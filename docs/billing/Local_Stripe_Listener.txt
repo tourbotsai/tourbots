@@ -1,0 +1,4 @@
+start local listener:
+stripe listen --api-key "sk_test_" \
+  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_succeeded,invoice.payment_failed \
+  --forward-to http://localhost:3000/api/webhooks/stripe

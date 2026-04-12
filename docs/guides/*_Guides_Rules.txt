@@ -1,0 +1,211 @@
+# TourBots Guides Authoring Rules
+
+Use this file as the single source of truth when generating or updating any website guide seed.
+
+---
+
+## 0) Mandatory accuracy workflow (do this first every time)
+
+Before writing any guide content, always complete this sequence:
+
+1. Read the full target page flow in the app first.
+2. Read every relevant UI component used in that flow.
+3. Read related hooks/services and backend/API routes for the same feature.
+4. Confirm the guide only describes behaviour that exists in code.
+
+If you find a clear code issue or inconsistency during this check:
+
+- Stop and raise it to the user first.
+- Ask whether to fix it now or keep the guide aligned to current behaviour.
+- Only then continue with guide writing.
+
+Accuracy is mandatory. Never write a guide from assumptions.
+
+---
+
+## 1) Core style and language rules
+
+1. Use British English only.
+2. Avoid American spellings:
+   - `optimise` not `optimize`
+   - `customisation` not `customization`
+   - `behaviour` not `behavior`
+   - `organisation` not `organization`
+   - `analyse` not `analyze`
+3. Keep wording concise and practical for B2B readers.
+4. Use direct, instructional phrasing (clear actions and outcomes).
+5. Do not use fluffy marketing language.
+6. Use confident, plain wording. Avoid hype.
+
+---
+
+## 2) Audience and tone
+
+- Primary audience: operators, agency teams, marketers, and implementation partners.
+- Tone: professional, calm, and helpful.
+- Voice: practical guidance, not sales copy.
+- Write for quick execution: "what to do", "where to click", "what to check".
+
+Preferred tone examples:
+- "Use this setup when you are ready for live rollout."
+- "Validate this step before moving to publishing."
+- "If this is missing, complete X first."
+
+Avoid:
+- "This amazing feature will transform your business."
+- "Simply click and everything works perfectly."
+
+---
+
+## 3) Markdown structure for guide content
+
+Inside SQL, the `content` body must follow this hierarchy:
+
+1. `## What this guide covers`
+2. Numbered `##` sections for the workflow:
+   - `## 1) ...`
+   - `## 2) ...`
+   - `## 3) ...`
+3. Optional `###` subsections where needed (for comparison blocks such as Free vs Pro).
+4. End with `## Final note` (or `## Next steps` where more useful).
+
+Formatting standards:
+- Use numbered lists for ordered steps.
+- Use bullet lists for options, inclusions, and checks.
+- Use bold for UI labels and CTA names (for example `**Start Free**`).
+- Keep paragraphs short (1-3 sentences).
+- One idea per paragraph.
+
+---
+
+## 4) Content pattern each guide should follow
+
+Each guide should include:
+
+1. Outcome statement (what the reader will complete).
+2. Prerequisites (if any).
+3. Step-by-step setup flow.
+4. Validation checks ("how to confirm this worked").
+5. Common mistakes or troubleshooting notes.
+6. Practical next step after completion.
+
+Keep each guide actionable. If a section does not help someone complete a task, remove it.
+
+---
+
+## 5) SQL seed format rules
+
+Every guide seed must:
+
+1. Use `insert into public.guides (...) values (...)`.
+2. Wrap markdown body in `$guide$ ... $guide$`.
+3. Include:
+   - `title`
+   - `slug`
+   - `excerpt`
+   - `content`
+   - `meta_title`
+   - `meta_description`
+   - `tags`
+   - `difficulty_level`
+   - `reading_time_minutes`
+4. Use `on conflict (slug) do update` for idempotent re-runs.
+5. Keep slug lowercase and hyphenated.
+
+Difficulty guidance:
+- `beginner`: first-time setup, orientation, basic workflows.
+- `intermediate`: optimisation, scaling, operational workflows.
+- `advanced`: complex implementation, governance, multi-team control.
+
+---
+
+## 6) Consistency rules for product naming
+
+Always use these product terms consistently:
+
+- `Tour Setup`
+- `Chatbot Setup`
+- `Share and Embed`
+- `Analytics`
+- `Billing`
+- `Add-ons`
+- `Agency Portal`
+- `tour locations`
+- `multiple models`
+- `navigation points`
+
+Do not mix terms inconsistently (for example `Addon` in one place and `Add-on` in another).
+Preferred form: `Add-on` (singular), `Add-ons` (plural).
+
+---
+
+## 7) Date, time, and numeric conventions
+
+1. Dates in text: `DD/MM/YYYY` where a full date is required.
+2. Time format: 24-hour clock when including times.
+3. Numeric formatting:
+   - Use comma separators for large numbers (for example `1,000`).
+   - Keep pricing clear and consistent with GBP format.
+
+---
+
+## 8) Section writing standards
+
+### Headings
+- Use explicit and descriptive headings.
+- Prefer "How to..." for task guides.
+- Prefer "Explained" for concept guides.
+
+### Steps
+- Start each step with an action verb.
+- Keep each step single-purpose.
+- Mention where in the app the step happens.
+
+### Checks
+- Include concrete success criteria:
+  - what should appear
+  - what should be enabled
+  - what data should update
+
+---
+
+## 9) Approved phrase bank
+
+Use these phrase types consistently:
+
+- "What this guide covers"
+- "Before you start"
+- "When to use this setup"
+- "Validation checklist"
+- "Common issues"
+- "Final note"
+
+Operational phrases:
+- "Complete this in the Tours page."
+- "Select the relevant tour location first."
+- "Save changes before testing."
+- "Confirm the update appears in Analytics."
+
+---
+
+## 10) Prohibited writing patterns
+
+Do not:
+
+1. Use vague filler ("super easy", "seamless", "game-changing").
+2. Add unverified claims.
+3. Add feature behaviour that is not in code.
+4. Overwrite product terminology with ad-hoc names.
+5. Use long, dense paragraphs.
+
+---
+
+## 11) Guide quality checklist (must pass before final)
+
+- British English spellings are correct.
+- Steps are clear and executable.
+- Headings follow the required hierarchy.
+- Product labels match actual UI terms.
+- No fluff or marketing exaggeration.
+- Metadata (slug, tags, difficulty, reading time) is complete.
+- SQL is idempotent and conflict-safe.

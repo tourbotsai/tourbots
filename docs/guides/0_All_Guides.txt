@@ -1,0 +1,144 @@
+# TourBots Website Guides Plan (Lean Version)
+
+Aligned to the current website sections shown on the Guides page:
+- Account Setup
+- Tour Setup
+- Chatbot Setup
+- Share and Embed
+- Analytics
+- Billing
+- Add-ons
+
+This is a reduced, practical list focused on core user outcomes.
+
+---
+
+## Account Setup
+
+### 1) Create Your TourBots Account and Choose the Right Plan [DONE - seeded]
+**What it should include:** Registration flow, Free vs Pro, and when to upgrade.  
+**Key bits:** Start Free path, first login, plan limits, decision checklist.
+
+### 2) First Login and Dashboard Overview [DONE - seeded]
+**What it should include:** What users see first and what each main area does.  
+**Key bits:** Dashboard stats, Tours, Chatbots, Settings, Help Centre, quick first actions.
+
+---
+
+## Tour Setup
+
+### 1) Initial Tour Setup (From Zero to Live Tour) [DONE - seeded]
+**What it should include:** Complete first-tour setup flow with minimum friction.  
+**Key bits:** Add primary tour, connect Matterport model, save core settings, first validation checks.
+
+### 2) How to Set Up Multiple Models in One Tour [DONE - seeded]
+**What it should include:** Attach secondary models and ask AI to switch correctly between them.  
+**Key bits:** Primary vs secondary model logic, setup workflow, common configuration mistakes.
+
+### 3) How to Set Up Separate Tours (Multiple Locations) [DONE - seeded]
+**What it should include:** Create and manage separate tours under one account, then configure a separate chatbot for each tour from the Chatbots page.  
+**Key bits:** Location creation flow, selector behaviour, when to use separate tours vs multiple models.
+
+### 4) How to Train AI on Navigation Points [DONE - seeded]
+**What it should include:** Create positions and map AI behaviour to movement.  
+**Key bits:** Save Position flow, naming standards, triggers/actions for navigation, test checklist.
+
+### 5) Build a Guided Tour Menu [DONE - seeded]
+**What it should include:** Create menu structure that drives user actions.  
+**Key bits:** Tour menu blocks, position/model linking, recommended journey order.
+
+### 6) Multiple Models vs Separate Tours: Which to Choose [DONE - seeded]
+**What it should include:** A decision framework to help users choose the right setup for their use case.  
+**Key bits:** When to use multiple models in one tour, when to create separate tours/locations, chatbot setup implications, analytics impact, and scaling guidance.
+
+---
+
+## Chatbot Setup
+
+### 1) Initial Chatbot Setup for a Tour [DONE - seeded]
+**What it should include:** Baseline chatbot configuration for launch readiness.  
+**Key bits:** Chatbot name, welcome message, system prompt basics, activation settings.
+
+### 2) Chatbot Information [DONE - seeded]
+**What it should include:** How to use the Chatbot Information block, and how to add new sections and fields.  
+**Key bits:** Overall explanation, the default first section, and the ability to add new sections and fields with custom names and practical examples.
+
+### 3) Upload and Manage Knowledge Documents [DONE - seeded]
+**What it should include:** How to add trusted source content and keep it clean.  
+**Key bits:** Supported files, upload process, replacement cycle, document quality rules.
+
+### 4) Configure Triggers and Behaviour Rules [DONE - seeded]
+**What it should include:** Define when the bot should act and how it should respond.  
+**Key bits:** Trigger conditions, actions, navigation-trigger connections, QA checks.
+
+### 5) Desktop and Mobile Chatbot Customisation [DONE - seeded]
+**What it should include:** Design and UX settings by device context.  
+**Key bits:** Desktop/mobile differences, preview process, brand consistency checklist.
+
+### 6) Playground Testing Before Go-Live [DONE - seeded]
+**What it should include:** A practical testing workflow before publishing chatbot changes.  
+**Key bits:** Prompt test scenarios, navigation testing, response quality checks, issue logging, and sign-off checklist.
+
+---
+
+## Share and Embed
+
+### 1) Share and Embed Your Tour (Primary Method) [DONE - seeded]
+**What it should include:** Canonical sharing workflow for live deployments.  
+**Key bits:** Where to get code, embed placement, responsive behaviour, go-live checks.
+
+### 2) Website Embed Troubleshooting [DONE - seeded]
+**What it should include:** Fast fixes for common embed failures.  
+**Key bits:** Loading issues, layout clipping, domain/environment checks, escalation path.
+
+---
+
+## Analytics
+
+### 1) Tour Analytics Explained [DONE - seeded]
+**What it should include:** What metrics exist and how teams should interpret them.  
+**Key bits:** Views, engagement trends, high/low performance signals, optimisation actions.
+
+### 2) Chatbot Analytics Explained [DONE - seeded]
+**What it should include:** How to evaluate conversation quality and outcomes.  
+**Key bits:** Conversation counts, response quality indicators, improvement loop.
+
+---
+
+## Billing
+
+### 1) Billing Settings and Subscription Management [DONE - seeded]
+**What it should include:** Plan status, billing controls, and account ownership expectations.  
+**Key bits:** Active plan details, included capacity, renewal awareness, billing hygiene.
+
+### 2) Pro Plan Requirement for Add-ons [DONE - seeded]
+**What it should include:** Clear explanation that add-ons are available on Pro, and how this affects purchase planning.  
+**Key bits:** Pro requirement, eligibility checks, extra locations/messages/white-label/agency portal access, and an upgrade-first workflow.
+
+
+
+---
+
+## Add-ons
+
+### 1) How to Add and Buy Extra Locations [DONE - seeded]
+**What it should include:** Exact flow for purchasing extra capacity for more tours.  
+**Key bits:** Extra space add-on logic, quantity selection, checkout, post-purchase verification.
+
+### 2) Message Top-Ups: When to Buy and How to Plan Capacity [DONE - seeded]
+**What it should include:** Capacity planning guidance for message demand.  
+**Key bits:** Usage monitoring, threshold planning, top-up workflow, budget control.
+
+### 3) White-Label Add-on: Setup and Commercial Use Cases [DONE - seeded]
+**What it should include:** When white-label is appropriate and what changes operationally.  
+**Key bits:** Brand requirements, rollout considerations, governance for client-facing delivery.
+
+### 4) Agency Portal Addon [DONE - seeded]
+**What it should include:** Explanation of the Agency Portal add-on and how it allows clients to access and manage shared tour and chatbot modules.  
+**Key bits:** Agency Portal add-on entitlement, secure client sign-in, branding and domain controls, module permissions (tour/settings/customisation/analytics), and credential management.
+
+### 5) Client Access Permissions Matrix (Agency Portal) [DONE - seeded]
+**What it should include:** A clear permissions matrix showing what clients can access and edit per enabled module.  
+**Key bits:** Tour module, settings blocks (config/information/documents/triggers), customisation access, analytics access, and recommended permission presets.
+
+---

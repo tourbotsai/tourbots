@@ -1,0 +1,30 @@
+# TourBots Website Blogs Plan (SEO Intent)
+
+Aligned to high-intent search themes for VR tours + AI chatbot discovery:
+- AI chatbot for Matterport tours
+- Chatbot-guided virtual tour movement
+- AI virtual tour embed and conversion
+
+This list prioritises commercially valuable SEO topics that match real buyer search behaviour.
+
+---
+
+## Matterport + AI Chatbot
+
+### 1) The 2026 AI Virtual Tour Growth Playbook for Venues and Agencies [DONE - seeded]
+**What it should include:** A practical growth framework for turning passive tour traffic into qualified demand.  
+**Key bits:** Guided discovery, AI-led question handling, lead capture moments, weekly optimisation cadence, agency retainer opportunity.
+
+### 2) How to Add an AI Chatbot to a Matterport Tour (Step-by-Step) [DONE - seeded]
+**What it should include:** A direct implementation article for teams searching how to connect AI chat to Matterport quickly.  
+**Key bits:** Matterport connection flow, chatbot setup, knowledge upload, embed deployment, go-live validation.
+
+---
+
+## Guided Navigation and Tour Movement
+
+### 1) Can an AI Chatbot Move a Virtual Tour? How Guided Navigation Works [DONE - seeded]
+**What it should include:** A clear explanation of how AI-triggered tour movement works and how to configure it safely.  
+**Key bits:** Navigation points, trigger logic, model switching behaviour, QA checklist, common movement errors.
+
+---

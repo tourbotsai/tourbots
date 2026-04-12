@@ -1,0 +1,22 @@
+{
+  "name": "TourBots AI - Virtual Venue Tours with AI Assistance",
+  "short_name": "TourBots AI",
+  "description": "Turn browsers into customers with 24/7 virtual venue tours and intelligent AI assistance",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#020617",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/tourbots/screenshots/blueicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "fitness", "marketing", "technology"],
+  "lang": "en-GB",
+  "scope": "/",
+  "prefer_related_applications": false
+}
