@@ -1,0 +1,17 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/publish-scheduled-blogs",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/send-outbound-sequence-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-stripe-cancellation-state",
+      "schedule": "0 3 * * *"
+    }
+  ],
+  "trailingSlash": false
+} 
