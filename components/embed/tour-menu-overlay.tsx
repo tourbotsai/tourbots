@@ -140,14 +140,40 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
               
               // Validate point data before dispatching event
               if (point && point.sweep_id) {
-                window.dispatchEvent(new CustomEvent('matterport_navigate', {
-                  detail: {
-                    sweep_id: point.sweep_id,
-                    position: point.position,
-                    rotation: point.rotation,
-                    area_name: point.name
+                const navigateToPoint = () => {
+                  window.dispatchEvent(new CustomEvent('matterport_navigate', {
+                    detail: {
+                      sweep_id: point.sweep_id,
+                      position: point.position,
+                      rotation: point.rotation,
+                      area_name: point.name
+                    }
+                  }));
+                };
+
+                // If point belongs to another model, switch first then navigate.
+                if (button.target_model_id && button.target_model_id !== currentModelId) {
+                  window.dispatchEvent(new CustomEvent('switch_matterport_model', {
+                    detail: {
+                      modelId: button.target_model_id,
+                      tourName: button.target_model_name || 'Tour'
+                    }
+                  }));
+
+                  // Keep UX consistent with model-switch actions.
+                  setIsVisible(false);
+                  setShowWidget(false);
+                  if (!isPreviewMode) {
+                    sessionStorage.removeItem(`tour-menu-dismissed-${tourId}`);
                   }
-                }));
+
+                  // Wait for model load transition before navigating to sweep.
+                  setTimeout(() => {
+                    navigateToPoint();
+                  }, 1500);
+                } else {
+                  navigateToPoint();
+                }
               }
             }
           } catch (error) {
@@ -291,6 +317,26 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
     }
   };
 
+  const getLogoDimensions = (content: any) => {
+    const desktopSize = Number(content.desktop_size);
+    const mobileSize = Number(content.mobile_size);
+    const legacyWidth = Number(content.width);
+    const legacyHeight = Number(content.height);
+
+    if (isMobile && Number.isFinite(mobileSize) && mobileSize > 0) {
+      return { width: mobileSize, height: mobileSize };
+    }
+
+    if (Number.isFinite(desktopSize) && desktopSize > 0) {
+      return { width: desktopSize, height: desktopSize };
+    }
+
+    return {
+      width: Number.isFinite(legacyWidth) && legacyWidth > 0 ? legacyWidth : 150,
+      height: Number.isFinite(legacyHeight) && legacyHeight > 0 ? legacyHeight : 80,
+    };
+  };
+
   const renderBlock = (block: TourMenuBlock) => {
     const alignmentClass = {
       left: 'text-left',
@@ -403,6 +449,12 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
 
       case 'logo':
         const logoContent = block.content as any;
+        const logoDimensions = getLogoDimensions(logoContent);
+        const logoAlignment = block.alignment === 'left'
+          ? 'flex-start'
+          : block.alignment === 'right'
+            ? 'flex-end'
+            : 'center';
         
         // Safety check: ensure image_url exists
         if (!logoContent.image_url) {
@@ -411,22 +463,31 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
         
         return (
           <div key={block.id} className={alignmentClass} style={marginStyle}>
-            <img
-              src={logoContent.image_url}
-              alt={logoContent.alt_text || 'Logo'}
+            <div
               style={{
-                width: `${logoContent.width || 150}px`,
-                height: `${logoContent.height || 80}px`,
-                maxWidth: '100%',
-                objectFit: 'contain',
-                display: block.alignment === 'center' ? 'block' : 'inline-block',
-                margin: block.alignment === 'center' ? '0 auto' : 0
+                width: '100%',
+                height: '128px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: logoAlignment,
               }}
-              onError={(e) => {
-                // Hide image if it fails to load
-                e.currentTarget.style.display = 'none';
-              }}
-            />
+            >
+              <img
+                src={logoContent.image_url}
+                alt={logoContent.alt_text || 'Logo'}
+                style={{
+                  width: `${logoDimensions.width}px`,
+                  height: `${logoDimensions.height}px`,
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                }}
+                onError={(e) => {
+                  // Hide image if it fails to load
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
           </div>
         );
 

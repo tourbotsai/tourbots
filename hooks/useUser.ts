@@ -3,6 +3,7 @@ import { useUser as useFirebaseUser } from "reactfire";
 import { UserWithVenue } from "@/lib/types";
 
 const USER_CACHE_TTL_MS = 30_000;
+const USER_ERROR_CACHE_TTL_MS = 1_500;
 
 type CachedUserState = {
   uid: string;
@@ -22,11 +23,15 @@ async function fetchUserWithCache(
   forceRefresh = false
 ): Promise<{ user: UserWithVenue | null; error: string | null }> {
   const now = Date.now();
+  const cacheTtlMs =
+    cachedUserState?.error && !cachedUserState.user
+      ? USER_ERROR_CACHE_TTL_MS
+      : USER_CACHE_TTL_MS;
   const hasFreshCache =
     !forceRefresh &&
     cachedUserState !== null &&
     cachedUserState.uid === uid &&
-    now - cachedUserState.cachedAt < USER_CACHE_TTL_MS;
+    now - cachedUserState.cachedAt < cacheTtlMs;
 
   if (hasFreshCache && cachedUserState) {
     return { user: cachedUserState.user, error: cachedUserState.error };
@@ -101,21 +106,50 @@ export function useUser() {
     
     setLoading(true);
     setError(null);
-    
+
+    let cancelled = false;
+
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
     (async () => {
       try {
-        const token = await authUser.getIdToken();
-        const result = await fetchUserWithCache(authUser.uid, token);
+        const maxAttempts = 3;
+        let attempt = 0;
+        let result: { user: UserWithVenue | null; error: string | null } = {
+          user: null,
+          error: null,
+        };
+
+        while (attempt < maxAttempts) {
+          const forceRefresh = attempt > 0;
+          const token = await authUser.getIdToken(forceRefresh);
+          result = await fetchUserWithCache(authUser.uid, token, forceRefresh);
+
+          if (result.user) break;
+          if (attempt === maxAttempts - 1) break;
+
+          // Fresh sign-up/login can race the user record creation; retry briefly.
+          await sleep(350 * (attempt + 1));
+          attempt += 1;
+        }
+
+        if (cancelled) return;
         setUser(result.user);
         setError(result.error);
       } catch (err: any) {
         console.error('Error in useUser hook:', err);
+        if (cancelled) return;
         setError(err.message);
         setUser(null);
       } finally {
+        if (cancelled) return;
         setLoading(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [authUser, firebaseLoaded]);
 
   const updateUser = async (fields: any) => {

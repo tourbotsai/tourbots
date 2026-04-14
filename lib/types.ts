@@ -254,6 +254,7 @@ export interface MenuButton {
   label: string;
   action_type: 'tour_point' | 'tour_model' | 'url' | 'close_menu' | 'open_chat';
   target_id: string; // For tour_point: point.id, for tour_model: tour.id, for url: URL string, for open_chat: empty
+  target_tour_id?: string; // For tour_point: selected source tour.id when multiple models exist
   target_model_id?: string; // For tour_model: matterport_tour_id (direct model ID)
   target_model_name?: string; // For tour_model: tour.title
   button_color: string;
@@ -266,6 +267,8 @@ export interface LogoBlockContent {
   image_url: string;
   width: number;
   height: number;
+  desktop_size?: number;
+  mobile_size?: number;
   alt_text: string;
 }
 

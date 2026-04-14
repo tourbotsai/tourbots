@@ -56,18 +56,38 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
 
   const widgetPreviewSettings = {
     ...settings,
-    show_reopen_widget: Boolean(settings.show_reopen_widget),
-    widget_position: settings.widget_position || 'bottom-right',
+    show_reopen_widget: settings.show_reopen_widget ?? true,
+    widget_position: settings.widget_position || 'bottom-left',
     widget_icon: settings.widget_icon || 'HelpCircle',
-    widget_size: settings.widget_size || 'medium',
-    widget_color: settings.widget_color || '#2563EB',
-    widget_hover_color: settings.widget_hover_color || '#1D4ED8',
-    widget_icon_color: settings.widget_icon_color || '#FFFFFF',
+    widget_size: settings.widget_size || 'small',
+    widget_color: settings.widget_color || '#FFFFFF',
+    widget_hover_color: settings.widget_hover_color || '#F0F0F0',
+    widget_icon_color: settings.widget_icon_color || '#FF0000',
     widget_x_offset: settings.widget_x_offset ?? 24,
     widget_y_offset: settings.widget_y_offset ?? 24,
     widget_tooltip_text: settings.widget_tooltip_text || 'Reopen Tour Menu',
     widget_border_radius: settings.widget_border_radius ?? 50,
     widget_shadow_intensity: settings.widget_shadow_intensity || 'medium',
+  };
+
+  const getLogoDimensions = (content: any) => {
+    const desktopSize = Number(content.desktop_size);
+    const mobileSize = Number(content.mobile_size);
+    const legacyWidth = Number(content.width);
+    const legacyHeight = Number(content.height);
+
+    if (mode === 'mobile' && Number.isFinite(mobileSize) && mobileSize > 0) {
+      return { width: mobileSize, height: mobileSize };
+    }
+
+    if (Number.isFinite(desktopSize) && desktopSize > 0) {
+      return { width: desktopSize, height: desktopSize };
+    }
+
+    return {
+      width: Number.isFinite(legacyWidth) && legacyWidth > 0 ? legacyWidth : 150,
+      height: Number.isFinite(legacyHeight) && legacyHeight > 0 ? legacyHeight : 80,
+    };
   };
 
   const renderBlock = (block: any) => {
@@ -163,37 +183,53 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
         );
 
       case 'logo':
+        const logoDimensions = getLogoDimensions(block.content);
+        const logoAlignment = block.alignment === 'left'
+          ? 'flex-start'
+          : block.alignment === 'right'
+            ? 'flex-end'
+            : 'center';
+
         return (
           <div key={block.id} className={alignmentClass} style={marginStyle}>
-            {block.content.image_url ? (
-              <img
-                src={block.content.image_url}
-                alt={block.content.alt_text}
-                style={{
-                  width: `${block.content.width}px`,
-                  height: `${block.content.height}px`,
-                  maxWidth: '100%',
-                  objectFit: 'contain',
-                  display: block.alignment === 'center' ? 'block' : 'inline-block',
-                  margin: block.alignment === 'center' ? '0 auto' : 0
-                }}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-            ) : (
-              <div 
-                className="border-2 border-dashed rounded flex items-center justify-center text-gray-400 text-sm"
-                style={{
-                  width: `${block.content.width}px`,
-                  height: `${block.content.height}px`,
-                  maxWidth: '100%',
-                  margin: block.alignment === 'center' ? '0 auto' : 0
-                }}
-              >
-                Logo
-              </div>
-            )}
+            <div
+              style={{
+                width: '100%',
+                height: '128px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: logoAlignment,
+              }}
+            >
+              {block.content.image_url ? (
+                <img
+                  src={block.content.image_url}
+                  alt={block.content.alt_text}
+                  style={{
+                    width: `${logoDimensions.width}px`,
+                    height: `${logoDimensions.height}px`,
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div
+                  className="border-2 border-dashed rounded flex items-center justify-center text-gray-400 text-sm"
+                  style={{
+                    width: `${logoDimensions.width}px`,
+                    height: `${logoDimensions.height}px`,
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                  }}
+                >
+                  Logo
+                </div>
+              )}
+            </div>
           </div>
         );
 

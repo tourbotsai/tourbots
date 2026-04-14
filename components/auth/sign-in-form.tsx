@@ -20,6 +20,7 @@ import { useAuth } from "reactfire";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { ModalForgotPassword } from "@/components/auth/modal-forgot-password";
 import { Eye, EyeOff, LogIn, Mail, Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -32,6 +33,7 @@ interface SignInFormProps {
 
 export const SignInForm: FC<SignInFormProps> = ({ onShowSignUp }) => {
   const auth = useAuth();
+  const router = useRouter();
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -53,6 +55,8 @@ export const SignInForm: FC<SignInFormProps> = ({ onShowSignUp }) => {
         title: "Welcome back!",
         description: "Successfully signed in to your TourBots AI dashboard.",
       });
+      router.push("/app/dashboard");
+      router.refresh();
     } catch (error: any) {
       let errorMessage = "An error occurred during sign in.";
       
