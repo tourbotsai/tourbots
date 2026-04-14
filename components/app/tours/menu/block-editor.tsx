@@ -19,9 +19,10 @@ interface BlockEditorProps {
   onDelete: () => void;
   onMove: (direction: 'up' | 'down') => void;
   tourId?: string;
+  activeDevice?: 'desktop' | 'mobile';
 }
 
-export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onMove, tourId }: BlockEditorProps) {
+export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onMove, tourId, activeDevice = 'desktop' }: BlockEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const getBlockIcon = (blockType: string) => {
@@ -111,7 +112,7 @@ export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onM
             <ButtonsBlockEditor block={block} onUpdate={onUpdate} />
           )}
           {block.block_type === 'logo' && (
-            <LogoBlockEditor block={block} onUpdate={onUpdate} tourId={tourId} />
+            <LogoBlockEditor block={block} onUpdate={onUpdate} tourId={tourId} activeDevice={activeDevice} />
           )}
           {block.block_type === 'table' && (
             <TableBlockEditor block={block} onUpdate={onUpdate} />

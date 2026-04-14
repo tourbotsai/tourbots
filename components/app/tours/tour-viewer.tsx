@@ -91,6 +91,8 @@ export function TourViewer({
   const [isSavingPosition, setIsSavingPosition] = useState(false);
   const [tourPoints, setTourPoints] = useState<any[]>([]);
   const [currentViewingModelId, setCurrentViewingModelId] = useState<string | null>(null);
+  const currentViewingModelIdRef = useRef<string | null>(null);
+  const lastAppliedSelectionRequestRef = useRef<string | null>(null);
   const lastTourLocationsSignalRef = useRef<number | undefined>(openTourLocationsManagerSignal);
   const activeVenueId = forcedVenueId || user?.venue?.id;
   const activeVenueName = forcedVenueName || user?.venue?.name || "Venue";
@@ -131,6 +133,13 @@ export function TourViewer({
   }, [allTours, currentLocationTourId, locationTours.length]);
 
   const menuScopeTourId = currentLocationTourId || tour?.id || "";
+  const primaryTourForCurrentLocation = useMemo(
+    () =>
+      modelsForCurrentLocation.find((row) => row.id === currentLocationTourId) ||
+      modelsForCurrentLocation.find((row) => row.tour_type === "primary" || !row.tour_type) ||
+      tour,
+    [modelsForCurrentLocation, currentLocationTourId, tour]
+  );
 
   const resolveLocationIdFromList = useCallback((tourRow: Tour | null, rows: Tour[]) => {
     if (!tourRow) return null;
@@ -476,12 +485,21 @@ export function TourViewer({
   }, [currentViewingModelId, authUser, activeVenueId, onTourChange, resolveLocationTourId, fetchTourCustomisation]);
 
   useEffect(() => {
+    currentViewingModelIdRef.current = currentViewingModelId;
+  }, [currentViewingModelId]);
+
+  useEffect(() => {
     if (!selectedTourIdOverride || allTours.length === 0) return;
+    const selectionRequestKey = `${selectedTourIdOverride}::${switchTourSignal ?? "none"}`;
+    if (lastAppliedSelectionRequestRef.current === selectionRequestKey) return;
+
     const selectedTour = allTours.find((t) => t.id === selectedTourIdOverride);
     if (!selectedTour) return;
-    if (selectedTour.matterport_tour_id === currentViewingModelId) return;
+
+    lastAppliedSelectionRequestRef.current = selectionRequestKey;
+    if (selectedTour.matterport_tour_id === currentViewingModelIdRef.current) return;
     handleSwitchModel(selectedTour);
-  }, [selectedTourIdOverride, switchTourSignal, allTours, currentViewingModelId, handleSwitchModel]);
+  }, [selectedTourIdOverride, switchTourSignal, allTours, handleSwitchModel]);
 
   // Listen for AI-triggered model switches from chat widget
   useEffect(() => {
@@ -761,9 +779,11 @@ export function TourViewer({
             isOpen={showSecondaryTours}
             onClose={() => setShowSecondaryTours(false)}
             venueId={user?.venue?.id || ''}
-            primaryTour={tour}
+            primaryTour={primaryTourForCurrentLocation || tour}
             allTours={allTours}
             onRefresh={fetchTour}
+            activeModelId={currentViewingModelId || tour.matterport_tour_id}
+            onSelectModel={handleSwitchModel}
           />
 
           <TourLocationsModal

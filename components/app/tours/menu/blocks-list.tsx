@@ -9,9 +9,10 @@ interface BlocksListProps {
   blocks: any[];
   onBlocksChange: (blocks: any[]) => void;
   tourId?: string;
+  activeDevice?: 'desktop' | 'mobile';
 }
 
-export function BlocksList({ blocks, onBlocksChange, tourId }: BlocksListProps) {
+export function BlocksList({ blocks, onBlocksChange, tourId, activeDevice = 'desktop' }: BlocksListProps) {
   const addBlock = (blockType: string) => {
     const newBlock = {
       id: `block-${Date.now()}`,
@@ -50,7 +51,9 @@ export function BlocksList({ blocks, onBlocksChange, tourId }: BlocksListProps) 
       case 'logo':
         return {
           image_url: '',
-          width: 150,
+          desktop_size: 80,
+          mobile_size: 80,
+          width: 80,
           height: 80,
           alt_text: 'Logo'
         };
@@ -182,6 +185,7 @@ export function BlocksList({ blocks, onBlocksChange, tourId }: BlocksListProps) 
               onDelete={() => deleteBlock(block.id)}
               onMove={(direction) => moveBlock(block.id, direction)}
               tourId={tourId}
+              activeDevice={activeDevice}
             />
           ))}
         </div>

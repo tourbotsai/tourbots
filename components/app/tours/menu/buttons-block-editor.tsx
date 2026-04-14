@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useUser } from "@/hooks/useUser";
+import { useAuthHeaders } from "@/hooks/useAuthHeaders";
 
 interface ButtonsBlockEditorProps {
   block: any;
@@ -18,8 +19,37 @@ interface ButtonsBlockEditorProps {
 
 export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps) {
   const { user } = useUser();
+  const { getAuthHeaders } = useAuthHeaders();
   const [tours, setTours] = useState<any[]>([]);
-  const [tourPoints, setTourPoints] = useState<any[]>([]);
+  const [tourPointsByTourId, setTourPointsByTourId] = useState<Record<string, any[]>>({});
+  const [loadingPointsTourId, setLoadingPointsTourId] = useState<string | null>(null);
+  const loadedTourPointsRef = useRef<Record<string, boolean>>({});
+
+  const fetchTourPointsForTour = useCallback(async (tourId: string) => {
+    if (!tourId) return;
+    if (loadedTourPointsRef.current[tourId]) return;
+
+    try {
+      setLoadingPointsTourId(tourId);
+      const pointsRes = await fetch(`/api/app/tours/${tourId}/points`, {
+        headers: await getAuthHeaders(),
+      });
+      if (!pointsRes.ok) return;
+
+      const pointsData = await pointsRes.json();
+      const points = Array.isArray(pointsData?.points) ? pointsData.points : [];
+
+      setTourPointsByTourId((prev) => ({
+        ...prev,
+        [tourId]: points,
+      }));
+      loadedTourPointsRef.current[tourId] = true;
+    } catch (error) {
+      console.error("Error fetching tour points for model:", error);
+    } finally {
+      setLoadingPointsTourId((current) => (current === tourId ? null : current));
+    }
+  }, [getAuthHeaders]);
 
   // Fetch tours and tour points when component mounts
   useEffect(() => {
@@ -28,18 +58,20 @@ export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps)
 
       try {
         // Fetch all tours for the venue
-        const toursRes = await fetch(`/api/app/tours/venue/${user.venue.id}/all`);
+        const toursRes = await fetch(`/api/app/tours/venue/${user.venue.id}/all`, {
+          headers: await getAuthHeaders(),
+        });
         if (toursRes.ok) {
           const toursData = await toursRes.json();
-          setTours(toursData);
-        }
+          const activeTours = Array.isArray(toursData)
+            ? toursData.filter((tour) => tour?.is_active !== false)
+            : [];
+          setTours(activeTours);
 
-        // Fetch all tour points across all tours
-        // For now, fetch from the primary tour - you might want to extend this
-        const pointsRes = await fetch(`/api/app/tours/venue/${user.venue.id}/points`);
-        if (pointsRes.ok) {
-          const pointsData = await pointsRes.json();
-          setTourPoints(pointsData);
+          // Preload points when there is only one model.
+          if (activeTours.length === 1) {
+            await fetchTourPointsForTour(activeTours[0].id);
+          }
         }
       } catch (error) {
         console.error('Error fetching tours/points:', error);
@@ -47,7 +79,7 @@ export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps)
     }
 
     fetchData();
-  }, [user]);
+  }, [user, getAuthHeaders, fetchTourPointsForTour]);
 
   const updateContent = (key: string, value: any) => {
     onUpdate({
@@ -81,6 +113,16 @@ export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps)
 
   const updateAlignment = (alignment: string) => {
     onUpdate({ alignment });
+  };
+
+  const getPointButtonSelectedTourId = (button: any) => {
+    if (button.target_tour_id) return button.target_tour_id as string;
+    if (button.target_model_id) {
+      const matchingTour = tours.find((tour) => tour.matterport_tour_id === button.target_model_id);
+      if (matchingTour) return matchingTour.id as string;
+    }
+    if (tours.length === 1) return tours[0].id as string;
+    return "";
   };
 
   return (
@@ -224,7 +266,13 @@ export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps)
                     <Label className="text-xs dark:text-gray-200">Action</Label>
                     <Select
                       value={button.action_type}
-                      onValueChange={(value) => updateButton(button.id, { action_type: value, target_id: '' })}
+                      onValueChange={(value) => updateButton(button.id, {
+                        action_type: value,
+                        target_id: '',
+                        target_tour_id: '',
+                        target_model_id: '',
+                        target_model_name: '',
+                      })}
                     >
                       <SelectTrigger className="mt-1">
                         <SelectValue />
@@ -242,28 +290,81 @@ export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps)
                   {/* Conditional Target Fields */}
                   {button.action_type === 'tour_point' && (
                     <div>
+                      {tours.length > 1 && (
+                        <div className="mb-3">
+                          <Label className="text-xs dark:text-gray-200">Select Tour Model First</Label>
+                          <Select
+                            value={getPointButtonSelectedTourId(button) || undefined}
+                            onValueChange={(value) => {
+                              const selectedTour = tours.find((tour) => tour.id === value);
+                              updateButton(button.id, {
+                                target_tour_id: value,
+                                target_id: '',
+                                target_model_id: selectedTour?.matterport_tour_id || '',
+                                target_model_name: selectedTour?.title || '',
+                              });
+                              fetchTourPointsForTour(value);
+                            }}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select model..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {tours.map((tour) => (
+                                <SelectItem key={tour.id} value={tour.id}>
+                                  🏢 {tour.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
                       <Label className="text-xs dark:text-gray-200">Target Tour Point</Label>
                       <Select
                         value={button.target_id}
-                        onValueChange={(value) => updateButton(button.id, { target_id: value })}
+                        onValueChange={(value) => {
+                          const selectedTourId = getPointButtonSelectedTourId(button);
+                          const selectedTour = tours.find((tour) => tour.id === selectedTourId);
+                          updateButton(button.id, {
+                            target_id: value,
+                            target_tour_id: selectedTourId || '',
+                            target_model_id: selectedTour?.matterport_tour_id || button.target_model_id || '',
+                            target_model_name: selectedTour?.title || button.target_model_name || '',
+                          });
+                        }}
+                        disabled={!getPointButtonSelectedTourId(button)}
                       >
                         <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select saved position..." />
+                          <SelectValue
+                            placeholder={
+                              !getPointButtonSelectedTourId(button)
+                                ? "Select a model first..."
+                                : "Select saved position..."
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
-                          {tourPoints.length === 0 ? (
-                            <SelectItem value="none" disabled>No saved positions yet</SelectItem>
+                          {loadingPointsTourId === getPointButtonSelectedTourId(button) ? (
+                            <SelectItem value="loading" disabled>Loading points...</SelectItem>
                           ) : (
-                            tourPoints.map((point) => (
-                              <SelectItem key={point.id} value={point.id}>
-                                📍 {point.name}
-                              </SelectItem>
-                            ))
+                            (() => {
+                              const selectedTourId = getPointButtonSelectedTourId(button);
+                              const pointsForTour = selectedTourId ? (tourPointsByTourId[selectedTourId] || []) : [];
+                              if (pointsForTour.length === 0) {
+                                return <SelectItem value="none" disabled>No saved positions yet</SelectItem>;
+                              }
+                              return pointsForTour.map((point) => (
+                                <SelectItem key={point.id} value={point.id}>
+                                  📍 {point.name}
+                                </SelectItem>
+                              ));
+                            })()
                           )}
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-gray-500 mt-1">
-                        Will navigate camera to this saved position
+                        Will navigate camera to this saved position.
                       </p>
                     </div>
                   )}

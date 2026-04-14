@@ -223,12 +223,12 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
             </div>
             <Switch
               id="show-widget"
-              checked={settings.show_reopen_widget}
+              checked={settings.show_reopen_widget ?? true}
               onCheckedChange={(checked) => updateSetting('show_reopen_widget', checked)}
             />
           </div>
 
-          {settings.show_reopen_widget && (
+          {(settings.show_reopen_widget ?? true) && (
             <>
               <div>
                 <Label className="text-sm dark:text-gray-200">Position</Label>
@@ -286,7 +286,7 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
                 <div>
                   <ColorPicker
                     label="Button Colour"
-                    value={settings.widget_color || "#2563EB"}
+                    value={settings.widget_color || "#FFFFFF"}
                     onChange={(value) => updateSetting('widget_color', value)}
                     showPresets={false}
                   />
@@ -295,7 +295,7 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
                 <div>
                   <ColorPicker
                     label="Hover Colour"
-                    value={settings.widget_hover_color || "#1D4ED8"}
+                    value={settings.widget_hover_color || "#F0F0F0"}
                     onChange={(value) => updateSetting('widget_hover_color', value)}
                     showPresets={false}
                   />
@@ -305,7 +305,7 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
               <div>
                 <ColorPicker
                   label="Icon Colour"
-                  value={settings.widget_icon_color || "#FFFFFF"}
+                  value={settings.widget_icon_color || "#FF0000"}
                   onChange={(value) => updateSetting('widget_icon_color', value)}
                   showPresets={false}
                 />

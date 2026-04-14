@@ -2,6 +2,7 @@
 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LogoUpload } from "./logo-upload";
@@ -11,10 +12,39 @@ interface LogoBlockEditorProps {
   block: any;
   onUpdate: (updates: any) => void;
   tourId?: string;
+  activeDevice?: 'desktop' | 'mobile';
 }
 
-export function LogoBlockEditor({ block, onUpdate, tourId }: LogoBlockEditorProps) {
+export function LogoBlockEditor({ block, onUpdate, tourId, activeDevice = 'desktop' }: LogoBlockEditorProps) {
   const { user } = useUser();
+
+  const clampDesktopLogoSize = (size: number) => Math.max(12, Math.min(196, size));
+  const clampMobileLogoSize = (size: number) => Math.max(12, Math.min(128, size));
+
+  const getLegacySize = () => {
+    const width = Number(block.content.width);
+    const height = Number(block.content.height);
+
+    if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+      return clampDesktopLogoSize(Math.round((width + height) / 2));
+    }
+    if (Number.isFinite(width) && width > 0) return clampDesktopLogoSize(Math.round(width));
+    if (Number.isFinite(height) && height > 0) return clampDesktopLogoSize(Math.round(height));
+    return 80;
+  };
+
+  const getDesktopSize = () => {
+    const desktopSize = Number(block.content.desktop_size);
+    if (Number.isFinite(desktopSize) && desktopSize > 0) return clampDesktopLogoSize(Math.round(desktopSize));
+    return getLegacySize();
+  };
+
+  const getMobileSize = () => {
+    const mobileSize = Number(block.content.mobile_size);
+    if (Number.isFinite(mobileSize) && mobileSize > 0) return clampMobileLogoSize(Math.round(mobileSize));
+    return clampMobileLogoSize(getDesktopSize());
+  };
+
   const updateContent = (key: string, value: any) => {
     onUpdate({
       content: { ...block.content, [key]: value }
@@ -23,6 +53,33 @@ export function LogoBlockEditor({ block, onUpdate, tourId }: LogoBlockEditorProp
 
   const updateAlignment = (alignment: string) => {
     onUpdate({ alignment });
+  };
+
+  const updateDesktopSize = (size: number) => {
+    const safeSize = clampDesktopLogoSize(size);
+    const currentMobileSize = Number(block.content.mobile_size);
+    const hasMobileSize = Number.isFinite(currentMobileSize) && currentMobileSize > 0;
+
+    onUpdate({
+      content: {
+        ...block.content,
+        desktop_size: safeSize,
+        mobile_size: hasMobileSize ? clampMobileLogoSize(Math.round(currentMobileSize)) : clampMobileLogoSize(safeSize),
+        // Keep legacy keys in sync for backwards compatibility.
+        width: safeSize,
+        height: safeSize,
+      }
+    });
+  };
+
+  const updateMobileSize = (size: number) => {
+    const safeSize = clampMobileLogoSize(size);
+    onUpdate({
+      content: {
+        ...block.content,
+        mobile_size: safeSize,
+      }
+    });
   };
 
   return (
@@ -44,31 +101,38 @@ export function LogoBlockEditor({ block, onUpdate, tourId }: LogoBlockEditorProp
         </div>
       )}
 
-      {/* Dimensions */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Size control shown for active preview device */}
+      {activeDevice === 'mobile' ? (
         <div>
-          <Label className="text-sm">Width (px)</Label>
-          <Input
-            type="number"
-            value={block.content.width}
-            onChange={(e) => updateContent('width', parseInt(e.target.value))}
-            min={50}
-            max={800}
+          <div className="mb-2 flex items-center justify-between">
+            <Label className="text-sm">Mobile Logo Size</Label>
+            <span className="text-xs text-muted-foreground">{getMobileSize()}px</span>
+          </div>
+          <Slider
+            value={[getMobileSize()]}
+            onValueChange={(value) => updateMobileSize(value[0] ?? getDesktopSize())}
+            min={12}
+            max={128}
+            step={2}
             className="mt-1"
           />
         </div>
+      ) : (
         <div>
-          <Label className="text-sm">Height (px)</Label>
-          <Input
-            type="number"
-            value={block.content.height}
-            onChange={(e) => updateContent('height', parseInt(e.target.value))}
-            min={50}
-            max={400}
+          <div className="mb-2 flex items-center justify-between">
+            <Label className="text-sm">Desktop Logo Size</Label>
+            <span className="text-xs text-muted-foreground">{getDesktopSize()}px</span>
+          </div>
+          <Slider
+            value={[getDesktopSize()]}
+            onValueChange={(value) => updateDesktopSize(value[0] ?? 80)}
+            min={12}
+            max={196}
+            step={2}
             className="mt-1"
           />
         </div>
-      </div>
+      )}
 
       {/* Alt Text */}
       <div>

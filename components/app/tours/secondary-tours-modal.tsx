@@ -48,6 +48,8 @@ interface SecondaryToursModalProps {
   primaryTour: Tour;
   allTours: Tour[];
   onRefresh: () => void;
+  activeModelId: string | null;
+  onSelectModel: (model: Tour) => void | Promise<void>;
 }
 
 export function SecondaryToursModal({ 
@@ -56,7 +58,9 @@ export function SecondaryToursModal({
   venueId,
   primaryTour,
   allTours,
-  onRefresh
+  onRefresh,
+  activeModelId,
+  onSelectModel,
 }: SecondaryToursModalProps) {
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
@@ -214,6 +218,12 @@ export function SecondaryToursModal({
     form.reset();
   };
 
+  const handleLoadModel = async (model: Tour) => {
+    if (activeModelId === model.matterport_tour_id) return;
+    await onSelectModel(model);
+    onClose();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={isDarkMode ? "sm:max-w-3xl max-h-[90vh] overflow-y-auto border border-slate-700/80 bg-[#0f1117] text-slate-100" : "sm:max-w-3xl max-h-[90vh] overflow-y-auto"}>
@@ -267,6 +277,15 @@ export function SecondaryToursModal({
                     className="dark:border-slate-700/80 dark:bg-[#11141c] dark:text-slate-100 dark:hover:bg-[#1a1e27]"
                   >
                     <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleLoadModel(primaryTour)}
+                    disabled={isLoading || activeModelId === primaryTour.matterport_tour_id}
+                    className="dark:border-slate-700/80 dark:bg-[#11141c] dark:text-slate-100 dark:hover:bg-[#1a1e27]"
+                  >
+                    {activeModelId === primaryTour.matterport_tour_id ? "Loaded" : "Load"}
                   </Button>
                 </div>
               </CardContent>
@@ -343,6 +362,15 @@ export function SecondaryToursModal({
                       </div>
                     </div>
                     <div className="flex gap-2 ml-4">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleLoadModel(tour)}
+                        disabled={isLoading || activeModelId === tour.matterport_tour_id}
+                        className="dark:border-slate-700/80 dark:bg-[#11141c] dark:text-slate-100 dark:hover:bg-[#1a1e27]"
+                      >
+                        {activeModelId === tour.matterport_tour_id ? "Loaded" : "Load"}
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"

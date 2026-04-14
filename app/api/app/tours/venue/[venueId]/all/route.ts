@@ -20,7 +20,7 @@ export async function GET(
     // Fetch all tours for this venue
     const { data: tours, error } = await supabase
       .from('tours')
-      .select('id, title, description, matterport_tour_id, tour_type, display_order, is_active')
+      .select('id, venue_id, parent_tour_id, title, description, matterport_tour_id, matterport_url, thumbnail_url, tour_type, display_order, navigation_keywords, is_active, created_at, updated_at')
       .eq('venue_id', venueId)
       .eq('is_active', true)
       .order('display_order', { ascending: true });

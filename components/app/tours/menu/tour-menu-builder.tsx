@@ -18,6 +18,29 @@ interface TourMenuBuilderProps {
   layoutMode?: 'split' | 'stacked';
 }
 
+const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = {
+  enabled: false,
+  position: 'center',
+  max_width: 600,
+  padding: 24,
+  border_radius: 16,
+  menu_background_color: '#FFFFFF',
+  backdrop_blur: true,
+  entrance_animation: 'fade-scale',
+  show_reopen_widget: true,
+  widget_position: 'bottom-left',
+  widget_icon: 'HelpCircle',
+  widget_size: 'small',
+  widget_color: '#FFFFFF',
+  widget_hover_color: '#F0F0F0',
+  widget_icon_color: '#FF0000',
+  widget_x_offset: 24,
+  widget_y_offset: 24,
+  widget_tooltip_text: 'Reopen Tour Menu',
+  widget_border_radius: 24,
+  widget_shadow_intensity: 'none',
+};
+
 export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilderProps = {}) {
   const { toast } = useToast();
   const isStackedLayout = layoutMode === 'stacked';
@@ -34,16 +57,7 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilde
   } = useTourMenu(activeTourId);
 
   // Local state for editing
-  const [settings, setSettings] = useState<Partial<TourMenuSettings>>({
-    enabled: false,
-    position: 'center',
-    max_width: 600,
-    padding: 24,
-    border_radius: 16,
-    menu_background_color: '#FFFFFF',
-    backdrop_blur: true,
-    entrance_animation: 'fade-scale',
-  });
+  const [settings, setSettings] = useState<Partial<TourMenuSettings>>(DEFAULT_MENU_SETTINGS);
 
   const [blocks, setBlocks] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -54,7 +68,7 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilde
   // Sync saved data to local state
   useEffect(() => {
     if (savedSettings) {
-      setSettings(savedSettings);
+      setSettings({ ...DEFAULT_MENU_SETTINGS, ...savedSettings });
     }
   }, [savedSettings]);
 
@@ -278,6 +292,7 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilde
                     blocks={blocks}
                     onBlocksChange={setBlocks}
                     tourId={activeTourId}
+                    activeDevice={activeDevice}
                   />
                 </TabsContent>
               </Tabs>
