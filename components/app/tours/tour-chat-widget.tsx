@@ -1627,7 +1627,6 @@ export function TourChatWidget({
                         // CSS variable consumed by the ::placeholder rule below
                         ['--tour-chat-placeholder-color' as any]: (getCustomisationValue('placeholder_text_color', 'mobile_placeholder_text_color') as string) || '#6B7280'
                       }}
-                      disabled={isLoading}
                     />
                   </div>
                   <button

@@ -774,6 +774,8 @@ You also have a file search tool covering the venue's uploaded documents. If the
       instructions,
       model: TOUR_CHATBOT_MODEL,
       previous_response_id: previousResponseId || undefined,
+      // Real-time chat: disable reasoning for the fastest possible first token.
+      reasoning: { effort: 'none' },
     };
 
     // Build tools array directly in responseArgs to avoid serialization issues
@@ -1122,6 +1124,7 @@ You also have a file search tool covering the venue's uploaded documents. If the
                 model: TOUR_CHATBOT_MODEL,
                 previous_response_id: responseId,
                 input: functionOutputs,
+                reasoning: { effort: 'none' },
               };
               continuationDepth += 1;
             }
