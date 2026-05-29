@@ -150,7 +150,7 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                 fieldKey="custom_logo_url"
                 iconSize={values.icon_size}
                 onIconSizeChange={(value) => onChange('icon_size', value)}
-                iconSizeMax={80}
+                iconSizeMax={128}
                 venueId={values.venue_id}
                 chatbotType={values.chatbot_type}
               />

@@ -519,8 +519,8 @@ export const VALIDATION_CONSTRAINTS = {
   IDLE_ANIMATION_INTERVAL: { min: 1000, max: 30000 },
   MESSAGE_MAX_WIDTH: { min: 60, max: 95 },
   MOBILE_MESSAGE_MAX_WIDTH: { min: 70, max: 95 },
-  ICON_SIZE: { min: 12, max: 48 },
-  MOBILE_ICON_SIZE: { min: 12, max: 32 },
+  ICON_SIZE: { min: 16, max: 128 },
+  MOBILE_ICON_SIZE: { min: 16, max: 104 },
   OFFSET: { min: 5, max: 100 },
   MOBILE_OFFSET: { min: 5, max: 50 },
 } as const;

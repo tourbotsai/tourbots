@@ -141,6 +141,7 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                 fieldKey="mobile_custom_logo_url"
                   iconSize={values.mobile_icon_size || 24}
                   onIconSizeChange={(value) => onChange('mobile_icon_size', value)}
+                  iconSizeMax={104}
                   venueId={values.venue_id}
                   chatbotType={values.chatbot_type}
                 />
