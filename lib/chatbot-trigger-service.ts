@@ -46,6 +46,17 @@ function appliesWhenFor(trigger: ChatbotTrigger): string {
   return keywords || 'the topic described in its response';
 }
 
+function isNavigationTrigger(trigger: ChatbotTrigger): boolean {
+  return trigger.action_type === 'navigate_tour_point' || trigger.action_type === 'switch_tour_model';
+}
+
+function deliveryNoteFor(trigger: ChatbotTrigger): string {
+  if (isNavigationTrigger(trigger)) {
+    return 'Delivery: give ONE short conversational line, then call the tool to move/switch the tour (you may add a brief follow-up after).';
+  }
+  return "Delivery: the trigger response IS your entire reply. Do NOT also answer the question separately, and do NOT repeat the same point twice — give a single, non-redundant reply.";
+}
+
 export function buildTriggerInstructions(params: {
   intentTriggers: ResolvedTrigger[];
   dueMessageCountTriggers: ResolvedTrigger[];
@@ -65,6 +76,7 @@ export function buildTriggerInstructions(params: {
         `- Trigger "${trigger.name}" — applies when the user's intent matches: ${appliesWhenFor(trigger)}.`,
         `  Response: ${responseInstructionFor(trigger)}`,
         `  Action: ${actionInstruction || 'No extra action — just deliver the response above.'}`,
+        `  ${deliveryNoteFor(trigger)}`,
       ];
       return parts.join('\n');
     });
@@ -72,6 +84,8 @@ export function buildTriggerInstructions(params: {
     sections.push(
       `CONFIGURED TRIGGERS (owner-defined):
 Using your own judgement about the user's intent, decide whether any of these triggers apply to the user's latest message. The "applies when" text (keywords or an intent description) is a hint about meaning, NOT literal text to match — only fire a trigger when the user genuinely means it (for example, do not fire a "personal training" trigger just because an unrelated word happens to contain those letters). Fire at most one of these triggers per reply, and only when it is clearly relevant. When a trigger applies, deliver its response as instructed and perform its action by calling the matching tool.
+
+IMPORTANT — avoid double answers: when a NON-navigation trigger applies (a message or a link), the trigger's response is your WHOLE reply. Do not first answer the question in your own words and then add the trigger message — that repeats yourself. Just give the trigger response once (and append/open the link if required). Only navigation/model-switch triggers should use a short conversational line followed by the tool call.
 
 ${lines.join('\n\n')}`
     );

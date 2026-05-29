@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, Globe, Calendar, ExternalLink, BarChart3, Users, MessageCircle, Camera, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, Globe, Calendar, ExternalLink, BarChart3, Users, MessageCircle, Camera, ArrowLeft, ChevronDown, ChevronUp, Monitor, Smartphone, Tablet } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -152,10 +152,21 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
     
     if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(ua)) {
       return 'Mobile';
-    } else if (/tablet|ipad|playbook|silk/i.test(ua)) {
+    } else     if (/tablet|ipad|playbook|silk/i.test(ua)) {
       return 'Tablet';
     }
     return 'Desktop';
+  };
+
+  const renderDeviceCell = (userAgent?: string | null) => {
+    const device = getDeviceType(userAgent);
+    const Icon = device === 'Mobile' ? Smartphone : device === 'Tablet' ? Tablet : Monitor;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+        <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+        {device}
+      </span>
+    );
   };
 
   const deviceData = stats
@@ -394,12 +405,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
                   {stats.map((stat) => (
                     <Card key={stat.id} className="rounded-lg border border-slate-200 p-3 shadow-none dark:border-input dark:bg-background">
                       <div className="flex items-start justify-between mb-2">
-                        <Badge 
-                          variant={stat.embed_type === 'tour' ? 'default' : 'secondary'}
-                          className="text-xs"
-                        >
-                          {stat.embed_type === 'tour' ? 'Tour' : 'Chatbot'}
-                        </Badge>
+                        {renderDeviceCell(stat.user_agent)}
                         <div className="flex items-center gap-1 text-sm font-medium">
                           <Eye className="h-3 w-3" />
                           {stat.views_count.toLocaleString()}
@@ -432,7 +438,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs">Type</TableHead>
+                        <TableHead className="text-xs">Device</TableHead>
                         <TableHead className="text-xs">Domain</TableHead>
                         <TableHead className="text-xs">Views</TableHead>
                         <TableHead className="text-xs">Last Viewed</TableHead>
@@ -443,12 +449,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
                       {stats.map((stat) => (
                         <TableRow key={stat.id}>
                           <TableCell>
-                            <Badge 
-                              variant={stat.embed_type === 'tour' ? 'default' : 'secondary'}
-                              className="text-xs"
-                            >
-                              {stat.embed_type === 'tour' ? 'Tour' : 'Chatbot'}
-                            </Badge>
+                            {renderDeviceCell(stat.user_agent)}
                           </TableCell>
                           <TableCell className="font-medium text-sm">
                             {formatDomain(stat.domain)}
