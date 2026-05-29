@@ -411,10 +411,15 @@ export async function PUT(
       'typing_indicator_color', 'loading_spinner_color', 'loading_text_color',
       'loading_background_color', 'mobile_chat_button_color', 'mobile_header_background_color',
       'mobile_header_text_color', 'mobile_ai_message_background', 'mobile_ai_message_text_color',
-      'mobile_user_message_background', 'mobile_input_background_color', 'mobile_send_button_color'
+      'mobile_user_message_background', 'mobile_input_background_color', 'mobile_send_button_color',
+      'window_background_color', 'mobile_window_background_color',
+      'timestamp_color', 'mobile_timestamp_color',
+      'thinking_background_color', 'mobile_thinking_background_color',
+      'thinking_text_color', 'mobile_thinking_text_color'
     ];
 
-    const hexColourPattern = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+    // Accept 3/6-digit hex and 4/8-digit hex with alpha (for transparency support).
+    const hexColourPattern = /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/;
     for (const field of colourFields) {
       if (customisation[field] && !hexColourPattern.test(customisation[field])) {
         return NextResponse.json(

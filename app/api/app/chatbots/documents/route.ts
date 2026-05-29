@@ -189,27 +189,50 @@ export async function POST(request: NextRequest) {
         .eq('id', chatbotConfigId)
         .single();
 
-      if (config?.openai_vector_store_id) {
-        // Upload file to OpenAI and add to vector store
-        const fileContent = new File([fileBuffer], file.name, { type: file.type });
-        const vectorStoreFile = await openAIService.uploadVectorStoreFile(
-          config.openai_vector_store_id,
-          fileContent
-        );
-        
-        // Update document record with OpenAI file ID
+      // Ensure the config has an OpenAI vector store. Older configs (and any created
+      // outside the admin batch job) may not have one yet, which silently breaks
+      // file search. Create it on demand and persist it to the config.
+      let vectorStoreId: string | null = config?.openai_vector_store_id || null;
+
+      if (!vectorStoreId) {
+        const { data: venueRow } = await supabase
+          .from('venues')
+          .select('name')
+          .eq('id', venueId)
+          .single();
+
+        const vectorStoreName = `${venueRow?.name || 'Venue'} - Virtual Tour Chatbot`;
+        const vectorStore = await openAIService.createVectorStore(vectorStoreName);
+        vectorStoreId = vectorStore.id;
+
         await supabase
-          .from('chatbot_documents')
+          .from('chatbot_configs')
           .update({
-            openai_file_id: vectorStoreFile.id,
-            openai_vector_store_id: config.openai_vector_store_id
+            openai_vector_store_id: vectorStoreId,
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', document.id);
-      } else {
-        console.warn(`No vector store found for chatbot config ${chatbotConfigId}`);
+          .eq('id', chatbotConfigId);
+
+        console.log(`✅ Created vector store on demand for config ${chatbotConfigId}: ${vectorStoreId}`);
       }
+
+      // Upload file to OpenAI and add to vector store (createAndPoll waits for indexing)
+      const fileContent = new File([fileBuffer], file.name, { type: file.type });
+      const vectorStoreFile = await openAIService.uploadVectorStoreFile(
+        vectorStoreId,
+        fileContent
+      );
+
+      // Update document record with OpenAI file ID
+      await supabase
+        .from('chatbot_documents')
+        .update({
+          openai_file_id: vectorStoreFile.id,
+          openai_vector_store_id: vectorStoreId,
+        })
+        .eq('id', document.id);
     } catch (openAIError: any) {
-      console.warn('Failed to upload to OpenAI vector store:', openAIError);
+      console.error('Failed to upload to OpenAI vector store:', openAIError);
       // Don't fail the whole request for OpenAI upload issues
     }
 

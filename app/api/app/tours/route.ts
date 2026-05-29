@@ -189,6 +189,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error creating tour:', error);
+    if (error?.code === '23505' && String(error?.message || '').includes('idx_tours_matterport_tour_id')) {
+      return NextResponse.json(
+        {
+          error:
+            'This Matterport model ID is already linked to another location in TourBots. Please use a different model ID or edit the existing location that already uses it.',
+        },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: error?.message || 'Failed to create tour' },
       { status: 500 }

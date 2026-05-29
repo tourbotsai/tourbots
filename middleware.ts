@@ -162,12 +162,32 @@ function getAllowedPublicOrigins(): Set<string> {
   return values;
 }
 
+/**
+ * Private/LAN hostnames (RFC 1918 ranges + .local). Used to allow testing the
+ * embed from other devices on the same network (e.g. a phone over Wi-Fi) during
+ * local development only.
+ */
+function isPrivateLanHostname(hostname: string): boolean {
+  if (hostname === '127.0.0.1' || hostname.endsWith('.local')) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  return false;
+}
+
 function isAllowedOrigin(origin: string, allowedOrigins: Set<string>): boolean {
   if (allowedOrigins.has(origin)) return true;
 
   try {
     const parsed = new URL(origin);
-    return parsed.hostname === 'localhost' || parsed.hostname.endsWith('.tourbots.ai');
+    if (parsed.hostname === 'localhost' || parsed.hostname.endsWith('.tourbots.ai')) {
+      return true;
+    }
+    // Dev-only: permit LAN IPs so the embed can be tested from a phone on the same network.
+    if (process.env.NODE_ENV === 'development' && isPrivateLanHostname(parsed.hostname)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/app/shared/sidebar";
 import { MobileSidebar } from "@/components/app/shared/mobile-sidebar";
 import { ThemeProvider } from "@/components/app/shared/theme-provider";
+import { UserProvider } from "@/components/user-provider";
 import { PageErrorBoundary, SectionErrorBoundary } from "@/components/ui/error-boundary";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -34,6 +35,7 @@ export default function AppLayout({
   return (
     <PageErrorBoundary>
       <ThemeProvider>
+        <UserProvider>
         <div className="flex min-h-screen bg-white dark:bg-gradient-to-br dark:from-[#0d1117] dark:via-[#111827] dark:to-[#0d1117] relative">
           {/* Dark Theme Background Elements */}
           <div className="hidden dark:block absolute inset-0 bg-black/35"></div>
@@ -103,6 +105,7 @@ export default function AppLayout({
             </main>
           </div>
         </div>
+        </UserProvider>
       </ThemeProvider>
     </PageErrorBoundary>
   );

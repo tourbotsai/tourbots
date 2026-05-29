@@ -6,6 +6,7 @@ import { rateLimiter } from '@/lib/rate-limiter';
 import { hardLimitService } from '@/lib/services/hard-limit-service';
 import { checkBillingMessageUsage } from '@/lib/services/billing-usage-service';
 import { chatMessageSchema } from '@/lib/input-sanitiser';
+import { TOUR_CHATBOT_MODEL } from '@/lib/constants/ai-models';
 import {
   authenticateChatbotRoute,
   ensureTourScope,
@@ -316,8 +317,7 @@ You also have access to a file search tool as they may have uploaded documents t
     const responseArgs: any = {
       input: inputItems,
       instructions,
-      model: 'gpt-4.1',
-      temperature: 0.7,
+      model: TOUR_CHATBOT_MODEL,
       tools: tools.length > 0 ? tools : undefined,
       previous_response_id: previousResponseId || undefined,
     };

@@ -11,16 +11,17 @@ export type DefaultInfoFieldTemplate = {
   field_label: string;
   field_type: 'text' | 'textarea' | 'url' | 'phone' | 'email';
   display_order: number;
+  field_rows: number;
 };
 
 /** Insert payload for the default General Information block (empty values). */
 export const DEFAULT_GENERAL_INFORMATION_FIELDS: readonly DefaultInfoFieldTemplate[] = [
-  { field_key: 'company_name', field_label: 'Company Name', field_type: 'text', display_order: 0 },
-  { field_key: 'website', field_label: 'Website', field_type: 'url', display_order: 1 },
-  { field_key: 'address', field_label: 'Address', field_type: 'textarea', display_order: 2 },
-  { field_key: 'general_description', field_label: 'General Description', field_type: 'textarea', display_order: 3 },
-  { field_key: 'phone', field_label: 'Phone', field_type: 'phone', display_order: 4 },
-  { field_key: 'email', field_label: 'Email', field_type: 'email', display_order: 5 },
+  { field_key: 'company_name', field_label: 'Company Name', field_type: 'text', display_order: 0, field_rows: 1 },
+  { field_key: 'website', field_label: 'Website', field_type: 'url', display_order: 1, field_rows: 1 },
+  { field_key: 'address', field_label: 'Address', field_type: 'textarea', display_order: 2, field_rows: 3 },
+  { field_key: 'general_description', field_label: 'General Description', field_type: 'textarea', display_order: 3, field_rows: 3 },
+  { field_key: 'phone', field_label: 'Phone', field_type: 'phone', display_order: 4, field_rows: 1 },
+  { field_key: 'email', field_label: 'Email', field_type: 'email', display_order: 5, field_rows: 1 },
 ] as const;
 
 type SectionRow = {
@@ -37,6 +38,7 @@ type FieldRow = {
   field_value: string | null;
   display_order?: number | null;
   is_required?: boolean | null;
+  field_rows?: number | null;
 };
 
 /**
@@ -70,6 +72,7 @@ export function matchesDefaultGeneralInformationTraining(
     if (f.field_type !== exp.field_type) return false;
     if (String(f.field_value || '').trim() !== '') return false;
     if (f.is_required) return false;
+    if ((f.field_rows ?? 1) !== exp.field_rows) return false;
   }
 
   return true;

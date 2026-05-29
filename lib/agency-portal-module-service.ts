@@ -118,6 +118,7 @@ async function ensureDefaultGeneralSection(chatbotConfigId: string) {
       field_value: '',
       display_order: field.display_order,
       is_required: false,
+      field_rows: field.field_rows,
     }))
   );
 
@@ -312,6 +313,7 @@ export async function updateScopedTourInformationSections(
       field_value?: string | null;
       display_order: number;
       is_required: boolean;
+      field_rows?: number;
     }>;
   }>
 ) {
@@ -334,6 +336,7 @@ export async function updateScopedTourInformationSections(
       field_value: field.field_value ?? '',
       display_order: Number.isFinite(field.display_order) ? field.display_order : fieldIndex,
       is_required: field.is_required === true,
+      field_rows: Math.min(3, Math.max(1, Number.isFinite(field.field_rows) ? Number(field.field_rows) : (field.field_type === 'textarea' ? 2 : 1))),
     })),
   }));
 
@@ -396,6 +399,7 @@ export async function updateScopedTourInformationSections(
           field_value: field.field_value ?? '',
           display_order: field.display_order,
           is_required: field.is_required,
+          field_rows: field.field_rows,
         }))
       );
     if (createFieldsError) throw createFieldsError;

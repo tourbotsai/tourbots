@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { useUser as useFirebaseUser } from 'reactfire';
+import { useTourChatbotAnalytics } from '@/hooks/app/useTourChatbotAnalytics';
+import { ConversationSessions } from '@/components/app/chatbots/shared/conversation-sessions';
 import { EmbedStat, Tour } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -49,6 +51,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
   });
   const [loading, setLoading] = useState(true);
   const [isEmbedStatsExpanded, setIsEmbedStatsExpanded] = useState(false);
+  const { conversations } = useTourChatbotAnalytics(selectedTourId);
 
   useEffect(() => {
     async function fetchTourAndAnalytics() {
@@ -482,6 +485,10 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
               </div>
             )}
           </div>
+
+          <div className="h-px bg-slate-200 dark:bg-slate-800" />
+
+          <ConversationSessions conversations={conversations} typeLabel="tour" />
         </CardContent>
       </Card>
     </div>

@@ -15,6 +15,8 @@ import { ChatbotConfigService } from '@/lib/services/chatbot-config-service';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
+import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
+import { resolveSendButtonSizePx, sendButtonIconSizePx } from '@/lib/send-button-size';
 import {
   getAnimationTiming,
   getAnimationDuration,
@@ -179,19 +181,12 @@ export function TourChatWidget({
     return finalCustomisation[desktopKey as keyof ChatbotCustomisation];
   };
 
-  // Get button size in pixels
-  const buttonSize = getCustomisationValue('chat_button_size', 'mobile_chat_button_size') as 'small' | 'medium' | 'large';
-  const buttonSizePx = isMobileView
-    ? {
-        small: 48,
-        medium: 60,
-        large: 80
-      }[buttonSize]
-    : {
-        small: 64,
-        medium: 80,
-        large: 104
-      }[buttonSize];
+  // Get button size in pixels (supports new px field with legacy fallback)
+  const buttonSizePx = resolveChatButtonSizePx({
+    pxValue: getCustomisationValue('chat_button_size_px', 'mobile_chat_button_size_px') as number | null | undefined,
+    legacySize: getCustomisationValue('chat_button_size', 'mobile_chat_button_size') as string | null | undefined,
+    mode: isMobileView ? 'mobile' : 'desktop',
+  });
 
   // Get position and offsets
   const buttonPosition = getCustomisationValue('chat_button_position', 'mobile_chat_button_position') as 'bottom-left' | 'bottom-right';
@@ -465,23 +460,16 @@ export function TourChatWidget({
 
     const assistantMessageId = (Date.now() + 1).toString();
     let accumulatedContent = '';
+    let triggeredUrl: string | null = null;
+    let streamErrored = false;
 
+    // OpenAI streams raw text deltas that already include correct spacing/newlines.
+    // Concatenate directly - inserting our own spaces breaks URLs, emails and
+    // phone numbers (e.g. "bodyactivegym.co.uk" -> "body active gym.co.uk").
     const appendStreamChunk = (existing: string, chunk: string) => {
       if (!existing) return chunk;
       if (!chunk) return existing;
-
-      const prevChar = existing.slice(-1);
-      const nextChar = chunk.charAt(0);
-
-      // Preserve intentional spacing/newlines, but add one space when two text
-      // segments are joined directly (e.g. "there." + "Here" => "there. Here").
-      const needsBoundarySpace =
-        !/\s/.test(prevChar) &&
-        !/\s/.test(nextChar) &&
-        /[A-Za-z0-9.!?,;:)]/.test(prevChar) &&
-        /[A-Za-z0-9(]/.test(nextChar);
-
-      return needsBoundarySpace ? `${existing} ${chunk}` : `${existing}${chunk}`;
+      return `${existing}${chunk}`;
     };
 
     try {
@@ -599,6 +587,9 @@ export function TourChatWidget({
                 });
                 window.dispatchEvent(navigationEvent);
               } else if (data.action_type === 'open_url' && data.url) {
+                // Remember the URL so it can be appended to the assistant message
+                // (AI Response + URL triggers should show the link after the reply).
+                triggeredUrl = data.url;
                 const urlEvent = new CustomEvent('tour_chatbot_open_url', {
                   detail: { url: data.url },
                 });
@@ -614,25 +605,36 @@ export function TourChatWidget({
                 setPreviousResponseId(data.responseId);
               }
             } else if (data.type === 'error') {
-              throw new Error(data.error || 'Streaming error');
+              // Flag and re-throw outside this try so it isn't swallowed by the
+              // JSON-parse catch below (otherwise the stream ends empty -> "Done.").
+              streamErrored = true;
             }
           } catch (parseError) {
             console.error('Error parsing tour chatbot SSE event:', parseError);
           }
+
+          if (streamErrored) {
+            throw new Error('Sorry, I encountered an error. Please try again later.');
+          }
         }
+      }
+
+      let finalContent = accumulatedContent || 'Done.';
+      if (triggeredUrl && !finalContent.includes(triggeredUrl)) {
+        finalContent = `${finalContent}\n\n${triggeredUrl}`;
       }
 
       setMessages(prev =>
         prev.some(msg => msg.id === assistantMessageId)
           ? prev.map(msg =>
               msg.id === assistantMessageId
-                ? { ...msg, content: accumulatedContent || 'Done.' }
+                ? { ...msg, content: finalContent }
                 : msg
             )
           : [...prev, {
               id: assistantMessageId,
               role: 'assistant',
-              content: accumulatedContent || 'Done.',
+              content: finalContent,
               timestamp: new Date().toISOString(),
             }]
       );
@@ -1013,8 +1015,8 @@ export function TourChatWidget({
               !isFullscreen && "absolute z-50"
             )}
             style={{
-              [isLeftPosition ? 'left' : 'right']: `${isFullscreen ? 24 : getCustomisationValue('chat_offset_side', 'mobile_chat_offset_side')}px`,
-              bottom: `${isFullscreen ? (isIPad ? 80 : 24) : getCustomisationValue('chat_offset_bottom', 'mobile_chat_offset_bottom')}px`
+              [isLeftPosition ? 'left' : 'right']: `${isFullscreen ? 24 : getCustomisationValue('chat_button_side_offset', 'mobile_chat_button_side_offset')}px`,
+              bottom: `${isFullscreen ? (isIPad ? 80 : 24) : getCustomisationValue('chat_button_bottom_offset', 'mobile_chat_button_bottom_offset')}px`
             }}
           >
             <div 
@@ -1127,6 +1129,10 @@ export function TourChatWidget({
       {/* Custom animations handled by animation utility system */}
       <style jsx>{`
         /* Legacy shake animation - now handled by animation utility */
+        .tour-chat-textarea::placeholder {
+          color: var(--tour-chat-placeholder-color, #6B7280) !important;
+          opacity: 1;
+        }
       `}</style>
       
       {!isExpanded ? (
@@ -1145,8 +1151,8 @@ export function TourChatWidget({
           )}
           style={{
             // Apply custom positioning with offsets
-            [isLeftPosition ? 'left' : 'right']: `${isFullscreen ? 24 : getCustomisationValue('chat_offset_side', 'mobile_chat_offset_side')}px`,
-            bottom: `${isFullscreen ? (isIPad ? 80 : 24) : getCustomisationValue('chat_offset_bottom', 'mobile_chat_offset_bottom')}px`
+            [isLeftPosition ? 'left' : 'right']: `${isFullscreen ? 24 : getCustomisationValue('chat_button_side_offset', 'mobile_chat_button_side_offset')}px`,
+            bottom: `${isFullscreen ? (isIPad ? 80 : 24) : getCustomisationValue('chat_button_bottom_offset', 'mobile_chat_button_bottom_offset')}px`
           }}
           onMouseEnter={(e) => {
             // Apply hover color if defined
@@ -1334,7 +1340,10 @@ export function TourChatWidget({
               {/* Messages */}
               <div 
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-transparent to-gray-50/30 dark:to-gray-900/30"
+                className="flex-1 overflow-y-auto p-4 space-y-4"
+                style={{
+                  backgroundColor: getCustomisationValue('window_background_color', 'mobile_window_background_color') as string,
+                }}
               >
                 {messages.map((message, index) => (
                   <div
@@ -1393,6 +1402,16 @@ export function TourChatWidget({
                             remarkPlugins={[remarkGfm]}
                             components={{
                               p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              a: ({ href, children }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline break-all hover:opacity-80"
+                                >
+                                  {children}
+                                </a>
+                              ),
                               ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
                               ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
                               li: ({ children }) => <li>{children}</li>,
@@ -1420,8 +1439,7 @@ export function TourChatWidget({
                         const timestamp = formatTimestamp(message.timestamp);
                         if (!timestamp) return null;
                         
-                        // Use fixed styling since timestamp color/size fields don't exist in database
-                        const timestampColor = '#999';
+                        const timestampColor = (getCustomisationValue('timestamp_color', 'mobile_timestamp_color') as string) || '#9CA3AF';
                         const timestampSize = 11;
                         
                         return (
@@ -1451,11 +1469,15 @@ export function TourChatWidget({
                 {isLoading && !hasStreamedContent && (
                   <div className="flex items-start gap-2.5 justify-start">
                     {renderAvatar(false)}
-                    <div className="bg-white/80 dark:bg-gray-800/80 p-3 rounded-lg shadow-sm border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm">
+                    <div
+                      className="p-3 rounded-lg shadow-sm backdrop-blur-sm"
+                      style={{ backgroundColor: (getCustomisationValue('thinking_background_color', 'mobile_thinking_background_color') as string) || '#F3F4F6' }}
+                    >
                       {(() => {
                         const typingStyle = (getCustomisationValue('typing_indicator_style', 'mobile_typing_indicator_style') as 'dots' | 'wave' | 'pulse' | 'none') || 'dots';
                         const typingColor = (getCustomisationValue('typing_indicator_color', 'mobile_typing_indicator_color') as string) || (getCustomisationValue('header_background_color', 'mobile_header_background_color') as string) || '#3B82F6';
                         const typingSpeed = (getCustomisationValue('typing_indicator_speed', 'mobile_typing_indicator_speed') as 'slow' | 'normal' | 'fast') || 'normal';
+                        const thinkingTextColor = (getCustomisationValue('thinking_text_color', 'mobile_thinking_text_color') as string) || '#6B7280';
                         
                         // Get animation duration based on speed
                         const getAnimationDuration = () => {
@@ -1471,7 +1493,7 @@ export function TourChatWidget({
                         
                         if (typingStyle === 'none') {
                           return (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs" style={{ color: thinkingTextColor }}>
                               {chatbotName} is typing...
                             </span>
                           );
@@ -1523,7 +1545,7 @@ export function TourChatWidget({
                                 />
                               )}
                             </div>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs" style={{ color: thinkingTextColor }}>
                               {chatbotName} is typing...
                             </span>
                           </div>
@@ -1558,16 +1580,19 @@ export function TourChatWidget({
                         // No additional scroll prevention needed
                       }}
                       placeholder={getCustomisationValue('input_placeholder_text', 'mobile_input_placeholder_text') as string || 'Ask about this space, availability, or key details...'}
-                      className="w-full resize-none border border-gray-200 dark:border-gray-700 px-2.5 py-2 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500 backdrop-blur-sm transition-all duration-200"
+                      className="tour-chat-textarea w-full resize-none border border-gray-200 dark:border-gray-700 px-2.5 py-2 focus:outline-none focus:border-red-500 backdrop-blur-sm transition-all duration-200"
                       rows={1}
                       style={{ 
                         maxHeight: '120px',
                         backgroundColor: getCustomisationValue('input_background_color', 'mobile_input_background_color') as string,
+                        color: (getCustomisationValue('input_text_color', 'mobile_input_text_color') as string) || '#111827',
                         fontSize: `${Math.max(16, getCustomisationValue('placeholder_text_size', 'mobile_placeholder_text_size') as number || 16)}px`,
                         borderRadius: `${getCustomisationValue('input_border_radius', 'mobile_input_border_radius')}px`,
                         height: `${getCustomisationValue('input_height', 'mobile_input_height')}px`,
                         minHeight: `${getCustomisationValue('input_height', 'mobile_input_height')}px`,
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        // CSS variable consumed by the ::placeholder rule below
+                        ['--tour-chat-placeholder-color' as any]: (getCustomisationValue('placeholder_text_color', 'mobile_placeholder_text_color') as string) || '#6B7280'
                       }}
                       disabled={isLoading}
                     />
@@ -1576,18 +1601,11 @@ export function TourChatWidget({
                     onClick={sendMessage}
                     disabled={!inputMessage.trim() || isLoading}
                     className={cn(
-                      "rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 hover:scale-105 shadow-lg",
-                      (() => {
-                        const size = getCustomisationValue('send_button_size', 'mobile_send_button_size') as 'small' | 'medium' | 'large';
-                        switch (size) {
-                          case 'small': return 'h-[30px] w-[30px]';
-                          case 'large': return 'h-12 w-12';
-                          case 'medium':
-                          default: return 'h-9 w-9';
-                        }
-                      })()
+                      "rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 hover:scale-105 shadow-lg"
                     )}
                     style={{
+                      width: `${resolveSendButtonSizePx({ pxValue: getCustomisationValue('send_button_size_px', 'mobile_send_button_size_px') as number, legacySize: getCustomisationValue('send_button_size', 'mobile_send_button_size') as string })}px`,
+                      height: `${resolveSendButtonSizePx({ pxValue: getCustomisationValue('send_button_size_px', 'mobile_send_button_size_px') as number, legacySize: getCustomisationValue('send_button_size', 'mobile_send_button_size') as string })}px`,
                       backgroundColor: getCustomisationValue('send_button_color', 'mobile_send_button_color') as string,
                       borderRadius: `${getCustomisationValue('send_button_border_radius', 'mobile_send_button_border_radius')}px`,
                       boxShadow: `0 4px 14px ${getCustomisationValue('send_button_color', 'mobile_send_button_color')}25`
@@ -1605,15 +1623,8 @@ export function TourChatWidget({
                     {(() => {
                       const iconName = getCustomisationValue('send_button_icon', 'mobile_send_button_icon') as string || 'Send';
                       const SendIconComponent = SEND_ICON_MAP[iconName as keyof typeof SEND_ICON_MAP] || Send;
-                      const size = getCustomisationValue('send_button_size', 'mobile_send_button_size') as 'small' | 'medium' | 'large';
-                      const iconSize = (() => {
-                        switch (size) {
-                          case 'small': return 14;
-                          case 'large': return 20;
-                          case 'medium':
-                          default: return 16;
-                        }
-                      })();
+                      const buttonPx = resolveSendButtonSizePx({ pxValue: getCustomisationValue('send_button_size_px', 'mobile_send_button_size_px') as number, legacySize: getCustomisationValue('send_button_size', 'mobile_send_button_size') as string });
+                      const iconSize = sendButtonIconSizePx(buttonPx);
                       
                       return (
                         <SendIconComponent 

@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, ChevronDown, ChevronUp, Plus, Save, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useChatbotInfoSections } from "@/hooks/app/useChatbotInfoSections";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type FieldType = 'text' | 'textarea' | 'url' | 'phone' | 'email';
 
@@ -20,6 +22,7 @@ interface EditableField {
   field_value: string;
   display_order: number;
   is_required: boolean;
+  field_rows: number;
 }
 
 interface EditableSection {
@@ -57,12 +60,29 @@ function inferFieldType(label: string): FieldType {
   return "text";
 }
 
+function getDefaultFieldRows(fieldType: FieldType, fieldLabel: string): number {
+  const normalised = fieldLabel.toLowerCase();
+  if (fieldType === "textarea") {
+    if (normalised.includes("description") || normalised.includes("address") || normalised.includes("notes")) {
+      return 3;
+    }
+    return 2;
+  }
+  return 1;
+}
+
+function getFieldHeightOptionLabel(rows: number): string {
+  if (rows === 1) return "Field height: 1 line";
+  return `Field height: ${rows} lines`;
+}
+
 export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProps) {
   const { toast } = useToast();
   const { sections, isLoading, isSaving, saveSections } = useChatbotInfoSections(chatbotConfigId);
   const [draftSections, setDraftSections] = useState<EditableSection[]>([]);
   const [isBlockExpanded, setIsBlockExpanded] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [pendingDeleteSection, setPendingDeleteSection] = useState<{ index: number; title: string } | null>(null);
 
   useEffect(() => {
     const safeSections = Array.isArray(sections) ? sections : [];
@@ -75,6 +95,7 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
         field_value: field.field_value || "",
         display_order: field.display_order ?? fieldIndex,
         is_required: field.is_required,
+        field_rows: Math.min(3, Math.max(1, Number.isFinite(field.field_rows) ? Number(field.field_rows) : getDefaultFieldRows(field.field_type, field.field_label))),
       }));
 
       if (section.section_key === GENERAL_INFO_SECTION_KEY) {
@@ -91,6 +112,7 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
             field_value: "",
             display_order: insertIndex,
             is_required: false,
+            field_rows: 3,
           });
         }
 
@@ -101,11 +123,13 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
               field_label: "General Description",
               field_type: "textarea",
               display_order: index,
+              field_rows: Math.min(3, Math.max(1, field.field_rows || 3)),
             };
           }
           return {
             ...field,
             display_order: index,
+            field_rows: Math.min(3, Math.max(1, field.field_rows || getDefaultFieldRows(field.field_type, field.field_label))),
           };
         });
       }
@@ -129,14 +153,14 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
 
   const isSectionExpanded = (section: EditableSection, index: number) => {
     const key = getSectionExpandKey(section, index);
-    return expandedSections[key] ?? true;
+    return expandedSections[key] ?? false;
   };
 
   const toggleSection = (section: EditableSection, index: number) => {
     const key = getSectionExpandKey(section, index);
     setExpandedSections((prev) => ({
       ...prev,
-      [key]: !(prev[key] ?? true),
+      [key]: !(prev[key] ?? false),
     }));
   };
 
@@ -198,6 +222,7 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
               field_value: "",
               display_order: nextFieldIndex,
               is_required: false,
+              field_rows: 1,
             },
           ],
         };
@@ -240,6 +265,7 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
             field_value: field.field_value || "",
             display_order: fieldIndex,
             is_required: field.is_required,
+            field_rows: Math.min(3, Math.max(1, Number.isFinite(field.field_rows) ? Number(field.field_rows) : getDefaultFieldRows(field.field_type, field.field_label))),
           })),
         })),
       });
@@ -267,7 +293,7 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
             </span>
             <span>Chatbot Information</span>
           </CardTitle>
-          <CardDescription>Select a tour and create a chatbot first to manage information sections.</CardDescription>
+          <CardDescription>Create and save your chatbot in the Configuration section first to manage information sections.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -338,7 +364,12 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
                 type="button"
                 variant="ghost"
                 className="text-red-600 hover:text-red-700"
-                onClick={() => deleteSection(sectionIndex)}
+                onClick={() =>
+                  setPendingDeleteSection({
+                    index: sectionIndex,
+                    title: section.section_title || `Section ${sectionIndex + 1}`,
+                  })
+                }
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -348,13 +379,28 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {section.fields.map((field, fieldIndex) => (
                   <div key={`${field.id || "new"}-${fieldIndex}`} className="space-y-2 rounded-md bg-white p-3 dark:border dark:border-input dark:bg-background">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Input
                         value={field.field_label}
                         onChange={(event) => updateField(sectionIndex, fieldIndex, { field_label: event.target.value })}
                         placeholder="Field name"
-                        className="max-w-[220px]"
+                        className="min-w-[180px] flex-1"
                       />
+                      <Select
+                        value={String(Math.min(3, Math.max(1, field.field_rows || 1)))}
+                        onValueChange={(value) => updateField(sectionIndex, fieldIndex, { field_rows: Number(value) })}
+                      >
+                        <SelectTrigger className="h-10 w-[180px]">
+                          <SelectValue>
+                            {getFieldHeightOptionLabel(Math.min(3, Math.max(1, field.field_rows || 1)))}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 line</SelectItem>
+                          <SelectItem value="2">2 lines</SelectItem>
+                          <SelectItem value="3">3 lines</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button
                         type="button"
                         variant="ghost"
@@ -366,22 +412,24 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
                       </Button>
                     </div>
 
-                    {field.field_type === "textarea" ? (
-                      <Textarea
-                        value={field.field_value}
-                        onChange={(event) => updateField(sectionIndex, fieldIndex, { field_value: event.target.value })}
-                        placeholder="Enter value"
-                      />
-                    ) : (
-                      <Input
-                        value={field.field_value}
-                        onChange={(event) => updateField(sectionIndex, fieldIndex, {
-                          field_value: event.target.value,
-                          field_type: inferFieldType(field.field_label),
-                        })}
-                        placeholder="Enter value"
-                      />
-                    )}
+                    <div className="space-y-2">
+                      {(field.field_rows || 1) > 1 ? (
+                        <Textarea
+                          value={field.field_value}
+                          rows={Math.min(3, Math.max(1, field.field_rows || 1))}
+                          className="min-h-0 resize-none"
+                          style={{ height: `${Math.min(3, Math.max(1, field.field_rows || 1)) * 24 + 16}px` }}
+                          onChange={(event) => updateField(sectionIndex, fieldIndex, { field_value: event.target.value })}
+                          placeholder="Enter value"
+                        />
+                      ) : (
+                        <Input
+                          value={field.field_value}
+                          onChange={(event) => updateField(sectionIndex, fieldIndex, { field_value: event.target.value })}
+                          placeholder="Enter value"
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -394,6 +442,26 @@ export function ChatbotInfoSections({ chatbotConfigId }: ChatbotInfoSectionsProp
           </div>
         ))}
       </CardContent> : null}
+
+      <ConfirmDialog
+        open={pendingDeleteSection !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteSection(null);
+        }}
+        title="Delete this section?"
+        description={
+          pendingDeleteSection
+            ? `"${pendingDeleteSection.title}" and all its fields will be removed. This change applies once you save your sections.`
+            : "This section and all its fields will be removed. This change applies once you save your sections."
+        }
+        confirmText="Delete section"
+        destructive
+        onConfirm={() => {
+          if (pendingDeleteSection) {
+            deleteSection(pendingDeleteSection.index);
+          }
+        }}
+      />
     </Card>
   );
 }

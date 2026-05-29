@@ -87,6 +87,7 @@ export async function deleteChatbotCustomisation(
 export function getDefaultCustomisation(_chatbotType: 'tour' = 'tour'): Partial<ChatbotCustomisation> {
   const baseDefaults = {
     chat_button_size: 'medium' as const,
+    chat_button_size_px: 80,
     chat_button_position: 'bottom-right' as const,
     chat_button_icon: 'MessageCircle',
     icon_size: 24, // Default icon size in pixels
@@ -96,6 +97,7 @@ export function getDefaultCustomisation(_chatbotType: 'tour' = 'tour'): Partial<
     window_height: 500,
     ai_message_background: '#F3F4F6',
     ai_message_text_color: '#111827',
+    window_background_color: '#FFFFFF',
     input_background_color: '#FFFFFF',
     show_powered_by: true,
     is_active: true,
@@ -121,6 +123,7 @@ export function getAdvancedDefaultCustomisation(
   const baseDefaults = {
     // EXISTING FIELDS
     chat_button_size: 'medium' as const,
+    chat_button_size_px: 80,
     chat_button_position: 'bottom-right' as const,
     chat_button_icon: 'MessageCircle',
     icon_size: 48,
@@ -130,6 +133,7 @@ export function getAdvancedDefaultCustomisation(
     window_height: 400,
     ai_message_background: '#F3F4F6',
     ai_message_text_color: '#111827',
+    window_background_color: '#FFFFFF',
     input_background_color: '#FFFFFF',
     show_powered_by: true,
     is_active: true,
@@ -173,6 +177,9 @@ export function getAdvancedDefaultCustomisation(
     // MESSAGE FEATURES
     show_timestamps: false,
     timestamp_format: '12h' as const,
+    timestamp_color: '#9CA3AF',
+    thinking_background_color: '#F3F4F6',
+    thinking_text_color: '#6B7280',
     message_max_width: 90,
     
     // AVATAR CUSTOMISATION
@@ -185,6 +192,7 @@ export function getAdvancedDefaultCustomisation(
     // ENHANCED SEND BUTTON STYLING
     send_button_style: 'icon' as const,
     send_button_size: 'medium' as const,
+    send_button_size_px: 36,
     send_button_border_radius: 0,
     send_button_icon: 'Send' as const,
     send_button_hover_color: '#40A9FF',
@@ -216,6 +224,7 @@ export function getAdvancedDefaultCustomisation(
     
     // MOBILE EXPANSION
     mobile_chat_button_size: 'medium' as const,
+    mobile_chat_button_size_px: 60,
     mobile_chat_button_position: 'bottom-right' as const,
     mobile_icon_size: 42,
     mobile_chat_button_border_radius: 8,
@@ -262,6 +271,7 @@ export function getAdvancedDefaultCustomisation(
     mobile_send_button_icon_color: '#FFFFFF',
     mobile_send_button_style: 'icon' as const,
     mobile_send_button_size: 'medium' as const,
+    mobile_send_button_size_px: 36,
     mobile_send_button_border_radius: 0,
     mobile_send_button_icon: 'Send' as const,
     mobile_send_button_hover_color: '#40A9FF',
@@ -309,6 +319,9 @@ export function getAdvancedDefaultCustomisation(
     mobile_show_powered_by: true,
     mobile_show_timestamps: false,
     mobile_timestamp_format: '12h' as const,
+    mobile_timestamp_color: '#9CA3AF',
+    mobile_thinking_background_color: '#F3F4F6',
+    mobile_thinking_text_color: '#6B7280',
     mobile_custom_logo_url: null,
   };
 
@@ -334,6 +347,7 @@ export function getAdvancedDefaultCustomisation(
     mobile_input_text_color: '#111827',
     mobile_ai_message_background: '#F3F4F6',
     mobile_ai_message_text_color: '#111827',
+    mobile_window_background_color: '#FFFFFF',
     mobile_input_background_color: '#FFFFFF',
     mobile_send_button_hover_color: '#1E40AF',
     mobile_chat_button_hover_color: '#1E40AF',
@@ -682,6 +696,22 @@ export function validateCustomisation(customisation: Partial<ChatbotCustomisatio
   }
 
   // Layout validation
+  if (customisation.chat_button_size_px && (customisation.chat_button_size_px < 48 || customisation.chat_button_size_px > 128)) {
+    errors.push('Desktop chat button size must be between 48 and 128 pixels');
+  }
+
+  if (customisation.send_button_size_px && (customisation.send_button_size_px < 28 || customisation.send_button_size_px > 56)) {
+    errors.push('Desktop send button size must be between 28 and 56 pixels');
+  }
+
+  if (customisation.mobile_send_button_size_px && (customisation.mobile_send_button_size_px < 28 || customisation.mobile_send_button_size_px > 56)) {
+    errors.push('Mobile send button size must be between 28 and 56 pixels');
+  }
+
+  if (customisation.mobile_chat_button_size_px && (customisation.mobile_chat_button_size_px < 40 || customisation.mobile_chat_button_size_px > 104)) {
+    errors.push('Mobile chat button size must be between 40 and 104 pixels');
+  }
+
   if (customisation.chat_window_width && (customisation.chat_window_width < 320 || customisation.chat_window_width > 500)) {
     errors.push('Chat window width must be between 320 and 500 pixels');
   }
@@ -759,13 +789,69 @@ export function validateCustomisation(customisation: Partial<ChatbotCustomisatio
     errors.push('Mobile timestamp format must be 12h, 24h, or relative');
   }
 
-  // Offset validation
-  if (customisation.chat_offset_bottom && (customisation.chat_offset_bottom < 0 || customisation.chat_offset_bottom > 100)) {
+  // Offset validation (desktop + mobile, button + chat)
+  if (
+    customisation.chat_button_bottom_offset !== undefined &&
+    customisation.chat_button_bottom_offset !== null &&
+    (customisation.chat_button_bottom_offset < 0 || customisation.chat_button_bottom_offset > 100)
+  ) {
+    errors.push('Button bottom offset must be between 0 and 100 pixels');
+  }
+
+  if (
+    customisation.chat_button_side_offset !== undefined &&
+    customisation.chat_button_side_offset !== null &&
+    (customisation.chat_button_side_offset < 0 || customisation.chat_button_side_offset > 100)
+  ) {
+    errors.push('Button side offset must be between 0 and 100 pixels');
+  }
+
+  if (
+    customisation.chat_offset_bottom !== undefined &&
+    customisation.chat_offset_bottom !== null &&
+    (customisation.chat_offset_bottom < 0 || customisation.chat_offset_bottom > 100)
+  ) {
     errors.push('Chat offset bottom must be between 0 and 100 pixels');
   }
+
+  if (
+    customisation.chat_offset_side !== undefined &&
+    customisation.chat_offset_side !== null &&
+    (customisation.chat_offset_side < 0 || customisation.chat_offset_side > 100)
+  ) {
+    errors.push('Chat offset side must be between 0 and 100 pixels');
+  }
   
-  if (customisation.mobile_chat_offset_bottom && (customisation.mobile_chat_offset_bottom < 0 || customisation.mobile_chat_offset_bottom > 100)) {
+  if (
+    customisation.mobile_chat_button_bottom_offset !== undefined &&
+    customisation.mobile_chat_button_bottom_offset !== null &&
+    (customisation.mobile_chat_button_bottom_offset < 0 || customisation.mobile_chat_button_bottom_offset > 100)
+  ) {
+    errors.push('Mobile button bottom offset must be between 0 and 100 pixels');
+  }
+
+  if (
+    customisation.mobile_chat_button_side_offset !== undefined &&
+    customisation.mobile_chat_button_side_offset !== null &&
+    (customisation.mobile_chat_button_side_offset < 0 || customisation.mobile_chat_button_side_offset > 100)
+  ) {
+    errors.push('Mobile button side offset must be between 0 and 100 pixels');
+  }
+  
+  if (
+    customisation.mobile_chat_offset_bottom !== undefined &&
+    customisation.mobile_chat_offset_bottom !== null &&
+    (customisation.mobile_chat_offset_bottom < 0 || customisation.mobile_chat_offset_bottom > 100)
+  ) {
     errors.push('Mobile chat offset bottom must be between 0 and 100 pixels');
+  }
+
+  if (
+    customisation.mobile_chat_offset_side !== undefined &&
+    customisation.mobile_chat_offset_side !== null &&
+    (customisation.mobile_chat_offset_side < 0 || customisation.mobile_chat_offset_side > 100)
+  ) {
+    errors.push('Mobile chat offset side must be between 0 and 100 pixels');
   }
 
   return {

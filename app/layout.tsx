@@ -96,6 +96,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
   return (
     <html lang="en" translate="no" className="notranslate">
+      <head>
+        {/* Web fonts for chatbot customisation font options (Roboto, Open Sans).
+            The others (System UI, Arial, Helvetica, Georgia, Times New Roman) are system fonts. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300..700&family=Roboto:wght@300;400;500;700&display=swap"
+        />
+      </head>
       <body className={cn(inter.className, inter.variable)}>
         <script
           type="application/ld+json"

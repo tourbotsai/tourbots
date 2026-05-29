@@ -4,9 +4,10 @@ import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Upload, X, Loader2, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Upload, X, Loader2, AlertCircle, Crop as CropIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
+import { LogoCropModal } from "./logo-crop-modal";
 
 interface LogoUploadProps {
   value?: string | null;
@@ -29,7 +30,24 @@ export function LogoUpload({
   const { getAuthHeaders } = useAuthHeaders();
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isCropOpen, setIsCropOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropObjectUrl, setCropObjectUrl] = useState<string | null>(null);
+  const [isCropSaving, setIsCropSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const cleanupCropObjectUrl = useCallback(() => {
+    if (cropObjectUrl) {
+      URL.revokeObjectURL(cropObjectUrl);
+      setCropObjectUrl(null);
+    }
+  }, [cropObjectUrl]);
+
+  const isSvgFile = (file: File) => file.type === 'image/svg+xml';
+  const isSvgUrl = (url: string) => {
+    const normalised = url.toLowerCase();
+    return normalised.includes('image/svg+xml') || normalised.includes('.svg');
+  };
 
   const validateFile = (file: File): string | null => {
     // Check file type
@@ -47,8 +65,8 @@ export function LogoUpload({
     return null;
   };
 
-  const uploadImage = useCallback(async (file: File) => {
-    const validationError = validateFile(file);
+  const uploadImage = useCallback(async (blob: Blob, fileName: string, mimeType: string) => {
+    const validationError = validateFile(new File([blob], fileName, { type: mimeType }));
     if (validationError) {
       toast({
         title: "Invalid File",
@@ -61,7 +79,7 @@ export function LogoUpload({
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', blob, fileName);
       formData.append('venueId', venueId);
       formData.append('tourId', tourId);
 
@@ -94,9 +112,52 @@ export function LogoUpload({
     }
   }, [venueId, tourId, onChange, toast, getAuthHeaders]);
 
+  const openCropForSource = useCallback((src: string, objectUrl: string | null = null) => {
+    if (objectUrl) {
+      setCropObjectUrl(objectUrl);
+    }
+    setCropImageSrc(src);
+    setIsCropOpen(true);
+  }, []);
+
+  const closeCropModal = useCallback(() => {
+    setIsCropOpen(false);
+    setCropImageSrc(null);
+    cleanupCropObjectUrl();
+  }, [cleanupCropObjectUrl]);
+
+  const handleCropSave = useCallback(async (blob: Blob) => {
+    try {
+      setIsCropSaving(true);
+      await uploadImage(blob, `logo-cropped-${Date.now()}.png`, 'image/png');
+      closeCropModal();
+    } catch (error) {
+      // uploadImage handles the error toast already.
+    } finally {
+      setIsCropSaving(false);
+    }
+  }, [closeCropModal, uploadImage]);
+
   const handleFileSelect = (files: FileList | null) => {
     if (files && files.length > 0) {
-      uploadImage(files[0]);
+      const file = files[0];
+      if (isSvgFile(file)) {
+        uploadImage(file, file.name || `logo-${Date.now()}.svg`, file.type);
+        return;
+      }
+
+      const validationError = validateFile(file);
+      if (validationError) {
+        toast({
+          title: "Invalid File",
+          description: validationError,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(file);
+      openCropForSource(objectUrl, objectUrl);
     }
   };
 
@@ -160,7 +221,7 @@ export function LogoUpload({
       
       {value ? (
         // Show uploaded image with remove option
-        <div className="relative group">
+        <div className="relative group space-y-2">
           <div className="w-full h-40 border-2 border-dashed border-gray-200 dark:border-neutral-700 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-neutral-800">
             <img 
               src={value} 
@@ -177,15 +238,36 @@ export function LogoUpload({
               <span className="text-sm">Failed to load image</span>
             </div>
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="absolute -top-2 -right-2 w-7 h-7 rounded-full p-0"
-            onClick={handleRemove}
-            type="button"
-          >
-            <X className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {isSvgUrl(value)
+                ? "SVG uploaded. Cropping is unavailable for SVG files."
+                : "Use crop to remove transparent spacing around your logo."}
+            </p>
+            <div className="flex items-center gap-2">
+              {!isSvgUrl(value) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openCropForSource(value)}
+                  type="button"
+                  disabled={isUploading}
+                >
+                  <CropIcon className="mr-2 h-4 w-4" />
+                  Crop
+                </Button>
+              )}
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-8 h-8 rounded-full p-0"
+                onClick={handleRemove}
+                type="button"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
         // Show upload area
@@ -228,6 +310,19 @@ export function LogoUpload({
         onChange={(e) => handleFileSelect(e.target.files)}
         className="hidden"
         disabled={isUploading}
+      />
+
+      <LogoCropModal
+        open={isCropOpen}
+        imageSrc={cropImageSrc}
+        isSaving={isCropSaving}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeCropModal();
+          }
+        }}
+        onCancel={closeCropModal}
+        onSave={handleCropSave}
       />
     </div>
   );

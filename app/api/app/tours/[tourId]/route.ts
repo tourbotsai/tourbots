@@ -71,6 +71,15 @@ export async function PATCH(
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error updating tour:', error);
+    if (error?.code === '23505' && String(error?.message || '').includes('idx_tours_matterport_tour_id')) {
+      return NextResponse.json(
+        {
+          error:
+            'This Matterport model ID is already linked to another location in TourBots. Please use a different model ID or edit the existing location that already uses it.',
+        },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: error?.message || 'Failed to update tour' }, { status: 500 });
   }
 }

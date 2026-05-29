@@ -446,6 +446,7 @@ export interface ChatbotInfoField {
   field_value?: string | null;
   display_order: number;
   is_required: boolean;
+  field_rows?: number;
   created_at: string;
   updated_at: string;
 }
@@ -462,8 +463,9 @@ export interface ChatbotInfoSection {
   fields?: ChatbotInfoField[];
 }
 
-export type ChatbotTriggerConditionType = 'keywords' | 'message_count';
+export type ChatbotTriggerConditionType = 'keywords' | 'message_count' | 'intent';
 export type ChatbotTriggerActionType = 'ai_message' | 'open_url' | 'navigate_tour_point' | 'switch_tour_model';
+export type ChatbotTriggerResponseMode = 'exact' | 'natural';
 
 export interface ChatbotTrigger {
   id: string;
@@ -476,8 +478,14 @@ export interface ChatbotTrigger {
   condition_type: ChatbotTriggerConditionType;
   condition_keywords?: string[] | null;
   condition_message_count?: number | null;
+  /** Natural-language description of the user's intent (condition_type === 'intent'). */
+  condition_intent?: string | null;
   action_type: ChatbotTriggerActionType;
   action_message: string;
+  /** How the AI delivers action_message: verbatim ('exact') or woven in naturally ('natural'). */
+  response_mode?: ChatbotTriggerResponseMode;
+  /** Optional guidance for how the AI should use the message (natural delivery only). */
+  response_guidance?: string | null;
   action_url?: string | null;
   action_tour_point_id?: string | null;
   action_tour_model_id?: string | null;
@@ -506,6 +514,7 @@ export interface ChatbotCustomisation {
   // EXISTING BASIC FIELDS
   chat_button_color: string;
   chat_button_size: 'small' | 'medium' | 'large';
+  chat_button_size_px: number;
   chat_button_position: 'bottom-right' | 'bottom-left';
   chat_button_icon: string;
   icon_size: number; // Size of the icon in pixels (16-80)
@@ -520,6 +529,7 @@ export interface ChatbotCustomisation {
   ai_message_text_color: string;
   user_message_background: string;
   user_message_text_color: string;
+  window_background_color: string;
   input_background_color: string;
   send_button_color: string;
   send_button_icon_color: string;
@@ -567,6 +577,9 @@ export interface ChatbotCustomisation {
   // Message Features
   show_timestamps: boolean;
   timestamp_format: '12h' | '24h' | 'relative';
+  timestamp_color?: string | null;
+  thinking_background_color?: string | null;
+  thinking_text_color?: string | null;
   message_max_width: number;
   
   // Avatar Customisation
@@ -581,6 +594,7 @@ export interface ChatbotCustomisation {
   // Enhanced Send Button Styling
   send_button_style: 'icon' | 'text' | 'icon-text';
   send_button_size: 'small' | 'medium' | 'large';
+  send_button_size_px: number;
   send_button_border_radius: number;
   send_button_icon: 'Send' | 'ArrowRight' | 'ChevronRight' | 'Play' | 'MessageCircle';
   send_button_hover_color: string;
@@ -616,6 +630,7 @@ export interface ChatbotCustomisation {
   // Mobile Chat Button
   mobile_chat_button_color?: string | null;
   mobile_chat_button_size: 'small' | 'medium' | 'large';
+  mobile_chat_button_size_px: number;
   mobile_chat_button_position: 'bottom-right' | 'bottom-left';
   mobile_icon_size: number;
   mobile_chat_button_border_radius: number;
@@ -655,6 +670,7 @@ export interface ChatbotCustomisation {
   mobile_ai_message_background?: string | null;
   mobile_ai_message_text_color?: string | null;
   mobile_user_message_background?: string | null;
+  mobile_window_background_color?: string | null;
   mobile_input_background_color?: string | null;
   mobile_send_button_color?: string | null;
   
@@ -683,6 +699,7 @@ export interface ChatbotCustomisation {
   mobile_send_button_icon_color: string;
   mobile_send_button_style: 'icon' | 'text' | 'icon-text';
   mobile_send_button_size: 'small' | 'medium' | 'large';
+  mobile_send_button_size_px?: number | null;
   mobile_send_button_border_radius: number;
   mobile_send_button_icon: 'Send' | 'ArrowRight' | 'ChevronRight' | 'Play' | 'MessageCircle';
   mobile_send_button_hover_color: string;
@@ -730,6 +747,9 @@ export interface ChatbotCustomisation {
   mobile_show_powered_by: boolean;
   mobile_show_timestamps: boolean;
   mobile_timestamp_format: '12h' | '24h' | 'relative';
+  mobile_timestamp_color?: string | null;
+  mobile_thinking_background_color?: string | null;
+  mobile_thinking_text_color?: string | null;
   mobile_custom_logo_url?: string | null;
   mobile_custom_header_icon_url?: string | null; // Mobile custom header icon image URL
   

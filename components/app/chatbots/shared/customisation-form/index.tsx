@@ -10,14 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { 
@@ -80,7 +73,6 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
   const [localCustomisation, setLocalCustomisation] = useState(customisation);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isResettingFactory, setIsResettingFactory] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [favouritePresets, setFavouritePresets] = useState<string[]>([]);
   
@@ -188,7 +180,6 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
   };
 
   const handleResetFactorySettings = async () => {
-    setIsResettingFactory(true);
     try {
       const resetCustomisation = await onReset();
       setLocalCustomisation(resetCustomisation);
@@ -196,7 +187,6 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
       setPreviewMode(false);
       setPreviewCustomisation(null);
       setPreviewPresetName('');
-      setShowResetDialog(false);
       toast({
         title: "Customisation reset",
         description: "All settings have been reset to factory defaults.",
@@ -207,8 +197,7 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
         description: "Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsResettingFactory(false);
+      throw error;
     }
   };
 
@@ -376,35 +365,17 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
         </div>
       </div>
 
-      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent className="dark:border-input dark:bg-background">
-          <DialogHeader>
-            <DialogTitle>Reset customisation?</DialogTitle>
-            <DialogDescription>
-              Choose whether to discard only temporary unsaved changes, or reset everything to factory defaults.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col items-center gap-2 sm:flex-row sm:justify-center">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleDiscardTemporaryChanges}
-              disabled={isResettingFactory}
-              className="dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
-            >
-              Discard temporary changes
-            </Button>
-            <Button
-              type="button"
-              onClick={handleResetFactorySettings}
-              disabled={isResettingFactory}
-              className="bg-slate-900 text-white hover:bg-slate-800 dark:border dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
-            >
-              {isResettingFactory ? "Resetting..." : "Reset factory settings"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showResetDialog}
+        onOpenChange={setShowResetDialog}
+        title="Reset customisation?"
+        description="Choose whether to discard only temporary unsaved changes, or reset everything to factory defaults."
+        confirmText="Reset factory settings"
+        destructive
+        onConfirm={handleResetFactorySettings}
+        secondaryText="Discard temporary changes"
+        onSecondary={handleDiscardTemporaryChanges}
+      />
 
       {/* Main Layout - 2 Columns on desktop, stacked on mobile */}
       <div

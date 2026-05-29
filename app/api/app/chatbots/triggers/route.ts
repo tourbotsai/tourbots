@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
-import { ChatbotTrigger, ChatbotTriggerActionType, ChatbotTriggerConditionType } from '@/lib/types';
+import { ChatbotTrigger, ChatbotTriggerActionType, ChatbotTriggerConditionType, ChatbotTriggerResponseMode } from '@/lib/types';
 import {
   authenticateChatbotRoute,
   logChatbotAudit,
@@ -14,7 +14,9 @@ function sanitiseKeywords(input?: string[] | null): string[] {
 }
 
 function sanitiseConditionType(input?: string): ChatbotTriggerConditionType {
-  return input === 'message_count' ? 'message_count' : 'keywords';
+  if (input === 'message_count') return 'message_count';
+  if (input === 'intent') return 'intent';
+  return 'keywords';
 }
 
 function sanitiseActionType(input?: string): ChatbotTriggerActionType {
@@ -22,6 +24,10 @@ function sanitiseActionType(input?: string): ChatbotTriggerActionType {
     return input;
   }
   return 'ai_message';
+}
+
+function sanitiseResponseMode(input?: string): ChatbotTriggerResponseMode {
+  return input === 'exact' ? 'exact' : 'natural';
 }
 
 async function resolveConfig(chatbotConfigId: string, venueId: string) {
@@ -191,6 +197,7 @@ export async function PUT(request: NextRequest) {
     const safeTriggers = (triggers || []).map((trigger, index) => {
       const conditionType = sanitiseConditionType(trigger.condition_type);
       const actionType = sanitiseActionType(trigger.action_type);
+      const responseMode = sanitiseResponseMode(trigger.response_mode);
       const conditionKeywords = sanitiseKeywords(trigger.condition_keywords);
       const conditionMessageCount = Number(trigger.condition_message_count || 0);
 
@@ -204,8 +211,11 @@ export async function PUT(request: NextRequest) {
         condition_type: conditionType,
         condition_keywords: conditionType === 'keywords' ? conditionKeywords : [],
         condition_message_count: conditionType === 'message_count' && conditionMessageCount > 0 ? conditionMessageCount : null,
+        condition_intent: conditionType === 'intent' ? (trigger.condition_intent || '').trim() || null : null,
         action_type: actionType,
         action_message: (trigger.action_message || '').trim(),
+        response_mode: responseMode,
+        response_guidance: responseMode === 'natural' ? (trigger.response_guidance || '').trim() || null : null,
         action_url: actionType === 'open_url' ? (trigger.action_url || '').trim() || null : null,
         action_tour_point_id: actionType === 'navigate_tour_point' ? trigger.action_tour_point_id || null : null,
         action_tour_model_id: actionType === 'switch_tour_model' ? trigger.action_tour_model_id || null : null,
@@ -230,6 +240,13 @@ export async function PUT(request: NextRequest) {
       if (trigger.condition_type === 'message_count' && !trigger.condition_message_count) {
         return NextResponse.json(
           { error: 'Message-count triggers require a message count' },
+          { status: 400 }
+        );
+      }
+
+      if (trigger.condition_type === 'intent' && !trigger.condition_intent) {
+        return NextResponse.json(
+          { error: 'Intent-based triggers require an intent description' },
           { status: 400 }
         );
       }

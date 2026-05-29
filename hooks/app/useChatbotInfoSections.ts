@@ -17,6 +17,7 @@ interface ChatbotInfoSectionsPayload {
       field_value?: string | null;
       display_order: number;
       is_required: boolean;
+      field_rows?: number;
     }>;
   }>;
 }

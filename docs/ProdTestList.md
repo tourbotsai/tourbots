@@ -8,6 +8,8 @@ Test account email: `apexfacilitiespricing@gmail.com`
 Test account password: `Test1234*`
 Apex Test
 
+Local Test account email: `testone@test.com`  
+Test account password: `Test1234*`
 
 ## TO DO
 - [X] Confirm live app opens at `tourbots.ai`.
@@ -16,37 +18,43 @@ Apex Test
 - [X] Go to `App -> Tours`. Add Matterport tour URL. Save tour.
 - [X] Add + test tour points.
 - [X] Add + switch to second model
-
-## D) Tour Menu Flow
-
-- [ ] Go to `Tours -> Tour Menu`.
-- [ ] Create menu sections/items linked to points.
-- [ ] Save menu.
-- [ ] Refresh and confirm menu persists.
+- [X] Go to `Tours -> Tour Menu`.
+- [X] Create menu sections/items linked to points.
+- [X] Save menu.
+- [X] Refresh and confirm menu persists.
 
 ## E) Chatbot Flow
 
-- [ ] Go to `App -> Chatbots`.
-- [ ] Add chatbot information content.
-- [ ] Upload at least one knowledge document.
-- [ ] Add at least 2 trigger rules.
-- [ ] Apply chatbot customisation/branding.
-- [ ] Test question: pricing.
-- [ ] Test question: opening times.
-- [ ] Test request: navigate to a specific area.
-- [ ] Test off-topic question.
+- [X] Go to `App -> Chatbots`.
+- [X] Add chatbot information content.
+- [X] Upload at least one knowledge document.
+- [X] Add at least 2 trigger rules.
+- [X] Apply chatbot customisation/branding.
+- [X] Full Playground testing:
+- [X] Test question: pricing.
+  - Test: Testing pricing trigger, AI Response + URL
+  - Prompt: "How much is a monthly membership, and do you offer off-peak or student rates?"
+- [X] Test question: opening times.
+  - Prompt: "What are your opening hours at the weekend?"
+- [X] Test Testing uploaded document, class time.
+  - Prompt: "What time is the Yoga Flow class on a Saturday?"
+  - Expected (from timetable doc): 11:00.
+- [X] Test off-topic question.
+  - Prompt: "What's the best film to watch this weekend?"
+- [X] Test all customisation settings Desktop/Mobile
 
 ## F) Tour Embed Flow (External Site)
 
-- [ ] Go to `Tours -> Share & Embed`.
-- [ ] Copy tour embed code.
-- [ ] Paste code into `bodyactivegym.vercel.app`.
-- [ ] Publish/redeploy external site.
-- [ ] Confirm embed loads correctly.
-- [ ] Confirm chatbot opens and responds.
-- [ ] Confirm tour navigation actions work.
-- [ ] Confirm mobile view works.
-- [ ] Confirm desktop view works.
+- [X] Go to `Tours -> Share & Embed`.
+- [X] Copy tour embed code.
+- [X] Paste code into other webiste repo.
+- [X] Confirm embed loads correctly.
+- [X] Confirm chatbot opens and responds.
+  - Send multile messages in one chat
+- [X] Confirm tour navigation actions work.
+  - Prompt: "Can you take me to the free weights area?"
+- [X] Confirm mobile view works.
+- [X] Confirm desktop view works.
 
 ## G) Tracking and Analytics
 

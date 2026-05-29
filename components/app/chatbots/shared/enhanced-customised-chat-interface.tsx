@@ -408,7 +408,8 @@ export function EnhancedCustomisedChatInterface({
         {/* Messages */}
         <div 
           ref={messagesContainerRef}
-          className="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50/50"
+          className="flex-grow p-4 space-y-4 overflow-y-auto"
+          style={{ backgroundColor: effectiveCustomisation.window_background_color }}
         >
           {messages.length === 0 && (
             <div className="text-center text-gray-500 py-8">
@@ -470,7 +471,10 @@ export function EnhancedCustomisedChatInterface({
                   )}
                   style={{
                     ...(message.role === 'assistant' ? styles.aiMessage : styles.userMessage),
-                    ...styles.message
+                    ...styles.message,
+                    ...(message.role === 'assistant' && !message.content && (message as any).isStreaming
+                      ? { backgroundColor: effectiveCustomisation.thinking_background_color || '#F3F4F6' }
+                      : {})
                   }}
                 >
                   {/* Show typing indicator for empty streaming messages */}
@@ -494,7 +498,7 @@ export function EnhancedCustomisedChatInterface({
                     
                     if (typingStyle === 'none') {
                       return (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-xs" style={{ color: effectiveCustomisation.thinking_text_color || '#6B7280' }}>
                           {chatbotName} is typing...
                         </span>
                       );
@@ -546,7 +550,7 @@ export function EnhancedCustomisedChatInterface({
                             />
                           )}
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-xs" style={{ color: effectiveCustomisation.thinking_text_color || '#6B7280' }}>
                           {chatbotName} is typing...
                         </span>
                       </div>
@@ -590,10 +594,13 @@ export function EnhancedCustomisedChatInterface({
                 
                 {/* Timestamp */}
                 {(showTimestamps || effectiveCustomisation.show_timestamps) && (
-                  <div className={cn(
-                    "text-xs text-gray-500 mt-1",
-                    message.role === 'assistant' ? "text-left" : "text-right"
-                  )}>
+                  <div
+                    className={cn(
+                      "text-xs mt-1",
+                      message.role === 'assistant' ? "text-left" : "text-right"
+                    )}
+                    style={{ color: effectiveCustomisation.timestamp_color || '#9CA3AF' }}
+                  >
                     {formatTimestamp(message.timestamp || new Date())}
                   </div>
                 )}

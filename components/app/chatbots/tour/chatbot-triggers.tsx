@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Zap, ChevronDown, ChevronUp, Plus, Save, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useChatbotTriggers } from "@/hooks/app/useChatbotTriggers";
@@ -15,6 +16,7 @@ import {
   ChatbotTrigger,
   ChatbotTriggerActionType,
   ChatbotTriggerConditionType,
+  ChatbotTriggerResponseMode,
   ChatbotTriggerTourModelOption,
   ChatbotTriggerTourPointOption,
 } from "@/lib/types";
@@ -28,8 +30,11 @@ interface EditableTrigger {
   condition_keywords: string[];
   condition_keywords_input: string;
   condition_message_count: number | null;
+  condition_intent: string;
   action_type: ChatbotTriggerActionType;
   action_message: string;
+  response_mode: ChatbotTriggerResponseMode;
+  response_guidance: string;
   action_url: string;
   action_tour_point_id: string;
   action_tour_model_id: string;
@@ -49,12 +54,15 @@ function createEmptyTrigger(index: number): EditableTrigger {
     name: `Trigger ${index + 1}`,
     display_order: index,
     is_active: true,
-    condition_type: "keywords",
+    condition_type: "intent",
     condition_keywords: [],
     condition_keywords_input: "",
     condition_message_count: null,
+    condition_intent: "",
     action_type: "ai_message",
     action_message: "",
+    response_mode: "natural",
+    response_guidance: "",
     action_url: "",
     action_tour_point_id: "",
     action_tour_model_id: "",
@@ -87,6 +95,8 @@ export function ChatbotTriggers({
   });
   const [isExpanded, setIsExpanded] = useState(hideHeader);
   const [draftTriggers, setDraftTriggers] = useState<EditableTrigger[]>([]);
+  const [expandedTriggerCards, setExpandedTriggerCards] = useState<Record<string, boolean>>({});
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const mapped = (triggers || []).map((trigger, index) => ({
@@ -98,8 +108,11 @@ export function ChatbotTriggers({
       condition_keywords: trigger.condition_keywords || [],
       condition_keywords_input: "",
       condition_message_count: trigger.condition_message_count || null,
+      condition_intent: trigger.condition_intent || "",
       action_type: trigger.action_type || "ai_message",
       action_message: trigger.action_message || "",
+      response_mode: (trigger.response_mode === "exact" ? "exact" : "natural") as ChatbotTriggerResponseMode,
+      response_guidance: trigger.response_guidance || "",
       action_url: trigger.action_url || "",
       action_tour_point_id: trigger.action_tour_point_id || "",
       action_tour_model_id: trigger.action_tour_model_id || "",
@@ -107,17 +120,34 @@ export function ChatbotTriggers({
     setDraftTriggers(mapped);
   }, [triggers]);
 
+  useEffect(() => {
+    setExpandedTriggerCards((prev) => {
+      const next: Record<string, boolean> = {};
+      draftTriggers.forEach((trigger, index) => {
+        const key = `${trigger.id || "new"}-${index}`;
+        next[key] = prev[key] ?? false;
+      });
+      return next;
+    });
+  }, [draftTriggers]);
+
   const canSave = useMemo(
     () =>
       Boolean(
         !readOnly &&
           chatbotConfigId &&
           draftTriggers.every((trigger) => {
-            if (!trigger.name.trim() || !trigger.action_message.trim()) {
+            if (!(trigger.name || "").trim() || !(trigger.action_message || "").trim()) {
+              return false;
+            }
+            if (trigger.condition_type === "intent" && !(trigger.condition_intent || "").trim()) {
+              return false;
+            }
+            if (trigger.condition_type === "keywords" && (trigger.condition_keywords || []).length === 0) {
               return false;
             }
             if (trigger.action_type === "open_url") {
-              return Boolean(trigger.action_url.trim());
+              return Boolean((trigger.action_url || "").trim());
             }
             if (trigger.action_type === "navigate_tour_point") {
               return Boolean(trigger.action_tour_point_id);
@@ -188,6 +218,21 @@ export function ChatbotTriggers({
     );
   };
 
+  const getTriggerCardKey = (trigger: EditableTrigger, index: number) => `${trigger.id || "new"}-${index}`;
+
+  const isTriggerCardExpanded = (trigger: EditableTrigger, index: number) => {
+    const key = getTriggerCardKey(trigger, index);
+    return expandedTriggerCards[key] ?? false;
+  };
+
+  const toggleTriggerCard = (trigger: EditableTrigger, index: number) => {
+    const key = getTriggerCardKey(trigger, index);
+    setExpandedTriggerCards((prev) => ({
+      ...prev,
+      [key]: !(prev[key] ?? false),
+    }));
+  };
+
   const handleSave = async () => {
     if (readOnly) {
       toast({
@@ -204,16 +249,19 @@ export function ChatbotTriggers({
       await saveTriggers({
         triggers: draftTriggers.map((trigger, index) => ({
           id: trigger.id,
-          name: trigger.name.trim() || `Trigger ${index + 1}`,
+          name: (trigger.name || "").trim() || `Trigger ${index + 1}`,
           display_order: index,
           is_active: trigger.is_active,
           condition_type: trigger.condition_type,
-          condition_keywords: trigger.condition_type === "keywords" ? trigger.condition_keywords : [],
+          condition_keywords: trigger.condition_type === "keywords" ? trigger.condition_keywords || [] : [],
           condition_message_count:
             trigger.condition_type === "message_count" ? Number(trigger.condition_message_count || 0) : null,
+          condition_intent: trigger.condition_type === "intent" ? (trigger.condition_intent || "").trim() : "",
           action_type: trigger.action_type,
-          action_message: trigger.action_message.trim(),
-          action_url: trigger.action_type === "open_url" ? trigger.action_url.trim() : "",
+          action_message: (trigger.action_message || "").trim(),
+          response_mode: trigger.response_mode === "exact" ? "exact" : "natural",
+          response_guidance: trigger.response_mode === "natural" ? (trigger.response_guidance || "").trim() : "",
+          action_url: trigger.action_type === "open_url" ? (trigger.action_url || "").trim() : "",
           action_tour_point_id: trigger.action_type === "navigate_tour_point" ? trigger.action_tour_point_id : "",
           action_tour_model_id: trigger.action_type === "switch_tour_model" ? trigger.action_tour_model_id : "",
         })),
@@ -314,14 +362,23 @@ export function ChatbotTriggers({
                         disabled={readOnly}
                       />
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => deleteTrigger(index)} className="text-red-600 hover:bg-red-50 hover:text-red-700" disabled={readOnly}>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setPendingDeleteIndex(index)} className="text-red-600 hover:bg-red-50 hover:text-red-700" disabled={readOnly}>
                       <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleTriggerCard(trigger, index)}
+                      className="text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-neutral-800 dark:hover:text-slate-100"
+                    >
+                      {isTriggerCardExpanded(trigger, index) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {isTriggerCardExpanded(trigger, index) ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-slate-700">Condition</Label>
                   <Select
@@ -337,6 +394,7 @@ export function ChatbotTriggers({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="intent">Intent</SelectItem>
                       <SelectItem value="keywords">Keywords</SelectItem>
                       <SelectItem value="message_count">Number of messages</SelectItem>
                     </SelectContent>
@@ -388,6 +446,20 @@ export function ChatbotTriggers({
                       </div>
                     ) : null}
                   </div>
+                ) : trigger.condition_type === "intent" ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-slate-700">Intent description</Label>
+                    <Input
+                      value={trigger.condition_intent}
+                      onChange={(event) => updateTrigger(index, { condition_intent: event.target.value })}
+                      placeholder="e.g. wants to get in touch with a member of the team"
+                      className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100"
+                      disabled={readOnly}
+                    />
+                    <p className="text-xs text-slate-500">
+                      Describe the user&apos;s intent in plain language. The AI fires this trigger when it judges the message matches.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-1.5">
                     <Label className="text-sm font-medium text-slate-700">Message count</Label>
@@ -406,9 +478,9 @@ export function ChatbotTriggers({
                     />
                   </div>
                 )}
-              </div>
+              </div> : null}
 
-              {trigger.action_type !== "ai_message" ? (
+              {isTriggerCardExpanded(trigger, index) && trigger.action_type !== "ai_message" ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {trigger.action_type === "open_url" ? (
                   <div className="space-y-1.5">
@@ -479,8 +551,28 @@ export function ChatbotTriggers({
                 </div>
               ) : null}
 
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-slate-700">Response message</Label>
+              {isTriggerCardExpanded(trigger, index) ? <div className="space-y-1.5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <Label className="text-sm font-medium text-slate-700">Response message</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-normal text-slate-500">Delivery</Label>
+                    <Select
+                      value={trigger.response_mode}
+                      onValueChange={(value) =>
+                        updateTrigger(index, { response_mode: value as ChatbotTriggerResponseMode })
+                      }
+                      disabled={readOnly}
+                    >
+                      <SelectTrigger className="h-8 w-[200px] border-slate-200 bg-white text-xs dark:border-input dark:bg-background dark:text-slate-100">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="natural">Natural conversation</SelectItem>
+                        <SelectItem value="exact">Exact response</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <Textarea
                   value={trigger.action_message}
                   onChange={(event) => updateTrigger(index, { action_message: event.target.value })}
@@ -488,7 +580,28 @@ export function ChatbotTriggers({
                   className="min-h-[90px] border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100"
                   disabled={readOnly}
                 />
-              </div>
+                <p className="text-xs text-slate-500">
+                  {trigger.response_mode === "exact"
+                    ? "Exact: the chatbot replies with this wording verbatim."
+                    : "Natural: the chatbot weaves this message into the conversation in its own words."}
+                </p>
+
+                {trigger.response_mode === "natural" ? (
+                  <div className="space-y-1.5 pt-2">
+                    <Label className="text-sm font-medium text-slate-700">Response guidance</Label>
+                    <Textarea
+                      value={trigger.response_guidance}
+                      onChange={(event) => updateTrigger(index, { response_guidance: event.target.value })}
+                      placeholder="e.g. Keep it brief and friendly, and always invite the visitor to get in touch for more details."
+                      className="min-h-[70px] border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100"
+                      disabled={readOnly}
+                    />
+                    <p className="text-xs text-slate-500">
+                      Optional: tell the AI how to use this message — tone, length, wording or anything it should always mention.
+                    </p>
+                  </div>
+                ) : null}
+              </div> : null}
             </div>
           ))}
         </>
@@ -506,6 +619,26 @@ export function ChatbotTriggers({
           </Button>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={pendingDeleteIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteIndex(null);
+        }}
+        title="Delete this trigger?"
+        description={
+          pendingDeleteIndex !== null && draftTriggers[pendingDeleteIndex]?.name
+            ? `"${draftTriggers[pendingDeleteIndex].name}" will be removed. This change applies once you save your triggers.`
+            : "This trigger will be removed. This change applies once you save your triggers."
+        }
+        confirmText="Delete trigger"
+        destructive
+        onConfirm={() => {
+          if (pendingDeleteIndex !== null) {
+            deleteTrigger(pendingDeleteIndex);
+          }
+        }}
+      />
     </div>
   );
 

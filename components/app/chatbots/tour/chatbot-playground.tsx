@@ -70,12 +70,11 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
   const previewCustomisation = useMemo(() => {
     if (!customisation) return customisation;
 
-    // Keep the user's visual design, but clamp offsets for preview containers
-    // so the widget is always visible inside the mock browser/phone frame.
+    // Keep offsets within valid customisation bounds.
     const clamp = (value: unknown, fallback: number) => {
       const num = Number(value);
       if (Number.isNaN(num)) return fallback;
-      return Math.max(12, Math.min(num, 36));
+      return Math.max(0, Math.min(num, 100));
     };
 
     return {
@@ -265,15 +264,20 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                       <div className="h-5 w-64 rounded-md bg-slate-200" />
                       <div className="mt-2 h-3 w-[420px] max-w-full rounded-md bg-slate-100" />
                     </div>
-                    <div
-                      className="relative min-h-0 flex-1 overflow-hidden rounded-none border-0 md:rounded-xl md:border md:border-slate-200"
-                      style={{
-                        backgroundImage: "url('https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1400&h=900&fit=crop')",
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                      }}
-                    >
-                      <div className="absolute inset-0 bg-slate-900/25 backdrop-blur-[1px]" />
+                    <div className="relative min-h-0 flex-1 overflow-hidden rounded-none border-0 bg-white md:rounded-xl md:border md:border-slate-200 dark:bg-background dark:md:border-input">
+                      {/* Faint mock website content so the widget has realistic context */}
+                      <div className="space-y-4 p-6">
+                        <div className="h-6 w-3/4 rounded bg-slate-200 dark:bg-neutral-700" />
+                        <div className="space-y-2">
+                          <div className="h-3 rounded bg-slate-100 dark:bg-neutral-800" />
+                          <div className="h-3 w-5/6 rounded bg-slate-100 dark:bg-neutral-800" />
+                          <div className="h-3 w-4/5 rounded bg-slate-100 dark:bg-neutral-800" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 pt-2">
+                          <div className="h-24 rounded-lg border border-slate-200 bg-slate-50 dark:border-input dark:bg-neutral-900" />
+                          <div className="h-24 rounded-lg border border-slate-200 bg-slate-50 dark:border-input dark:bg-neutral-900" />
+                        </div>
+                      </div>
 
                       {user?.venue?.id && previewTour && (
                         <TourChatWidget
@@ -304,15 +308,20 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                         <div className="mt-1.5 h-2.5 w-44 rounded bg-slate-100" />
                       </div>
 
-                      <div
-                        className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200"
-                        style={{
-                          backgroundImage: "url('https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1000&h=1600&fit=crop')",
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                      >
-                        <div className="absolute inset-0 bg-slate-900/25 backdrop-blur-[1px]" />
+                      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-input dark:bg-background">
+                        {/* Faint mock website content so the widget has realistic context */}
+                        <div className="space-y-3 p-4">
+                          <div className="h-4 w-3/4 rounded bg-slate-200 dark:bg-neutral-700" />
+                          <div className="space-y-1.5">
+                            <div className="h-2.5 rounded bg-slate-100 dark:bg-neutral-800" />
+                            <div className="h-2.5 w-5/6 rounded bg-slate-100 dark:bg-neutral-800" />
+                            <div className="h-2.5 w-4/5 rounded bg-slate-100 dark:bg-neutral-800" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="h-16 rounded-lg border border-slate-200 bg-slate-50 dark:border-input dark:bg-neutral-900" />
+                            <div className="h-16 rounded-lg border border-slate-200 bg-slate-50 dark:border-input dark:bg-neutral-900" />
+                          </div>
+                        </div>
 
                         {user?.venue?.id && previewTour && (
                           <TourChatWidget

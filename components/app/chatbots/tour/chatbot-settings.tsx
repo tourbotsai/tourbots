@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Upload, File, Trash2, Globe, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Upload, File, Trash2, Globe, BookOpen, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { useTourChatbotConfig } from "@/hooks/app/useTourChatbotConfig";
 import { useTourChatbotDocuments } from "@/hooks/app/useTourChatbotDocuments";
 import { useUser } from "@/hooks/useUser";
@@ -17,6 +17,7 @@ import { HardLimitUsageWidget } from "@/components/shared/hard-limit-usage-widge
 import { HardLimitConfig, HardLimitUsage } from "@/lib/types";
 import { ChatbotInfoSections } from "./chatbot-info-sections";
 import { ChatbotTriggers } from "./chatbot-triggers";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
 
 interface TourChatbotSettingsProps {
@@ -54,6 +55,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
   const [hardLimitConfig, setHardLimitConfig] = useState<HardLimitConfig | null>(null);
   const [hardLimitUsage, setHardLimitUsage] = useState<HardLimitUsage | null>(null);
   const [isLoadingHardLimits, setIsLoadingHardLimits] = useState(false);
+  const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ id: string; name: string } | null>(null);
 
   // Fetch hard limit data
   useEffect(() => {
@@ -182,7 +184,21 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
         description: "Failed to delete document",
         variant: "destructive",
       });
+      throw error;
     }
+  };
+
+  const handleViewDocument = (fileUrl?: string | null) => {
+    if (!fileUrl) {
+      toast({
+        title: "Error",
+        description: "Document link is unavailable",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    window.open(fileUrl, "_blank", "noopener,noreferrer");
   };
 
   if (isLoading) {
@@ -478,14 +494,28 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteDocument(doc.id)}
-                    className="flex-shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  >
-                    <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewDocument(doc.file_url)}
+                      className="flex-shrink-0 text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-neutral-800 dark:hover:text-slate-100"
+                      title="View document"
+                      aria-label={`View ${doc.original_filename}`}
+                    >
+                      <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPendingDeleteDoc({ id: doc.id, name: doc.original_filename })}
+                      className="flex-shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      title="Delete document"
+                      aria-label={`Delete ${doc.original_filename}`}
+                    >
+                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -501,6 +531,26 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
       ) : null}
 
       {showTriggersSection ? <ChatbotTriggers chatbotConfigId={tourConfig?.id} /> : null}
+
+      <ConfirmDialog
+        open={pendingDeleteDoc !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteDoc(null);
+        }}
+        title="Delete this document?"
+        description={
+          pendingDeleteDoc
+            ? `"${pendingDeleteDoc.name}" will be permanently removed from your chatbot's knowledge. This cannot be undone.`
+            : "This document will be permanently removed from your chatbot's knowledge. This cannot be undone."
+        }
+        confirmText="Delete document"
+        destructive
+        onConfirm={async () => {
+          if (pendingDeleteDoc) {
+            await handleDeleteDocument(pendingDeleteDoc.id);
+          }
+        }}
+      />
     </div>
   );
 } 

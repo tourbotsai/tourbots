@@ -28,8 +28,8 @@ import {
 import { Camera, Save, X, Plus, Trash2, ExternalLink, Tag, Edit } from "lucide-react";
 import { Tour } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { deleteSecondaryTour, updateTour } from "@/lib/tour-service";
 import { useTheme } from "@/components/app/shared/theme-provider";
+import { useToast } from "@/components/ui/use-toast";
 
 const secondaryTourSchema = z.object({
   title: z.string().min(1, "Tour name is required"),
@@ -63,6 +63,7 @@ export function SecondaryToursModal({
   onSelectModel,
 }: SecondaryToursModalProps) {
   const { theme } = useTheme();
+  const { toast } = useToast();
   const isDarkMode = theme === "dark";
   const { data: authUser } = useFirebaseUser();
   const [isLoading, setIsLoading] = useState(false);
@@ -144,9 +145,21 @@ export function SecondaryToursModal({
           navigation_keywords: keywords,
           display_order: editingTour.display_order,
         };
-        
-        // Use generic updateTour function for both primary and secondary tours
-        await updateTour(editingTour.id, tourData);
+
+        const token = await authUser.getIdToken();
+        const response = await fetch(`/api/app/tours/${editingTour.id}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(tourData),
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update model');
+        }
       } else {
         const token = await authUser.getIdToken();
         const response = await fetch('/api/app/tours', {
@@ -183,7 +196,11 @@ export function SecondaryToursModal({
       setEditingTour(null);
     } catch (error: any) {
       console.error('Error saving secondary tour:', error);
-      alert(error.message || 'Failed to save tour. Please try again.');
+      toast({
+        title: "Unable to save model",
+        description: error?.message || "Failed to save model. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -198,11 +215,27 @@ export function SecondaryToursModal({
 
     setIsLoading(true);
     try {
-      await deleteSecondaryTour(tourId, venueId);
+      const token = await authUser.getIdToken();
+      const response = await fetch(`/api/app/tours/${tourId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete model');
+      }
+
       onRefresh();
     } catch (error: any) {
       console.error('Error deleting tour:', error);
-      alert(error.message || 'Failed to delete tour. Please try again.');
+      toast({
+        title: "Unable to delete model",
+        description: error?.message || "Failed to delete model. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

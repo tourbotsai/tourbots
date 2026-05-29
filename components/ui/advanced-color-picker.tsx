@@ -4,8 +4,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
-import ResponsiveSlider from './responsive-slider';
 
 interface AdvancedColorPickerProps {
   value?: string;
@@ -311,17 +311,14 @@ const AdvancedColorPicker: FC<AdvancedColorPickerProps> = ({
 
         {/* Transparency Slider */}
         {supportTransparency && (
-          <div>
-            <p className="text-sm font-medium mb-2">Opacity: {Math.round(opacity * 100)}%</p>
-            <ResponsiveSlider
-              value={opacity}
-              onChange={(value) => updateColor(hsv, value)}
+          <div className="w-64 space-y-2">
+            <p className="text-sm font-medium">Opacity: {Math.round(opacity * 100)}%</p>
+            <Slider
+              value={[opacity]}
               min={0}
               max={1}
               step={0.01}
-              showInput={false}
-              showBadge={false}
-              className="w-64"
+              onValueChange={(values) => updateColor(hsv, values[0] ?? 1)}
             />
           </div>
         )}
