@@ -5,6 +5,7 @@ import { ChatbotCustomisation } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -15,6 +16,7 @@ import {
   ChevronDown, ChevronRight, MessageCircle, Monitor, Type, 
   Palette, Sparkles, Bot, Settings
 } from 'lucide-react';
+import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
 
 interface DesktopCustomisationProps {
   values: ChatbotCustomisation;
@@ -51,6 +53,18 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
   const handleCustomImageChange = (imageUrl: string | null) => {
     onChange('custom_logo_url', imageUrl);
     onCustomImageChange?.(imageUrl);
+  };
+
+  const desktopButtonSizePx = resolveChatButtonSizePx({
+    pxValue: values.chat_button_size_px,
+    legacySize: values.chat_button_size,
+    mode: 'desktop',
+  });
+
+  const getLegacyDesktopButtonSize = (sizePx: number): 'small' | 'medium' | 'large' => {
+    if (sizePx < 72) return 'small';
+    if (sizePx > 96) return 'large';
+    return 'medium';
   };
 
   return (
@@ -93,16 +107,24 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Button Size</Label>
-                  <Select value={values.chat_button_size} onValueChange={(value) => onChange('chat_button_size', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2 pt-2">
+                    <Slider
+                      value={[desktopButtonSizePx]}
+                      min={48}
+                      max={128}
+                      step={2}
+                      onValueChange={(value) => {
+                        const nextSize = value[0] ?? 80;
+                        onChange('chat_button_size_px', nextSize);
+                        onChange('chat_button_size', getLegacyDesktopButtonSize(nextSize));
+                      }}
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>48px</span>
+                      <span>{desktopButtonSizePx}px</span>
+                      <span>128px</span>
+                    </div>
+                  </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -151,12 +173,12 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                     type="number"
                     value={values.chat_button_bottom_offset ?? 20}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 10 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 10 : Math.max(10, Math.min(20, value));
+                      const value = e.target.value === '' ? 20 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 20 : Math.max(0, Math.min(100, value));
                       onChange('chat_button_bottom_offset', offset);
                     }}
-                    min="10"
-                    max="20"
+                    min="0"
+                    max="100"
                   />
                 </div>
               </div>
@@ -168,12 +190,12 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                     type="number"
                     value={values.chat_button_side_offset ?? 20}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 10 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 10 : Math.max(10, Math.min(20, value));
+                      const value = e.target.value === '' ? 20 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 20 : Math.max(0, Math.min(100, value));
                       onChange('chat_button_side_offset', offset);
                     }}
-                    min="10"
-                    max="20"
+                    min="0"
+                    max="100"
                   />
                 </div>
                 
@@ -360,12 +382,12 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                     type="number"
                     value={values.chat_offset_bottom ?? 20}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 10 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 10 : Math.max(10, Math.min(20, value));
+                      const value = e.target.value === '' ? 20 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 20 : Math.max(0, Math.min(100, value));
                       onChange('chat_offset_bottom', offset);
                     }}
-                    min="10"
-                    max="20"
+                    min="0"
+                    max="100"
                   />
                 </div>
               </div>
@@ -377,12 +399,12 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                     type="number"
                     value={values.chat_offset_side ?? 20}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 10 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 10 : Math.max(10, Math.min(20, value));
+                      const value = e.target.value === '' ? 20 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 20 : Math.max(0, Math.min(100, value));
                       onChange('chat_offset_side', offset);
                     }}
-                    min="10"
-                    max="20"
+                    min="0"
+                    max="100"
                   />
                 </div>
 
@@ -458,6 +480,22 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                   showPresets={false}
                 />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ColorPicker
+                  label="AI Thinking Background"
+                  value={values.thinking_background_color || '#F3F4F6'}
+                  onChange={(value) => onChange('thinking_background_color', value)}
+                  showPresets={false}
+                />
+
+                <ColorPicker
+                  label="AI Thinking Text"
+                  value={values.thinking_text_color || '#6B7280'}
+                  onChange={(value) => onChange('thinking_text_color', value)}
+                  showPresets={false}
+                />
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <ColorPicker
@@ -475,12 +513,21 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                 />
               </div>
               
-              <ColorPicker
-                label="Input Background"
-                value={values.input_background_color || ''}
-                onChange={(value) => onChange('input_background_color', value)}
-                showPresets={false}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ColorPicker
+                  label="Window Background Colour"
+                  value={values.window_background_color || ''}
+                  onChange={(value) => onChange('window_background_color', value)}
+                  showPresets={false}
+                />
+
+                <ColorPicker
+                  label="Input Background"
+                  value={values.input_background_color || ''}
+                  onChange={(value) => onChange('input_background_color', value)}
+                  showPresets={false}
+                />
+              </div>
               
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border dark:border-input dark:bg-background">
                 <div className="flex flex-col">
@@ -859,6 +906,15 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                   </Select>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ColorPicker
+                  label="Timestamp Colour"
+                  value={values.timestamp_color || '#9CA3AF'}
+                  onChange={(value) => onChange('timestamp_color', value)}
+                  showPresets={false}
+                />
+              </div>
             </CardContent>
           </CollapsibleContent>
         </Card>
@@ -955,17 +1011,14 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Send Button Size</Label>
-                  <Select value={values.send_button_size} onValueChange={(value) => onChange('send_button_size', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small (30px)</SelectItem>
-                      <SelectItem value="medium">Medium (36px)</SelectItem>
-                      <SelectItem value="large">Large (48px)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Send Button Size (px)</Label>
+                  <Input
+                    type="number"
+                    value={values.send_button_size_px ?? 36}
+                    onChange={(e) => onChange('send_button_size_px', parseInt(e.target.value) || 36)}
+                    min="28"
+                    max="56"
+                  />
                 </div>
                 
                 <div className="space-y-2">

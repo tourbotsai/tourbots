@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BarChart3, MessageCircle, Users, Clock, ChevronDown, ChevronUp, Globe, Smartphone, Monitor, Tablet, ArrowLeft } from "lucide-react";
+import { BarChart3, MessageCircle, Users, Clock, Globe, ArrowLeft } from "lucide-react";
 import { useTourChatbotAnalytics } from "@/hooks/app/useTourChatbotAnalytics";
+import { ConversationSessions } from "@/components/app/chatbots/shared/conversation-sessions";
 import { Conversation } from "@/lib/types";
 import {
   BarChart,
@@ -53,8 +53,6 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
   const { tourConfig, isLoading: configLoading } = useTourChatbotConfig(selectedTourId);
   const [stats, setStats] = useState<any>(null);
   const [conversationGroups, setConversationGroups] = useState<ConversationGroup[]>([]);
-  const [expandedConversations, setExpandedConversations] = useState<Set<string>>(new Set());
-  const [isConversationsSectionExpanded, setIsConversationsSectionExpanded] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -146,27 +144,6 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
     value: count,
     percentage: Math.round((count / conversationGroups.length) * 100)
   }));
-
-  const toggleConversation = (conversationId: string) => {
-    const newExpanded = new Set(expandedConversations);
-    if (newExpanded.has(conversationId)) {
-      newExpanded.delete(conversationId);
-    } else {
-      newExpanded.add(conversationId);
-    }
-    setExpandedConversations(newExpanded);
-  };
-
-  const getDeviceIcon = (userAgent?: string) => {
-    if (!userAgent) return <Monitor className="w-4 h-4" />;
-    const ua = userAgent.toLowerCase();
-    if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(ua)) {
-      return <Smartphone className="w-4 h-4" />;
-    } else if (/tablet|ipad|playbook|silk/i.test(ua)) {
-      return <Tablet className="w-4 h-4" />;
-    }
-    return <Monitor className="w-4 h-4" />;
-  };
 
   if (configLoading || isLoading) {
     return (
@@ -288,146 +265,7 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
 
           <div className="h-px bg-slate-200" />
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Conversation sessions</h3>
-                <p className="text-xs text-slate-500">
-                  Full chatbot conversation threads with metadata and response timing.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsConversationsSectionExpanded(!isConversationsSectionExpanded)}
-                className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
-              >
-                {isConversationsSectionExpanded ? (
-                  <>
-                    Collapse
-                    <ChevronUp className="ml-2 h-4 w-4" />
-                  </>
-                ) : (
-                  <>
-                    Expand
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {isConversationsSectionExpanded && (
-              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-input dark:bg-background">
-            {conversationGroups.length === 0 ? (
-              <div className="py-8 text-center">
-                <MessageCircle className="mx-auto mb-4 h-10 w-10 text-slate-400" />
-                <p className="text-slate-600">No chatbot conversations yet</p>
-                <p className="text-sm text-slate-500">
-                  Sessions will appear here once visitors start chatting.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {conversationGroups.map((group) => (
-                  <div key={group.conversation_id} className="rounded-lg border border-slate-200 bg-white p-4 dark:border-input dark:bg-background">
-                    {/* Conversation Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleConversation(group.conversation_id)}
-                          className="p-1"
-                        >
-                          {expandedConversations.has(group.conversation_id) ? (
-                            <ChevronUp className="w-4 h-4" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4" />
-                          )}
-                        </Button>
-                        <div>
-                          <h4 className="font-medium">Conversation #{group.conversation_id.slice(-8)}</h4>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <span>{new Date(group.first_message_time).toLocaleString()}</span>
-                            {group.domain && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <Globe className="w-3 h-3" />
-                                  {group.domain}
-                                </span>
-                              </>
-                            )}
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              {getDeviceIcon(group.user_agent)}
-                              Device
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700 dark:border-input dark:bg-background dark:text-slate-300">
-                          {group.total_messages} messages
-                        </Badge>
-                        {group.avg_response_time && (
-                          <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700 dark:border-input dark:bg-background dark:text-slate-300">
-                            {group.avg_response_time}ms avg
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700 dark:border-input dark:bg-background dark:text-slate-300">
-                          tour
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Expanded Conversation Messages */}
-                    {expandedConversations.has(group.conversation_id) && (
-                      <div className="space-y-3 border-l-2 border-slate-200 pl-8">
-                        {group.messages.map((message, index) => (
-                          <div key={message.id} className="flex items-start gap-3">
-                            <div className="flex-shrink-0 mt-1">
-                              {message.message_type === 'visitor' ? (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100">
-                                  <Users className="h-3 w-3 text-slate-700" />
-                                </div>
-                              ) : (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100">
-                                  <MessageCircle className="h-3 w-3 text-slate-700" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="text-sm font-medium">
-                                  {message.message_type === 'visitor' ? 'Visitor' : 'Tour Bot'}
-                                </p>
-                                <div className="flex items-center gap-2 text-xs text-slate-400">
-                                  <span>#{message.message_position || index + 1}</span>
-                                  <span>{new Date(message.created_at).toLocaleTimeString()}</span>
-                                  {message.response_time_ms && (
-                                    <span className="text-slate-600">{message.response_time_ms}ms</span>
-                                  )}
-                                </div>
-                              </div>
-                              <p className="mb-2 text-sm text-slate-600">
-                                {message.message_type === 'visitor' 
-                                  ? (message.message || 'No message content')
-                                  : (message.response || 'No response content')
-                                }
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-              </div>
-            )}
-          </div>
+          <ConversationSessions conversations={conversations} typeLabel="tour" />
 
           <div className="h-px bg-slate-200" />
 

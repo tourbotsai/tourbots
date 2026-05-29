@@ -116,7 +116,10 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
           </div>
 
           <div>
-            <Label className="text-sm dark:text-gray-200">Padding: {settings.padding}px</Label>
+            <Label className="text-sm dark:text-gray-200">Horizontal Padding: {settings.padding}px</Label>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Vertical spacing is controlled per content block.
+            </p>
             <Slider
               value={[settings.padding]}
               onValueChange={([value]) => updateSetting('padding', value)}

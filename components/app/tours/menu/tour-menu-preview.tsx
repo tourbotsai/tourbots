@@ -97,8 +97,10 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
       right: 'text-right'
     }[block.alignment as 'left' | 'center' | 'right'] || 'text-center';
 
-    const marginTop = isCenteredSingleButtonsMenu && block.block_type === 'buttons' ? 0 : block.margin_top;
-    const marginBottom = isCenteredSingleButtonsMenu && block.block_type === 'buttons' ? 0 : block.margin_bottom;
+    const rawMarginTop = Number.isFinite(block.margin_top) ? block.margin_top : 0;
+    const rawMarginBottom = Number.isFinite(block.margin_bottom) ? block.margin_bottom : 12;
+    const marginTop = isCenteredSingleButtonsMenu && block.block_type === 'buttons' ? 0 : rawMarginTop;
+    const marginBottom = isCenteredSingleButtonsMenu && block.block_type === 'buttons' ? 0 : rawMarginBottom;
     const marginStyle = {
       marginTop: `${marginTop}px`,
       marginBottom: `${marginBottom}px`
@@ -195,9 +197,7 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
             <div
               style={{
                 width: '100%',
-                height: '128px',
                 display: 'flex',
-                alignItems: 'center',
                 justifyContent: logoAlignment,
               }}
             >
@@ -207,9 +207,9 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
                   alt={block.content.alt_text}
                   style={{
                     width: `${logoDimensions.width}px`,
-                    height: `${logoDimensions.height}px`,
+                    height: 'auto',
                     maxWidth: '100%',
-                    maxHeight: '100%',
+                    display: 'block',
                     objectFit: 'contain',
                   }}
                   onError={(e) => {
@@ -223,7 +223,6 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
                     width: `${logoDimensions.width}px`,
                     height: `${logoDimensions.height}px`,
                     maxWidth: '100%',
-                    maxHeight: '100%',
                   }}
                 >
                   Logo
@@ -317,7 +316,10 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
             )}
             style={{
               maxWidth: mode === 'mobile' ? '90%' : `${settings.max_width}px`,
-              padding: `${settings.padding}px`,
+              paddingLeft: `${settings.padding}px`,
+              paddingRight: `${settings.padding}px`,
+              paddingTop: '0px',
+              paddingBottom: '0px',
               backgroundColor: settings.menu_background_color,
               borderRadius: `${settings.border_radius}px`,
               maxHeight: mode === 'mobile' ? '85%' : '80%',

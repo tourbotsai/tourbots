@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GripVertical, Trash2, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { TextBlockEditor } from "./text-block-editor";
 import { ButtonsBlockEditor } from "./buttons-block-editor";
 import { LogoBlockEditor } from "./logo-block-editor";
@@ -24,6 +26,9 @@ interface BlockEditorProps {
 
 export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onMove, tourId, activeDevice = 'desktop' }: BlockEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const safeMarginTop = Number.isFinite(block.margin_top) ? block.margin_top : 0;
+  const safeMarginBottom = Number.isFinite(block.margin_bottom) ? block.margin_bottom : 12;
+  const showSpacingControls = block.block_type !== 'spacer';
 
   const getBlockIcon = (blockType: string) => {
     const icons: Record<string, string> = {
@@ -45,6 +50,12 @@ export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onM
       spacer: 'Spacer Block'
     };
     return labels[blockType] || 'Block';
+  };
+
+  const updateSpacing = (key: 'margin_top' | 'margin_bottom', value: number) => {
+    onUpdate({
+      [key]: value
+    });
   };
 
   return (
@@ -119,6 +130,41 @@ export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onM
           )}
           {block.block_type === 'spacer' && (
             <SpacerBlockEditor block={block} onUpdate={onUpdate} />
+          )}
+
+          {showSpacingControls && (
+            <div className="mt-5 space-y-4 rounded-lg border p-3 dark:border-neutral-700">
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold dark:text-white">Block Spacing</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Control the gap above and below this block.
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-xs">Top spacing: {safeMarginTop}px</Label>
+                <Slider
+                  value={[safeMarginTop]}
+                  onValueChange={([value]) => updateSpacing('margin_top', value)}
+                  min={0}
+                  max={80}
+                  step={4}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Bottom spacing: {safeMarginBottom}px</Label>
+                <Slider
+                  value={[safeMarginBottom]}
+                  onValueChange={([value]) => updateSpacing('margin_bottom', value)}
+                  min={0}
+                  max={80}
+                  step={4}
+                  className="mt-2"
+                />
+              </div>
+            </div>
           )}
         </CardContent>
       )}

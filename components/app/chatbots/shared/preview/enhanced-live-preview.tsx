@@ -31,6 +31,8 @@ import {
   type IdleAnimationType,
   type TypingIndicatorType
 } from '@/lib/utils/animation-timing';
+import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
+import { resolveSendButtonSizePx, sendButtonIconSizePx } from '@/lib/send-button-size';
 
 const ICON_MAP = {
   MessageCircle, MessageSquare, Bot, Headphones, HelpCircle, Mail, Phone,
@@ -60,9 +62,10 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
   isTemplatePreview = false
 }) => {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [previewInputValue, setPreviewInputValue] = useState('');
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [previousLoadingAnimation, setPreviousLoadingAnimation] = useState<string>('');
+  const [previousLoadingSignature, setPreviousLoadingSignature] = useState<string>('');
   const [previousLoadingTextColor, setPreviousLoadingTextColor] = useState<string>('');
   const [previousLoadingBgColor, setPreviousLoadingBgColor] = useState<string>('');
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
@@ -106,12 +109,14 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     ai_message_text_color: getEffectiveValue('ai_message_text_color', 'mobile_ai_message_text_color', '#09090B'),
     user_message_background: getEffectiveValue('user_message_background', 'mobile_user_message_background', '#1890FF'),
     user_message_text_color: getEffectiveValue('user_message_text_color', 'mobile_user_message_text_color', '#FFFFFF'),
+    window_background_color: getEffectiveValue('window_background_color', 'mobile_window_background_color', '#FFFFFF'),
     input_background_color: getEffectiveValue('input_background_color', 'mobile_input_background_color', '#FFFFFF'),
     input_text_color: getEffectiveValue('input_text_color', 'mobile_input_text_color', '#111827'), // 🆕 Customisable input text
     placeholder_text_color: getEffectiveValue('placeholder_text_color', 'mobile_placeholder_text_color', '#6B7280'), // 🆕 Customisable placeholder
     input_border_color: '#D1D5DB',
     chat_button_color: getEffectiveValue('chat_button_color', 'mobile_chat_button_color', '#1890FF'),
     chat_button_size: getEffectiveValue('chat_button_size', 'mobile_chat_button_size', 'medium'),
+    chat_button_size_px: getEffectiveValue('chat_button_size_px', 'mobile_chat_button_size_px', mode === 'mobile' ? 60 : 80),
     show_powered_by: getEffectiveValue('show_powered_by', 'mobile_show_powered_by', true),
     brand_name: 'TourBots',
     brand_url: 'https://tourbots.ai',
@@ -161,6 +166,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     send_button_hover_color: getEffectiveValue('send_button_hover_color', 'mobile_send_button_hover_color', '#40A9FF'),
     send_button_icon: getEffectiveValue('send_button_icon', 'mobile_send_button_icon', 'Send'),
     send_button_size: getEffectiveValue('send_button_size', 'mobile_send_button_size', 'medium'),
+    send_button_size_px: getEffectiveValue('send_button_size_px', 'mobile_send_button_size_px', 36),
     
     // NEW: Enhanced Send Button Options
     send_button_icon_color: getEffectiveValue('send_button_icon_color', 'mobile_send_button_icon_color', '#FFFFFF'),
@@ -169,6 +175,9 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     // Message Settings with mobile-aware values
     show_timestamps: getEffectiveValue('show_timestamps', 'mobile_show_timestamps', false),
     timestamp_format: getEffectiveValue('timestamp_format', 'mobile_timestamp_format', '12h'),
+    timestamp_color: getEffectiveValue('timestamp_color', 'mobile_timestamp_color', '#9CA3AF'),
+    thinking_background_color: getEffectiveValue('thinking_background_color', 'mobile_thinking_background_color', '#F3F4F6'),
+    thinking_text_color: getEffectiveValue('thinking_text_color', 'mobile_thinking_text_color', '#6B7280'),
     message_max_width: getEffectiveValue('message_max_width', 'mobile_message_max_width', mode === 'mobile' ? 85 : 80),
 
     // NEW: Message Shadows
@@ -251,23 +260,15 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
   const IconComponent = ICON_MAP[custom.chat_button_icon as keyof typeof ICON_MAP] || MessageCircle;
   const SendIconComponent = SEND_ICON_MAP[custom.send_button_icon as keyof typeof SEND_ICON_MAP] || Send;
 
-  const chatButtonSizePx = useMemo(() => {
-    if (mode === 'mobile') {
-      switch (custom.chat_button_size) {
-        case 'small': return 48;
-        case 'large': return 80;
-        case 'medium':
-        default: return 60;
-      }
-    }
-
-    switch (custom.chat_button_size) {
-      case 'small': return 64;
-      case 'large': return 104;
-      case 'medium':
-      default: return 80;
-    }
-  }, [custom.chat_button_size, mode]);
+  const chatButtonSizePx = useMemo(
+    () =>
+      resolveChatButtonSizePx({
+        pxValue: custom.chat_button_size_px as number,
+        legacySize: custom.chat_button_size as string,
+        mode: mode === 'mobile' ? 'mobile' : 'desktop',
+      }),
+    [custom.chat_button_size_px, custom.chat_button_size, mode]
+  );
 
   const iconStyle = useMemo(() => ({
     width: `${custom.icon_size}px`,
@@ -311,28 +312,16 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     return calculateMessageShadow(custom.message_shadow_enabled);
   }, [custom.message_shadow_enabled]);
 
-  // Convert send button size strings to numbers
-  const getSendButtonSizeValue = (size: string) => {
-    switch (size) {
-      case 'small': return 16;
-      case 'large': return 24;
-      case 'medium':
-      default: return 20;
-    }
-  };
-
-  const getSendButtonContainerSizeValue = (size: string) => {
-    switch (size) {
-      case 'small': return 30;
-      case 'large': return 48;
-      case 'medium':
-      default: return 36;
-    }
-  };
+  // Resolve send button px (px field first, legacy enum fallback)
+  const sendButtonContainerPx = resolveSendButtonSizePx({
+    pxValue: custom.send_button_size_px as number,
+    legacySize: custom.send_button_size as string,
+  });
+  const sendButtonIconPx = sendButtonIconSizePx(sendButtonContainerPx);
 
   // NEW: Enhanced send button styles
   const sendButtonStyle = useMemo(() => {
-    const buttonSize = getSendButtonContainerSizeValue(custom.send_button_size);
+    const buttonSize = sendButtonContainerPx;
     
     const baseStyle = {
       backgroundColor: custom.send_button_color,
@@ -362,7 +351,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     }
 
     return baseStyle;
-  }, [custom.send_button_color, custom.send_button_border_radius, custom.send_button_size, custom.send_button_style]);
+  }, [custom.send_button_color, custom.send_button_border_radius, sendButtonContainerPx, custom.send_button_style]);
 
   // NEW: Animation classes
   const chatEntranceClass = useMemo(() => {
@@ -420,24 +409,36 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     typography.font_family
   ]);
 
-  // NEW: Loading Animation Preview - triggers when loading animation changes (just like desktop)
+  // NEW: Loading State Preview - triggers when ANY loading setting changes
+  // (animation, spinner style, the three loading colours, or the "Show Loading Text" toggle)
   useEffect(() => {
     // Clear any existing loading preview timeout
     if (loadingPreviewTimeoutRef.current) {
       clearTimeout(loadingPreviewTimeoutRef.current);
     }
 
-    // Skip if loading animation is "none" 
+    // Composite signature of every loading-related setting we want to preview.
+    const loadingSignature = [
+      custom.loading_animation,
+      custom.loading_spinner_style,
+      custom.loading_spinner_color,
+      custom.loading_text_color,
+      custom.loading_background_color,
+      String(custom.loading_text_enabled),
+    ].join('|');
+
+    // Skip triggering when the animation is "none" (nothing meaningful to show),
+    // but still record the signature so switching away from "none" triggers correctly.
     if (custom.loading_animation === 'none') {
-      setPreviousLoadingAnimation(custom.loading_animation);
+      setPreviousLoadingSignature(loadingSignature);
       return;
     }
 
-    // Only trigger preview if we have a previous value and it's different (not initial load)
-    if (previousLoadingAnimation !== '' && previousLoadingAnimation !== custom.loading_animation) {
+    // Only trigger preview if we have a previous value and it changed (not initial load)
+    if (previousLoadingSignature !== '' && previousLoadingSignature !== loadingSignature) {
       // Start loading preview
       setIsLoadingPreview(true);
-      
+
       // End loading preview after 3 seconds
       loadingPreviewTimeoutRef.current = setTimeout(() => {
         setIsLoadingPreview(false);
@@ -445,14 +446,21 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     }
 
     // Update previous value
-    setPreviousLoadingAnimation(custom.loading_animation);
+    setPreviousLoadingSignature(loadingSignature);
 
     return () => {
       if (loadingPreviewTimeoutRef.current) {
         clearTimeout(loadingPreviewTimeoutRef.current);
       }
     };
-  }, [custom.loading_animation]);
+  }, [
+    custom.loading_animation,
+    custom.loading_spinner_style,
+    custom.loading_spinner_color,
+    custom.loading_text_color,
+    custom.loading_background_color,
+    custom.loading_text_enabled,
+  ]);
 
   // NEW: Inject animation styles
   useEffect(() => {
@@ -646,10 +654,13 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
       : now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     
     return (
-      <div className={cn(
-        "text-xs opacity-70 mt-1",
-        isUser ? "text-right" : "text-left"
-      )}>
+      <div
+        className={cn(
+          "text-xs mt-1",
+          isUser ? "text-right" : "text-left"
+        )}
+        style={{ color: custom.timestamp_color }}
+      >
         {timeString}
       </div>
     );
@@ -756,7 +767,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     
     if (typingStyle === 'none') {
       return (
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs" style={{ color: custom.thinking_text_color }}>
           {chatbotName} is typing...
         </span>
       );
@@ -808,7 +819,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
             />
           )}
         </div>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs" style={{ color: custom.thinking_text_color }}>
           {chatbotName} is typing...
         </span>
       </div>
@@ -975,7 +986,10 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
         </div>
 
         {/* Messages */}
-        <div className="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50/50 dark:bg-neutral-900/50">
+        <div
+          className="flex-grow p-4 space-y-4 overflow-y-auto"
+          style={{ backgroundColor: custom.window_background_color }}
+        >
           {/* AI Welcome Message - Left Aligned */}
           {showWelcomeMessage && (
             <div className="flex items-start gap-2.5">
@@ -1037,7 +1051,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
               <div 
                 className="p-3 rounded-tl-none"
                 style={{ 
-                  backgroundColor: custom.ai_message_background,
+                  backgroundColor: custom.thinking_background_color,
                   borderRadius: `${custom.message_border_radius}px`
                 }}
               >
@@ -1061,7 +1075,8 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
             <input 
               type="text" 
               placeholder={custom.input_placeholder_text || "Type your message..."} 
-              disabled 
+              value={previewInputValue}
+              onChange={(e) => setPreviewInputValue(e.target.value)}
               className="flex-grow px-3 py-2 text-sm border focus:outline-none focus:ring-1 transition-all gt-preview-input"
               style={{ 
                 backgroundColor: custom.input_background_color, 
@@ -1078,6 +1093,8 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
               }} 
             />
             <button 
+              type="button"
+              onClick={() => setPreviewInputValue('')}
               className="text-white transition-all duration-200 hover:shadow-md disabled:opacity-50"
               style={sendButtonStyle}
               onMouseEnter={(e) => {
@@ -1093,7 +1110,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
                 <span style={{ color: custom.send_button_icon_color }}>Send</span>
               ) : (
                 <SendIconComponent 
-                  size={getSendButtonSizeValue(custom.send_button_size)} 
+                  size={sendButtonIconPx} 
                   color={custom.send_button_icon_color}
                   style={{ color: custom.send_button_icon_color }}
                 />
@@ -1129,11 +1146,7 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
       </div>
       
       <p 
-        className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center"
-        style={{
-          opacity: isChatOpen ? 1 : 0,
-          transition: 'opacity 0.3s ease-in-out'
-        }}
+        className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pointer-events-none"
       >
         Chat Window
       </p>
@@ -1185,9 +1198,23 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
                   [custom.chat_button_position === 'bottom-left' ? 'left' : 'right']: `${custom.chat_button_side_offset}px`
                 }}
               >
-                <div className="flex flex-col items-center space-y-2">
+                <div className="relative">
+                <div
+                  className={cn(
+                    "flex flex-col space-y-2",
+                    custom.chat_button_position === 'bottom-left' ? "items-start" : "items-end"
+                  )}
+                >
                   {renderChatIcon()}
-                  <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap text-center">Chat Button</p>
+                </div>
+                <p
+                  className={cn(
+                    "absolute top-full mt-1 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pointer-events-none",
+                    custom.chat_button_position === 'bottom-left' ? "left-0" : "right-0"
+                  )}
+                >
+                  Chat Button
+                </p>
                 </div>
               </div>
             )}
@@ -1273,15 +1300,25 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
         {/* Chat Button positioned on mock website when closed */}
         {!isChatOpen && (
           <div 
-            className="absolute text-center space-y-2 pointer-events-auto z-10"
+            className={cn(
+              "absolute pointer-events-auto z-10",
+              custom.chat_button_position === 'bottom-left' ? "text-left" : "text-right"
+            )}
             style={{
               bottom: `${custom.chat_button_bottom_offset}px`,
               [custom.chat_button_position === 'bottom-left' ? 'left' : 'right']: `${custom.chat_button_side_offset}px`
             }}
           >
-            {renderChatIcon()}
-            <div className="w-full flex justify-center">
-              <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Chat Button</p>
+            <div className="relative">
+              {renderChatIcon()}
+              <p
+                className={cn(
+                  "absolute top-full mt-1 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pointer-events-none",
+                  custom.chat_button_position === 'bottom-left' ? "left-0" : "right-0"
+                )}
+              >
+                Chat Button
+              </p>
             </div>
           </div>
         )}

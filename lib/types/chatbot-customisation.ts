@@ -332,6 +332,7 @@ export const FIELD_CONSTRAINTS: FieldConstraints = {
   chat_window_width: { min: 320, max: 500, required: true },
   header_height: { min: 40, max: 80, required: true },
   input_height: { min: 30, max: 60, required: true },
+  send_button_size_px: { min: 28, max: 56, required: false },
   message_max_width: { min: 60, max: 95, required: true },
   
   // Animation constraints

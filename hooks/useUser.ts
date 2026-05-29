@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useUser as useFirebaseUser } from "reactfire";
 import { UserWithVenue } from "@/lib/types";
+import { UserContext, type UseUserResult } from "@/contexts/user-context";
 
 const USER_CACHE_TTL_MS = 30_000;
 const USER_ERROR_CACHE_TTL_MS = 1_500;
@@ -87,13 +88,19 @@ async function fetchUserWithCache(
   return inFlightUserRequest;
 }
 
-export function useUser() {
+/**
+ * Standalone user resolution. When `enabled` is false the effect is skipped so
+ * the hook stays inert — used by the context-aware `useUser` below to avoid a
+ * duplicate fetch when a `UserProvider` is already supplying the value.
+ */
+export function useUserStandalone(enabled: boolean = true): UseUserResult {
   const { data: authUser, hasEmitted: firebaseLoaded } = useFirebaseUser();
   const [user, setUser] = useState<UserWithVenue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     if (!firebaseLoaded) return;
     
     if (!authUser) {
@@ -150,7 +157,7 @@ export function useUser() {
     return () => {
       cancelled = true;
     };
-  }, [authUser, firebaseLoaded]);
+  }, [authUser, firebaseLoaded, enabled]);
 
   const updateUser = async (fields: any) => {
     if (!user) return null;
@@ -242,4 +249,16 @@ export function useUser() {
     updateUser, 
     updateVenue 
   };
-} 
+}
+
+/**
+ * Reads the shared user from `UserProvider` when present. Falls back to a
+ * self-contained resolution when used outside a provider (e.g. public tour
+ * widget, agency embed, auth pages) so those surfaces keep working unchanged.
+ */
+export function useUser(): UseUserResult {
+  const ctx = useContext(UserContext);
+  // Inert when a provider supplies the value, so there is no duplicate fetch.
+  const local = useUserStandalone(ctx === null);
+  return ctx ?? local;
+}

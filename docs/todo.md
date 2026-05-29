@@ -1,5 +1,7 @@
 - Run full end-to-end testing on the Body Active demo website: embed & agency portal
 
+- Set up website tour demo account properly
+
 - Rollout WhiteLabelEmbed.md
 - Set up hello@tourbots.ai and partners@tourbots.ai email
 - SPF/DKIM/DMARC

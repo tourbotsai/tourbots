@@ -5,6 +5,7 @@ import { ChatbotCustomisation } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -17,6 +18,7 @@ import { IconSelector } from '../icon-selector';
 import { ImageUpload } from '../image-upload';
 import ResponsiveSlider from '@/components/ui/responsive-slider';
 import ToggleGroup from '@/components/ui/toggle-group';
+import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
 
 interface MobileCustomisationProps {
   values: ChatbotCustomisation;
@@ -41,6 +43,18 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
   const handleCustomImageChange = (imageUrl: string | null) => {
     onChange('mobile_custom_logo_url', imageUrl);
+  };
+
+  const mobileButtonSizePx = resolveChatButtonSizePx({
+    pxValue: values.mobile_chat_button_size_px,
+    legacySize: values.mobile_chat_button_size,
+    mode: 'mobile',
+  });
+
+  const getLegacyMobileButtonSize = (sizePx: number): 'small' | 'medium' | 'large' => {
+    if (sizePx < 54) return 'small';
+    if (sizePx > 70) return 'large';
+    return 'medium';
   };
 
   return (
@@ -83,16 +97,24 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Button Size</Label>
-                  <Select value={values.mobile_chat_button_size} onValueChange={(value) => onChange('mobile_chat_button_size', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2 pt-2">
+                    <Slider
+                      value={[mobileButtonSizePx]}
+                      min={40}
+                      max={104}
+                      step={2}
+                      onValueChange={(value) => {
+                        const nextSize = value[0] ?? 60;
+                        onChange('mobile_chat_button_size_px', nextSize);
+                        onChange('mobile_chat_button_size', getLegacyMobileButtonSize(nextSize));
+                      }}
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>40px</span>
+                      <span>{mobileButtonSizePx}px</span>
+                      <span>104px</span>
+                    </div>
+                  </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -142,12 +164,12 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                     type="number"
                     value={values.mobile_chat_button_bottom_offset ?? 15}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 5 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 5 : Math.max(5, Math.min(50, value));
+                      const value = e.target.value === '' ? 15 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 15 : Math.max(0, Math.min(100, value));
                       onChange('mobile_chat_button_bottom_offset', offset);
                     }}
-                    min="5"
-                    max="50"
+                    min="0"
+                    max="100"
                   />
                 </div>
               </div>
@@ -159,12 +181,12 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                     type="number"
                     value={values.mobile_chat_button_side_offset ?? 15}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 5 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 5 : Math.max(5, Math.min(50, value));
+                      const value = e.target.value === '' ? 15 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 15 : Math.max(0, Math.min(100, value));
                       onChange('mobile_chat_button_side_offset', offset);
                     }}
-                    min="5"
-                    max="50"
+                    min="0"
+                    max="100"
                   />
                 </div>
                 
@@ -351,12 +373,12 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                     type="number"
                     value={values.mobile_chat_offset_bottom ?? 15}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 5 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 5 : Math.max(5, Math.min(20, value));
+                      const value = e.target.value === '' ? 15 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 15 : Math.max(0, Math.min(100, value));
                       onChange('mobile_chat_offset_bottom', offset);
                     }}
-                    min="5"
-                    max="20"
+                    min="0"
+                    max="100"
                   />
                 </div>
               </div>
@@ -368,12 +390,12 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                     type="number"
                     value={values.mobile_chat_offset_side ?? 15}
                     onChange={(e) => {
-                      const value = e.target.value === '' ? 5 : parseInt(e.target.value);
-                      const offset = isNaN(value) ? 5 : Math.max(5, Math.min(20, value));
+                      const value = e.target.value === '' ? 15 : parseInt(e.target.value);
+                      const offset = isNaN(value) ? 15 : Math.max(0, Math.min(100, value));
                       onChange('mobile_chat_offset_side', offset);
                     }}
-                    min="5"
-                    max="20"
+                    min="0"
+                    max="100"
                   />
                 </div>
                 
@@ -449,6 +471,22 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                   showPresets={false}
                 />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ColorPicker
+                  label="AI Thinking Background"
+                  value={values.mobile_thinking_background_color || '#F3F4F6'}
+                  onChange={(value) => onChange('mobile_thinking_background_color', value)}
+                  showPresets={false}
+                />
+
+                <ColorPicker
+                  label="AI Thinking Text"
+                  value={values.mobile_thinking_text_color || '#6B7280'}
+                  onChange={(value) => onChange('mobile_thinking_text_color', value)}
+                  showPresets={false}
+                />
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <ColorPicker
@@ -466,12 +504,21 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                 />
               </div>
               
-              <ColorPicker
-                label="Input Background Colour"
-                value={values.mobile_input_background_color || ''}
-                onChange={(value) => onChange('mobile_input_background_color', value)}
-                showPresets={false}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ColorPicker
+                  label="Window Background Colour"
+                  value={values.mobile_window_background_color || ''}
+                  onChange={(value) => onChange('mobile_window_background_color', value)}
+                  showPresets={false}
+                />
+
+                <ColorPicker
+                  label="Input Background Colour"
+                  value={values.mobile_input_background_color || ''}
+                  onChange={(value) => onChange('mobile_input_background_color', value)}
+                  showPresets={false}
+                />
+              </div>
               
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg dark:border dark:border-input dark:bg-background">
                 <div className="space-y-1">
@@ -921,17 +968,14 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Send Button Size</Label>
-                  <Select value={values.mobile_send_button_size} onValueChange={(value) => onChange('mobile_send_button_size', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small (30px)</SelectItem>
-                      <SelectItem value="medium">Medium (36px)</SelectItem>
-                      <SelectItem value="large">Large (48px)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Send Button Size (px)</Label>
+                  <Input
+                    type="number"
+                    value={values.mobile_send_button_size_px ?? 36}
+                    onChange={(e) => onChange('mobile_send_button_size_px', parseInt(e.target.value) || 36)}
+                    min="28"
+                    max="56"
+                  />
                 </div>
                 
                 <div className="space-y-2">
@@ -1075,17 +1119,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <Label>Timestamp Format</Label>
-                <Select value={values.mobile_timestamp_format} onValueChange={(value) => onChange('mobile_timestamp_format', value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="12h">12 Hour</SelectItem>
-                    <SelectItem value="24h">24 Hour</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Timestamp Format</Label>
+                  <Select value={values.mobile_timestamp_format} onValueChange={(value) => onChange('mobile_timestamp_format', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="12h">12 Hour</SelectItem>
+                      <SelectItem value="24h">24 Hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <ColorPicker
+                  label="Timestamp Colour"
+                  value={values.mobile_timestamp_color || '#9CA3AF'}
+                  onChange={(value) => onChange('mobile_timestamp_color', value)}
+                  showPresets={false}
+                />
               </div>
             </CardContent>
           </CollapsibleContent>

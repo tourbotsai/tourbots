@@ -1,4 +1,5 @@
 import { ChatbotCustomisation } from '@/lib/types';
+import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
 
 /**
  * Mode-aware field selection utility - gets the effective value based on current mode
@@ -35,12 +36,18 @@ export const getEffectiveCustomisation = (
     ai_message_text_color: getEffectiveValue(customisation, 'ai_message_text_color', 'mobile_ai_message_text_color', '#09090B', mode),
     user_message_background: getEffectiveValue(customisation, 'user_message_background', 'mobile_user_message_background', '#1890FF', mode),
     user_message_text_color: getEffectiveValue(customisation, 'user_message_text_color', 'mobile_user_message_text_color', '#FFFFFF', mode),
+    window_background_color: getEffectiveValue(customisation, 'window_background_color', 'mobile_window_background_color', '#FFFFFF', mode),
     input_background_color: getEffectiveValue(customisation, 'input_background_color', 'mobile_input_background_color', '#FFFFFF', mode),
     input_text_color: getEffectiveValue(customisation, 'input_text_color', 'mobile_input_text_color', '#111827', mode), // 🆕 Customisable input text
     placeholder_text_color: getEffectiveValue(customisation, 'placeholder_text_color', 'mobile_placeholder_text_color', '#6B7280', mode), // 🆕 Customisable placeholder
     input_border_color: '#D1D5DB',
     chat_button_color: getEffectiveValue(customisation, 'chat_button_color', 'mobile_chat_button_color', '#1890FF', mode),
     chat_button_size: getEffectiveValue(customisation, 'chat_button_size', 'mobile_chat_button_size', 'medium', mode),
+    chat_button_size_px: resolveChatButtonSizePx({
+      pxValue: getEffectiveValue(customisation, 'chat_button_size_px', 'mobile_chat_button_size_px', mode === 'mobile' ? 60 : 80, mode),
+      legacySize: getEffectiveValue(customisation, 'chat_button_size', 'mobile_chat_button_size', 'medium', mode),
+      mode,
+    }),
     show_powered_by: getEffectiveValue(customisation, 'show_powered_by', 'mobile_show_powered_by', true, mode),
     brand_name: 'TourBots AI',
     brand_url: 'https://tourbots.ai',
@@ -89,6 +96,7 @@ export const getEffectiveCustomisation = (
     send_button_hover_color: getEffectiveValue(customisation, 'send_button_hover_color', 'mobile_send_button_hover_color', '#40A9FF', mode),
     send_button_icon: getEffectiveValue(customisation, 'send_button_icon', 'mobile_send_button_icon', 'Send', mode),
     send_button_size: getEffectiveValue(customisation, 'send_button_size', 'mobile_send_button_size', 'medium', mode),
+    send_button_size_px: getEffectiveValue(customisation, 'send_button_size_px', 'mobile_send_button_size_px', 36, mode),
     
     // Enhanced Send Button Options
     send_button_icon_color: getEffectiveValue(customisation, 'send_button_icon_color', 'mobile_send_button_icon_color', '#FFFFFF', mode),
@@ -97,6 +105,9 @@ export const getEffectiveCustomisation = (
     // Message Settings with mode-aware values
     show_timestamps: getEffectiveValue(customisation, 'show_timestamps', 'mobile_show_timestamps', false, mode),
     timestamp_format: getEffectiveValue(customisation, 'timestamp_format', 'mobile_timestamp_format', '12h', mode),
+    timestamp_color: getEffectiveValue(customisation, 'timestamp_color', 'mobile_timestamp_color', '#9CA3AF', mode),
+    thinking_background_color: getEffectiveValue(customisation, 'thinking_background_color', 'mobile_thinking_background_color', '#F3F4F6', mode),
+    thinking_text_color: getEffectiveValue(customisation, 'thinking_text_color', 'mobile_thinking_text_color', '#6B7280', mode),
     message_max_width: getEffectiveValue(customisation, 'message_max_width', 'mobile_message_max_width', mode === 'mobile' ? 85 : 80, mode),
 
     // Message Shadows
@@ -272,12 +283,14 @@ export interface PlaygroundCustomisation {
   ai_message_text_color: string;
   user_message_background: string;
   user_message_text_color: string;
+  window_background_color: string;
   input_background_color: string;
   input_text_color: string; // 🆕 Customisable input text colour
   placeholder_text_color: string; // 🆕 Customisable placeholder colour
   input_border_color: string;
   chat_button_color: string;
   chat_button_size: string;
+  chat_button_size_px: number;
   show_powered_by: boolean;
   brand_name: string;
   brand_url: string;
@@ -320,12 +333,16 @@ export interface PlaygroundCustomisation {
   send_button_hover_color: string;
   send_button_icon: string;
   send_button_size: string;
+  send_button_size_px: number;
   send_button_icon_color: string;
   send_button_style: string;
 
   // Messages
   show_timestamps: boolean;
   timestamp_format: string;
+  timestamp_color: string;
+  thinking_background_color: string;
+  thinking_text_color: string;
   message_max_width: number;
   message_shadow_enabled: boolean;
 

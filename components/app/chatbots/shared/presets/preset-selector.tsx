@@ -101,6 +101,7 @@ interface PresetTemplate {
     ai_message_text_color: string;
     user_message_background: string;
     user_message_text_color: string;
+    window_background_color?: string;
     input_background_color: string;
     send_button_color: string;
     send_button_icon_color: string;
@@ -115,6 +116,7 @@ interface PresetTemplate {
     mobile_ai_message_text_color: string;
     mobile_user_message_background: string;
     mobile_user_message_text_color: string;
+    mobile_window_background_color?: string;
     mobile_input_background_color: string;
     mobile_send_button_color: string;
     mobile_send_button_icon_color: string;
@@ -122,6 +124,7 @@ interface PresetTemplate {
     
     // Features - all Body Active fields
     chat_button_size: 'small' | 'medium' | 'large';
+    chat_button_size_px?: number;
     chat_button_position: 'bottom-right' | 'bottom-left';
     chat_button_icon: string;
     chat_button_shadow_intensity: 'none' | 'light' | 'medium' | 'heavy';
@@ -140,6 +143,9 @@ interface PresetTemplate {
     idle_animation_interval: number;
     show_timestamps: boolean;
     timestamp_format: '12h' | '24h' | 'relative';
+    timestamp_color?: string;
+    thinking_background_color?: string;
+    thinking_text_color?: string;
     show_user_avatar: boolean;
     show_bot_avatar: boolean;
     avatar_style: 'circle' | 'square' | 'rounded';
@@ -147,6 +153,7 @@ interface PresetTemplate {
     user_avatar_icon: 'User' | 'UserCheck' | 'UserCog' | 'Smile' | 'Coffee';
     send_button_style: 'icon' | 'text' | 'icon-text';
     send_button_size: 'small' | 'medium' | 'large';
+    send_button_size_px?: number;
     send_button_icon: 'Send' | 'ArrowRight' | 'ChevronRight' | 'Play' | 'MessageCircle';
     font_family: string;
     show_powered_by: boolean;
@@ -154,6 +161,7 @@ interface PresetTemplate {
     
     // Mobile features
     mobile_chat_button_size: 'small' | 'medium' | 'large';
+    mobile_chat_button_size_px?: number;
     mobile_chat_button_position: 'bottom-right' | 'bottom-left';
     mobile_chat_button_icon: 'MessageCircle' | 'Headphones' | 'Users' | 'Crown' | 'Shield';
     mobile_chat_button_shadow_intensity: 'none' | 'light' | 'medium' | 'heavy';
@@ -179,10 +187,14 @@ interface PresetTemplate {
     mobile_idle_animation_interval: number;
     mobile_send_button_style: 'icon' | 'text' | 'icon-text';
     mobile_send_button_size: 'small' | 'medium' | 'large';
+    mobile_send_button_size_px?: number;
     mobile_send_button_icon: 'Send' | 'ArrowRight' | 'ChevronRight' | 'Play' | 'MessageCircle';
     mobile_show_powered_by: boolean;
     mobile_show_timestamps: boolean;
     mobile_timestamp_format: '12h' | '24h' | 'relative';
+    mobile_timestamp_color?: string;
+    mobile_thinking_background_color?: string;
+    mobile_thinking_text_color?: string;
     mobile_welcome_message_delay: number;
   };
 }

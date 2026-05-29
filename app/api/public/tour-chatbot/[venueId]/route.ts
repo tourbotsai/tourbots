@@ -8,7 +8,8 @@ import { hardLimitService } from '@/lib/services/hard-limit-service';
 import { checkBillingMessageUsage } from '@/lib/services/billing-usage-service';
 import { ChatbotTrigger, HardLimitResult } from '@/lib/types';
 import { stripHTML } from '@/lib/input-sanitiser';
-import { findMatchedTrigger } from '@/lib/chatbot-trigger-service';
+import { buildTriggerInstructions, ResolvedTrigger } from '@/lib/chatbot-trigger-service';
+import { TOUR_CHATBOT_MODEL } from '@/lib/constants/ai-models';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
 type ResolvedConfig = {
@@ -196,9 +197,19 @@ function getOriginHost(request: NextRequest): string | null {
   return null;
 }
 
+function isPrivateLanHost(host: string): boolean {
+  if (host.endsWith('.local')) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  return false;
+}
+
 function isAllowedPublicChatOriginHost(host: string | null): boolean {
   if (!host) return process.env.NODE_ENV === 'development';
   if (host === 'localhost' || host === '127.0.0.1') return true;
+  // Dev-only: treat LAN IPs as first-party so the embed can be tested from a phone.
+  if (process.env.NODE_ENV === 'development' && isPrivateLanHost(host)) return true;
   return host === 'tourbots.ai' || host.endsWith('.tourbots.ai');
 }
 
@@ -483,10 +494,6 @@ export async function POST(
     const combinedMessages = [...(conversationHistory || []), { role: 'user', content: sanitisedMessage }];
     const userMessageCount = combinedMessages.filter((msg: any) => msg.role === 'user').length;
     const activeTriggers = await getActiveChatbotTriggers(config.id);
-    const matchedTrigger = findMatchedTrigger(activeTriggers, {
-      message: sanitisedMessage,
-      userMessageCount,
-    });
 
     // Log visitor message to database
     let visitorMessagePosition = 1;
@@ -613,142 +620,76 @@ When a user asks to see an area that's in a DIFFERENT model than their current l
       console.error('Error fetching tours and tour points:', error);
     }
 
-    if (matchedTrigger) {
-      const triggerResponse = matchedTrigger.action_message;
-      let triggerEvent: Record<string, any> | null = null;
-      let consumedHardLimitResult = hardLimitResult;
+    // AI-DRIVEN TRIGGERS
+    // We no longer pre-match triggers with regex. Instead we describe the active
+    // triggers to the model (below, in the system prompt) and let it decide, from
+    // the user's intent, whether any apply. Trigger actions (open_url / navigation
+    // / model switch) are executed via the model's tool calls. Message-count
+    // triggers are still evaluated server-side (only those due are surfaced).
+    const intentTriggersRaw = activeTriggers.filter(
+      (t) =>
+        (t.condition_type === 'keywords' && (t.condition_keywords?.length || 0) > 0) ||
+        (t.condition_type === 'intent' && Boolean((t.condition_intent || '').trim()))
+    );
+    const dueMessageCountTriggersRaw = activeTriggers.filter(
+      (t) =>
+        t.condition_type === 'message_count' &&
+        Number(t.condition_message_count || 0) > 0 &&
+        userMessageCount >= Number(t.condition_message_count)
+    );
 
-      if (matchedTrigger.action_type === 'open_url' && matchedTrigger.action_url) {
-        triggerEvent = {
-          type: 'trigger_action',
-          action_type: 'open_url',
-          url: matchedTrigger.action_url,
-        };
-      } else if (matchedTrigger.action_type === 'navigate_tour_point' && matchedTrigger.action_tour_point_id) {
-        const { data: tourPoint } = await supabase
-          .from('tour_points')
-          .select('id, name, sweep_id, position, rotation')
-          .eq('id', matchedTrigger.action_tour_point_id)
-          .maybeSingle();
-
-        if (tourPoint) {
-          triggerEvent = {
-            type: 'trigger_action',
-            action_type: 'navigate_tour_point',
-            tour_point_id: tourPoint.id,
-            area_name: tourPoint.name,
-            sweep_id: tourPoint.sweep_id,
-            position: tourPoint.position,
-            rotation: tourPoint.rotation,
-          };
-        }
-      } else if (matchedTrigger.action_type === 'switch_tour_model' && matchedTrigger.action_tour_model_id) {
-        const { data: targetTour } = await supabase
-          .from('tours')
-          .select('id, title, matterport_tour_id')
-          .eq('id', matchedTrigger.action_tour_model_id)
-          .eq('venue_id', venueId)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (targetTour) {
-          triggerEvent = {
-            type: 'trigger_action',
-            action_type: 'switch_tour_model',
-            tour_id: targetTour.id,
-            tour_title: targetTour.title,
-            model_id: targetTour.matterport_tour_id,
-          };
-        }
-      }
-
-      try {
-        const { count: messageCount } = await supabase
-          .from('conversations')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conversationId);
-
-        const botMessagePosition = (messageCount || 0) + 1;
-        await supabase.from('conversations').insert([{
-          venue_id: venueId,
-          tour_id: configResult?.selectedTourId || null,
-          session_id: finalSessionId,
-          conversation_id: conversationId,
-          message_position: botMessagePosition,
-          message_type: 'bot',
-          message: null,
-          response: triggerResponse,
-          chatbot_type: 'tour',
-          ip_address: ipAddress,
-          user_agent: userAgent,
-          page_url: pageUrl,
-          domain: domain,
-          embed_id: resolvedEmbedId,
-          response_time_ms: Date.now() - startTime,
-        }]);
-      } catch (error) {
-        console.error('Failed to store trigger response:', error);
-      }
-
-      try {
-        consumedHardLimitResult = await hardLimitService.consumeHardLimit(
-          venueId,
-          'tour',
-          configResult?.selectedTourId || undefined
-        );
-      } catch (consumeError) {
-        console.error('Failed to consume hard-limit quota after trigger response:', consumeError);
-      }
-
-      return new Response(
-        new ReadableStream({
-          async start(controller) {
-            const encoder = new TextEncoder();
-
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'start',
-                chatbotType: 'tour',
-                sessionId: finalSessionId,
-              })}\n\n`)
-            );
-
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'content',
-                content: triggerResponse,
-              })}\n\n`)
-            );
-
-            if (triggerEvent) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(triggerEvent)}\n\n`));
-            }
-
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'done',
-                responseTime: Date.now() - startTime,
-                hardLimitInfo: {
-                  remaining: consumedHardLimitResult.remaining,
-                  usagePercentage: consumedHardLimitResult.usagePercentage,
-                  resetTime: consumedHardLimitResult.resetTime,
-                },
-              })}\n\n`)
-            );
-
-            controller.close();
-          },
-        }),
-        {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache, no-transform',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-          },
-        }
-      );
+    // Resolve human-readable targets for navigate / switch actions.
+    const triggerPointIds = Array.from(
+      new Set(
+        activeTriggers
+          .filter((t) => t.action_type === 'navigate_tour_point' && t.action_tour_point_id)
+          .map((t) => t.action_tour_point_id as string)
+      )
+    );
+    const pointNameById = new Map<string, string>();
+    if (triggerPointIds.length > 0) {
+      const { data: triggerPoints } = await supabase
+        .from('tour_points')
+        .select('id, name')
+        .in('id', triggerPointIds);
+      (triggerPoints || []).forEach((point: any) => pointNameById.set(point.id, point.name));
     }
+    const modelTitleById = new Map<string, string>();
+    tours.forEach((tour: any) => modelTitleById.set(tour.id, tour.title));
+
+    const triggerActionInstruction = (trigger: ChatbotTrigger): string | null => {
+      if (trigger.action_type === 'open_url' && trigger.action_url) {
+        return `After replying, call the open_url tool with url "${trigger.action_url}".`;
+      }
+      if (trigger.action_type === 'navigate_tour_point' && trigger.action_tour_point_id) {
+        const name = pointNameById.get(trigger.action_tour_point_id);
+        if (name) {
+          return `After replying, move the tour to the "${name}" area by calling navigate_to_area with that area's sweep_id (from the navigation areas list above).`;
+        }
+      }
+      if (trigger.action_type === 'switch_tour_model' && trigger.action_tour_model_id) {
+        const title = modelTitleById.get(trigger.action_tour_model_id);
+        if (title) {
+          return `After replying, switch the tour to "${title}" by calling switch_tour_model.`;
+        }
+      }
+      return null;
+    };
+
+    const toResolvedTrigger = (trigger: ChatbotTrigger): ResolvedTrigger => ({
+      trigger,
+      actionInstruction: triggerActionInstruction(trigger),
+    });
+
+    const triggerInstructions = buildTriggerInstructions({
+      intentTriggers: intentTriggersRaw.map(toResolvedTrigger),
+      dueMessageCountTriggers: dueMessageCountTriggersRaw.map(toResolvedTrigger),
+      userMessageCount,
+    });
+
+    const hasOpenUrlTrigger = activeTriggers.some(
+      (t) => t.action_type === 'open_url' && Boolean(t.action_url)
+    );
 
     // Build system instructions
     const instructions = `You are the AI assistant for ${venue.name}. You are in their virtual tour speaking to prospective members exploring their virtual tour.
@@ -771,20 +712,28 @@ ${config.guardrails_enabled && config.guardrail_prompt ?
 ${multiModelContext}
 
 ${tourPointsContext}
-
+${triggerInstructions}
 RESPONSE GUIDELINES:
-- Always prioritise accuracy using the venue's information, NEVER MAKE ANYTHING UP OR ANSWER FROM YOUR KNOWN MATERIAL
-- Never mention "searching files" or "uploaded documents"
-- If unsure about specific details, suggest they contact the venue directly
-- Be helpful, friendly, and professional in all interactions
-- Focus on helping visitors understand the virtual tour and what they can see and do at the venue
+- You are speaking directly to an end user in a live, real-time chat. You cannot do background work, "look into it", or send a follow-up message later. Every reply must be complete and final on its own.
+- NEVER stall or tell the user to wait. Do not say "give me a moment", "let me check", "one moment", "I'll look into that", "please hold", "I'll get back to you", or anything implying a second message. Do any needed lookups silently and give the final answer in THIS single message.
+- Answer every question by working through these steps within this one response, in order:
+  1. First, use the venue information provided below to answer.
+  2. If the answer is not fully covered by that information, you MUST call the file_search tool to check the venue's uploaded documents in this same turn. This is REQUIRED, not optional, for any specific question such as class times/timetables, schedules, prices, policies, equipment, staff, or any detail not fully answered above.
+  3. If you find the answer (in the info or the documents), give it directly and confidently.
+  4. ONLY if the answer is not in the information AND a file_search returned nothing relevant may you say you don't have it. In that case, do NOT guess: briefly apologise and tell the user to contact the venue directly, including the contact details (phone, email, or website) from the venue information below.
+- CRITICAL: You must NOT tell the user you don't have the information, and must NOT suggest they contact the venue, until you have actually called the file_search tool in THIS turn. Never claim something is unavailable without searching the documents first. "I don't know" answers are only allowed after a real file search comes back empty.
+- This search-first rule OVERRIDES any other instruction above (including any that says "if unsure, say so and suggest contacting the venue"). Being unsure means you must search the uploaded documents first - only suggest contacting the venue if that search finds nothing.
+- Always prioritise accuracy using the venue's information. NEVER make anything up or answer from your own general/training knowledge.
+- Never reveal or mention your tools or process. Do not say "searching files", "uploaded documents", "knowledge base", "vector store", or similar - simply give the answer.
+- Be helpful, friendly, and professional in all interactions.
+- Focus on helping visitors understand the virtual tour and what they can see and do at the venue.
 - When users ask to see specific areas, ALWAYS respond conversationally first (e.g., "Sure, let me show you the leg area"), then use the navigate_to_area function to physically move the tour
 ${tours.length > 1 ? '- When users mention keywords related to other locations (e.g., secondary facilities), ALWAYS respond conversationally first (e.g., "I\'ll take you to the cold hut now"), then use the switch_tour_model function to switch to that location' : ''}
 
 This is the info the venue has uploaded:
 ${formattedVenueInfo}
 
-You also have access to a file search tool as they may have uploaded documents that contain the answer to user questions if not listed in above info.`;
+You also have a file search tool covering the venue's uploaded documents. If the answer is not in the information above, use it immediately and silently within this same response - do not announce it and do not ask the user to wait.`;
 
     // Prepare conversation input.
     // Use OpenAI-native continuation when available to avoid replaying full history.
@@ -820,8 +769,7 @@ You also have access to a file search tool as they may have uploaded documents t
     const responseArgs: any = {
       input: inputItems,
       instructions,
-      model: 'gpt-4.1',
-      temperature: 0.7,
+      model: TOUR_CHATBOT_MODEL,
       previous_response_id: previousResponseId || undefined,
     };
 
@@ -833,6 +781,9 @@ You also have access to a file search tool as they may have uploaded documents t
         type: 'file_search',
         vector_store_ids: [config.openai_vector_store_id]
       });
+      console.log(`🔎 file_search enabled for config ${config.id} (vector store: ${config.openai_vector_store_id})`);
+    } else {
+      console.warn(`⚠️ No vector store on config ${config.id} - file search DISABLED, chatbot cannot read uploaded documents`);
     }
 
     // Add tour navigation function if tour points are available
@@ -908,6 +859,29 @@ You also have access to a file search tool as they may have uploaded documents t
       });
     }
 
+    // Add the open_url tool when an active trigger opens a URL (AI-driven triggers).
+    if (hasOpenUrlTrigger) {
+      tools.push({
+        type: 'function',
+        name: 'open_url',
+        description: 'Show the user a link/URL after your reply. Only call this when a configured trigger requires opening a specific URL, and use the exact URL given in that trigger\'s instructions. IMPORTANT: Always provide your conversational reply text BEFORE calling this function.',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'The exact URL to show the user (from the matching trigger\'s instructions).'
+            },
+            reason: {
+              type: 'string',
+              description: 'Why this URL is being shown (for logging).'
+            }
+          },
+          required: ['url']
+        }
+      });
+    }
+
     // Add tools to responseArgs if any exist
     if (tools.length > 0) {
       responseArgs.tools = tools;
@@ -918,7 +892,8 @@ You also have access to a file search tool as they may have uploaded documents t
       input: `[${inputItems.length} messages]`,
       venueId,
       chatbotType: 'tour',
-      triggerMatched: false
+      activeTriggers: activeTriggers.length,
+      dueMessageCountTriggers: dueMessageCountTriggersRaw.length,
     });
 
     // Return streaming response using Server-Sent Events
@@ -939,10 +914,11 @@ You also have access to a file search tool as they may have uploaded documents t
               })}\n\n`)
             );
 
-            const streamAndCollect = async (args: any) => {
+            const streamAndCollect = async (args: any, isContinuation = false) => {
               const stream = await openAIService.streamResponse(args);
               const collectedFunctionCalls: Array<{ name: string; arguments: string; call_id?: string }> = [];
               let roundResponseId: string | null = null;
+              let isFirstTextDeltaThisRound = true;
 
               for await (const event of stream) {
                 const anyEvent = event as any;
@@ -962,11 +938,27 @@ You also have access to a file search tool as they may have uploaded documents t
                   if (eventType === 'response.output_text.delta' || eventType === 'response.content_part.delta') {
                     if (eventData.delta && typeof eventData.delta === 'string') {
                       if (!eventData.delta.includes('"sweep_id"') && !eventData.delta.includes('"area_name"')) {
-                        fullResponse += eventData.delta;
+                        let delta = eventData.delta;
+                        // When the model speaks again after a function call (e.g. navigation),
+                        // insert a single separating space so the continuation sentence doesn't
+                        // run straight into the previous one ("...now.Here's..." -> "...now. Here's...").
+                        // Only at the segment boundary, and only when needed, so URLs/emails within a
+                        // single stream are never split.
+                        if (
+                          isFirstTextDeltaThisRound &&
+                          isContinuation &&
+                          fullResponse.length > 0 &&
+                          !/\s$/.test(fullResponse) &&
+                          !/^\s/.test(delta)
+                        ) {
+                          delta = ` ${delta}`;
+                        }
+                        isFirstTextDeltaThisRound = false;
+                        fullResponse += delta;
                         controller.enqueue(
                           encoder.encode(`data: ${JSON.stringify({
                             type: 'content',
-                            content: eventData.delta
+                            content: delta
                           })}\n\n`)
                         );
                       } else {
@@ -999,7 +991,7 @@ You also have access to a file search tool as they may have uploaded documents t
             let continuationDepth = 0;
 
             while (continuationDepth < 3) {
-              const { responseId, functionCalls } = await streamAndCollect(nextArgs);
+              const { responseId, functionCalls } = await streamAndCollect(nextArgs, continuationDepth > 0);
               if (!functionCalls.length) break;
 
               console.log('✅ Stream complete, processing function calls:', functionCalls);
@@ -1066,13 +1058,41 @@ You also have access to a file search tool as they may have uploaded documents t
                       output: JSON.stringify({ status: 'error', action: 'switch_tour_model' }),
                     });
                   }
+                } else if (functionCall.name === 'open_url') {
+                  try {
+                    const parsedArgs = JSON.parse(functionCall.arguments || '{}');
+                    if (parsedArgs.url) {
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: 'trigger_action',
+                          action_type: 'open_url',
+                          url: parsedArgs.url
+                        })}\n\n`)
+                      );
+                    }
+                    functionOutputs.push({
+                      type: 'function_call_output',
+                      call_id: functionCall.call_id,
+                      output: JSON.stringify({
+                        status: parsedArgs.url ? 'dispatched' : 'error',
+                        action: 'open_url',
+                      }),
+                    });
+                  } catch (error) {
+                    console.error('Error processing open_url function:', error);
+                    functionOutputs.push({
+                      type: 'function_call_output',
+                      call_id: functionCall.call_id,
+                      output: JSON.stringify({ status: 'error', action: 'open_url' }),
+                    });
+                  }
                 }
               }
 
               if (!functionOutputs.length || !responseId) break;
 
               nextArgs = {
-                model: 'gpt-4.1',
+                model: TOUR_CHATBOT_MODEL,
                 previous_response_id: responseId,
                 input: functionOutputs,
               };

@@ -1,4 +1,6 @@
 import { ChatbotCustomisation } from './types';
+import { resolveChatButtonSizePx } from './chat-button-size';
+import { resolveSendButtonSizePx } from './send-button-size';
 
 export interface TourEmbedOptions {
   width?: string;
@@ -39,6 +41,7 @@ export interface EmbedCustomisation {
   buttonColor: string;
   buttonHoverColor: string;
   buttonSize: string;
+  buttonSizePx: number;
   buttonPosition: string;
   buttonIcon: string;
   buttonShape: string;
@@ -74,6 +77,9 @@ export interface EmbedCustomisation {
   messageTextSize: number;
   messageFontWeight: string;
   
+  // Window body
+  windowBackgroundColor: string;
+
   // Input Area
   inputBackgroundColor: string;
   inputTextColor: string;
@@ -86,6 +92,7 @@ export interface EmbedCustomisation {
   sendButtonHoverColor: string;
   sendButtonIconColor: string;
   sendButtonSize: string;
+  sendButtonSizePx: number;
   sendButtonIcon: string;
   sendButtonBorderRadius: number;
   
@@ -113,6 +120,7 @@ export interface EmbedCustomisation {
   // Timestamps
   showTimestamps: boolean;
   timestampFormat: string;
+  timestampColor: string;
   
   // Welcome Message
   welcomeMessageDelay: number;
@@ -120,6 +128,8 @@ export interface EmbedCustomisation {
   // Advanced Features
   showTypingIndicator: boolean;
   typingIndicatorColor: string;
+  thinkingBackgroundColor: string;
+  thinkingTextColor: string;
   enableSounds: boolean;
   enableNotifications: boolean;
   
@@ -142,6 +152,11 @@ export function mapCustomisationToEmbed(
     buttonColor: customisation[`${prefix}chat_button_color`] || customisation.chat_button_color || '#1890FF',
     buttonHoverColor: customisation[`${prefix}chat_button_hover_color`] || customisation.chat_button_hover_color || '#0F7AFF',
     buttonSize: customisation[`${prefix}chat_button_size`] || customisation.chat_button_size || 'medium',
+    buttonSizePx: resolveChatButtonSizePx({
+      pxValue: customisation[`${prefix}chat_button_size_px`] as number | null | undefined,
+      legacySize: customisation[`${prefix}chat_button_size`] as string | null | undefined,
+      mode: isDesktop ? 'desktop' : 'mobile',
+    }),
     buttonPosition: customisation[`${prefix}chat_button_position`] || customisation.chat_button_position || 'bottom-right',
     buttonIcon: customisation[`${prefix}chat_button_icon`] || customisation.chat_button_icon || 'MessageCircle',
     buttonShape: 'circle',
@@ -177,6 +192,9 @@ export function mapCustomisationToEmbed(
     messageTextSize: customisation[`${prefix}message_text_size`] || customisation.message_text_size || 14,
     messageFontWeight: customisation[`${prefix}message_font_weight`] || customisation.message_font_weight || 'normal',
     
+    // Window body
+    windowBackgroundColor: customisation[`${prefix}window_background_color`] || customisation.window_background_color || '#FFFFFF',
+
     // Input Area
     inputBackgroundColor: customisation[`${prefix}input_background_color`] || customisation.input_background_color || '#FFFFFF',
     inputTextColor: '#000000',
@@ -189,6 +207,10 @@ export function mapCustomisationToEmbed(
     sendButtonHoverColor: customisation[`${prefix}send_button_hover_color`] || customisation.send_button_hover_color || '#0F7AFF',
     sendButtonIconColor: customisation[`${prefix}send_button_icon_color`] || customisation.send_button_icon_color || '#FFFFFF',
     sendButtonSize: customisation[`${prefix}send_button_size`] || customisation.send_button_size || 'medium',
+    sendButtonSizePx: resolveSendButtonSizePx({
+      pxValue: customisation[`${prefix}send_button_size_px`] ?? customisation.send_button_size_px,
+      legacySize: customisation[`${prefix}send_button_size`] || customisation.send_button_size,
+    }),
     sendButtonIcon: customisation[`${prefix}send_button_icon`] || customisation.send_button_icon || 'Send',
     sendButtonBorderRadius: customisation[`${prefix}send_button_border_radius`] || customisation.send_button_border_radius || 8,
     
@@ -216,6 +238,7 @@ export function mapCustomisationToEmbed(
     // Timestamps
     showTimestamps: customisation[`${prefix}show_timestamps`] ?? customisation.show_timestamps ?? false,
     timestampFormat: customisation[`${prefix}timestamp_format`] || customisation.timestamp_format || '24h',
+    timestampColor: customisation[`${prefix}timestamp_color`] || customisation.timestamp_color || '#9CA3AF',
     
     // Welcome Message
     welcomeMessageDelay: customisation[`${prefix}welcome_message_delay`] || customisation.welcome_message_delay || 1000,
@@ -223,6 +246,8 @@ export function mapCustomisationToEmbed(
     // Advanced Features
     showTypingIndicator: (customisation[`${prefix}typing_indicator_style`] || customisation.typing_indicator_style) !== 'none',
     typingIndicatorColor: customisation[`${prefix}typing_indicator_color`] || customisation.typing_indicator_color || '#1890FF',
+    thinkingBackgroundColor: customisation[`${prefix}thinking_background_color`] || customisation.thinking_background_color || '#F3F4F6',
+    thinkingTextColor: customisation[`${prefix}thinking_text_color`] || customisation.thinking_text_color || '#6B7280',
     enableSounds: false,
     enableNotifications: false,
   };
@@ -384,6 +409,11 @@ function mapLegacyCustomisation(customisation: ChatbotCustomisation) {
     // Chat button styling
     buttonColor: customisation.chat_button_color,
     buttonSize: customisation.chat_button_size,
+    buttonSizePx: resolveChatButtonSizePx({
+      pxValue: customisation.chat_button_size_px,
+      legacySize: customisation.chat_button_size,
+      mode: 'desktop',
+    }),
     buttonPosition: customisation.chat_button_position,
     buttonIcon: customisation.chat_button_icon,
     iconSize: customisation.icon_size,
@@ -399,9 +429,14 @@ function mapLegacyCustomisation(customisation: ChatbotCustomisation) {
     // Message styling
     aiMessageBackground: customisation.ai_message_background,
     aiMessageTextColor: customisation.ai_message_text_color,
+    thinkingBackgroundColor: customisation.thinking_background_color || '#F3F4F6',
+    thinkingTextColor: customisation.thinking_text_color || '#6B7280',
     userMessageBackground: customisation.user_message_background,
     userMessageTextColor: customisation.user_message_text_color,
     
+    // Window body styling
+    windowBackgroundColor: customisation.window_background_color,
+
     // Input area styling
     inputBackgroundColor: customisation.input_background_color,
     sendButtonColor: customisation.send_button_color,
@@ -433,7 +468,9 @@ export function generateCustomisationCSS(customisation: ChatbotCustomisation, de
   const effectiveCustomisation = mapCustomisationToEmbed(customisation, device);
   
   // Generate comprehensive CSS
-  let css = `/* ${chatbotType.charAt(0).toUpperCase() + chatbotType.slice(1)} Chatbot Custom Styles */\n`;
+  // Load web fonts used by the font picker so they apply in the direct (non-iframe)
+  // embed where the host page may not already include them. @import must come first.
+  let css = `/* ${chatbotType.charAt(0).toUpperCase() + chatbotType.slice(1)} Chatbot Custom Styles */\n@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300..700&family=Roboto:wght@300;400;500;700&display=swap');\n`;
   
   // Chat Button Styles
   css += `
@@ -528,7 +565,7 @@ export function generateCustomisationCSS(customisation: ChatbotCustomisation, de
   flex: 1 !important;
   overflow-y: auto !important;
   padding: 16px !important;
-  background: #f8f9fa !important;
+  background: ${effectiveCustomisation.windowBackgroundColor || '#f8f9fa'} !important;
   font-family: ${effectiveCustomisation.fontFamily} !important;
 }
 
@@ -636,8 +673,8 @@ export function generateCustomisationCSS(customisation: ChatbotCustomisation, de
   color: ${effectiveCustomisation.sendButtonIconColor} !important;
   border: none !important;
   border-radius: ${effectiveCustomisation.sendButtonBorderRadius}px !important;
-  width: ${getSizeValue(effectiveCustomisation.sendButtonSize, 'send')}px !important;
-  height: ${getSizeValue(effectiveCustomisation.sendButtonSize, 'send')}px !important;
+  width: ${effectiveCustomisation.sendButtonSizePx}px !important;
+  height: ${effectiveCustomisation.sendButtonSizePx}px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -666,9 +703,11 @@ export function generateCustomisationCSS(customisation: ChatbotCustomisation, de
   if (effectiveCustomisation.showTypingIndicator) {
     css += `
 .${prefix}-typing-indicator {
-  color: ${effectiveCustomisation.typingIndicatorColor} !important;
+  color: ${effectiveCustomisation.thinkingTextColor} !important;
+  background-color: ${effectiveCustomisation.thinkingBackgroundColor} !important;
   font-size: ${effectiveCustomisation.messageTextSize}px !important;
   padding: 12px 16px !important;
+  border-radius: ${effectiveCustomisation.messageBorderRadius}px !important;
   display: flex !important;
   align-items: center !important;
   gap: 4px !important;
@@ -697,9 +736,8 @@ export function generateCustomisationCSS(customisation: ChatbotCustomisation, de
     css += `
 .${prefix}-timestamp {
   font-size: ${Math.max(10, effectiveCustomisation.messageTextSize - 2)}px !important;
-  color: #6b7280 !important;
+  color: ${effectiveCustomisation.timestampColor} !important;
   margin-top: 4px !important;
-  opacity: 0.7 !important;
   font-family: ${effectiveCustomisation.fontFamily} !important;
 }`;
   }
