@@ -713,6 +713,9 @@ ${multiModelContext}
 
 ${tourPointsContext}
 ${triggerInstructions}
+DEVICE CONTEXT:
+The visitor is on a ${deviceType === 'unknown' ? 'desktop' : deviceType} device.${deviceType === 'mobile' ? ' Bear this in mind and adjust your answer length accordingly — keep replies concise unless directed otherwise.' : ''}
+
 RESPONSE GUIDELINES:
 - You are speaking directly to an end user in a live, real-time chat. You cannot do background work, "look into it", or send a follow-up message later. Every reply must be complete and final on its own.
 - NEVER stall or tell the user to wait. Do not say "give me a moment", "let me check", "one moment", "I'll look into that", "please hold", "I'll get back to you", or anything implying a second message. Do any needed lookups silently and give the final answer in THIS single message.
@@ -914,7 +917,7 @@ You also have a file search tool covering the venue's uploaded documents. If the
               })}\n\n`)
             );
 
-            const streamAndCollect = async (args: any, isContinuation = false) => {
+            const streamAndCollect = async (args: any, isContinuation = false, suppressText = false) => {
               const stream = await openAIService.streamResponse(args);
               const collectedFunctionCalls: Array<{ name: string; arguments: string; call_id?: string }> = [];
               let roundResponseId: string | null = null;
@@ -937,7 +940,12 @@ You also have a file search tool covering the venue's uploaded documents. If the
                   const eventData = anyEvent;
                   if (eventType === 'response.output_text.delta' || eventType === 'response.content_part.delta') {
                     if (eventData.delta && typeof eventData.delta === 'string') {
-                      if (!eventData.delta.includes('"sweep_id"') && !eventData.delta.includes('"area_name"')) {
+                      if (suppressText) {
+                        // We still consume this round's text (needed to submit the tool
+                        // output and keep OpenAI state valid) but do NOT show or store it.
+                        // Used after a non-tour action (e.g. open_url) so the model can't
+                        // produce a redundant second reply.
+                      } else if (!eventData.delta.includes('"sweep_id"') && !eventData.delta.includes('"area_name"')) {
                         let delta = eventData.delta;
                         // When the model speaks again after a function call (e.g. navigation),
                         // insert a single separating space so the continuation sentence doesn't
@@ -989,9 +997,14 @@ You also have a file search tool covering the venue's uploaded documents. If the
 
             let nextArgs: any = responseArgs;
             let continuationDepth = 0;
+            let suppressNextRoundText = false;
 
             while (continuationDepth < 3) {
-              const { responseId, functionCalls } = await streamAndCollect(nextArgs, continuationDepth > 0);
+              const { responseId, functionCalls } = await streamAndCollect(
+                nextArgs,
+                continuationDepth > 0,
+                suppressNextRoundText
+              );
               if (!functionCalls.length) break;
 
               console.log('✅ Stream complete, processing function calls:', functionCalls);
@@ -1090,6 +1103,20 @@ You also have a file search tool covering the venue's uploaded documents. If the
               }
 
               if (!functionOutputs.length || !responseId) break;
+
+              // We must always submit the tool outputs so the response that contains the
+              // function_call is "closed" — otherwise the NEXT turn (which references it via
+              // previous_response_id) fails with "No tool output found for function call …".
+              //
+              // For tour actions (navigate_to_area / switch_tour_model) we WANT the model to
+              // speak again in the continuation (e.g. "Here's the leg area" after moving).
+              // For non-tour actions like open_url we do NOT — the model already answered, so
+              // we suppress the continuation's text to avoid a redundant double reply, while
+              // still submitting the output to keep the conversation state valid.
+              const hasTourAction = functionCalls.some(
+                (fc) => fc.name === 'navigate_to_area' || fc.name === 'switch_tour_model'
+              );
+              suppressNextRoundText = !hasTourAction && fullResponse.trim().length > 0;
 
               nextArgs = {
                 model: TOUR_CHATBOT_MODEL,

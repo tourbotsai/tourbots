@@ -100,6 +100,16 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     return result;
   };
 
+  // Custom uploads (logos, header icon, avatars) must NEVER inherit across devices.
+  // A desktop upload should not appear in the mobile preview (and vice versa), matching
+  // the live embed which reads the device-specific field with no cross-device fallback.
+  const getDeviceScopedValue = (desktopKey: keyof ChatbotCustomisation, mobileKey: keyof ChatbotCustomisation, fallback: any) => {
+    if (mode === 'mobile') {
+      return effectiveCustomisation[mobileKey] ?? fallback;
+    }
+    return effectiveCustomisation[desktopKey] ?? fallback;
+  };
+
   const custom = {
     // Basic customisation with mobile-aware values
     header_background_color: getEffectiveValue('header_background_color', 'mobile_header_background_color', '#1890FF'),
@@ -120,10 +130,10 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     show_powered_by: getEffectiveValue('show_powered_by', 'mobile_show_powered_by', true),
     brand_name: 'TourBots',
     brand_url: 'https://tourbots.ai',
-    custom_logo_url: getEffectiveValue('custom_logo_url', 'mobile_custom_logo_url', null),
+    custom_logo_url: getDeviceScopedValue('custom_logo_url', 'mobile_custom_logo_url', null),
     header_icon_size: getEffectiveValue('header_icon_size', 'mobile_header_icon_size', 20),
     header_icon: getEffectiveValue('header_icon', 'mobile_header_icon', 'Bot'),
-    custom_header_icon_url: getEffectiveValue('custom_header_icon_url', 'mobile_custom_header_icon_url', null),
+    custom_header_icon_url: getDeviceScopedValue('custom_header_icon_url', 'mobile_custom_header_icon_url', null),
     icon_size: getEffectiveValue('icon_size', 'mobile_icon_size', 24),
     chat_button_icon: getEffectiveValue('chat_button_icon', 'mobile_chat_button_icon', 'MessageCircle'),
     chat_button_position: getEffectiveValue('chat_button_position', 'mobile_chat_button_position', 'bottom-right'),
@@ -155,8 +165,8 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
     show_bot_avatar: getEffectiveValue('show_bot_avatar', 'mobile_show_bot_avatar', true),
     user_avatar_icon: getEffectiveValue('user_avatar_icon', 'mobile_user_avatar_icon', 'User'),
     bot_avatar_icon: getEffectiveValue('bot_avatar_icon', 'mobile_bot_avatar_icon', 'Bot'),
-    custom_user_avatar_url: getEffectiveValue('custom_user_avatar_url', 'mobile_custom_user_avatar_url', null),
-    custom_bot_avatar_url: getEffectiveValue('custom_bot_avatar_url', 'mobile_custom_bot_avatar_url', null),
+    custom_user_avatar_url: getDeviceScopedValue('custom_user_avatar_url', 'mobile_custom_user_avatar_url', null),
+    custom_bot_avatar_url: getDeviceScopedValue('custom_bot_avatar_url', 'mobile_custom_bot_avatar_url', null),
     
     // NEW: Avatar Style (circle/square/rounded)
     avatar_style: getEffectiveValue('avatar_style', 'mobile_avatar_style', 'circle'),
@@ -378,11 +388,10 @@ const EnhancedLivePreview: FC<EnhancedLivePreviewProps> = ({
       const iPhoneViewportWidth = 393;
       const iPhoneViewportHeight = 852;
       
-      // Apply same Math.min logic as embed script:
-      // width: Math.min(width, window.innerWidth - 20)
-      // height: Math.min(height, window.innerHeight - 80)
-      const constrainedWidth = Math.min(custom.chat_window_width, iPhoneViewportWidth - 20);
-      const constrainedHeight = Math.min(custom.chat_window_height, iPhoneViewportHeight - 80);
+      // Mirror the live embed's mobile sizing: honour the configured px but guard
+      // against viewport overflow with min(95vw, …) / min(90vh, …).
+      const constrainedWidth = Math.min(custom.chat_window_width, iPhoneViewportWidth * 0.95);
+      const constrainedHeight = Math.min(custom.chat_window_height, iPhoneViewportHeight * 0.90);
       
       return {
         width: `${constrainedWidth}px`,

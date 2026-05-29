@@ -1044,15 +1044,21 @@ export function TourChatWidget({
               borderRadius: `${getCustomisationValue('chat_window_border_radius', 'mobile_chat_window_border_radius')}px`,
               boxShadow: getChatWindowShadowStyle(),
               fontFamily: getCustomisationValue('font_family', 'mobile_font_family') as string,
-              // Use only inline styles for dimensions - no hardcoded Tailwind classes
+              // Use only inline styles for dimensions - no hardcoded Tailwind classes.
+              // Mobile honours the configured px, only guarding against viewport overflow
+              // (95vw / 90vh) so the window can't spill off small screens.
               width: isMobileView 
-                ? `min(90vw, ${getCustomisationValue('window_width', 'mobile_chat_window_width')}px)`
+                ? `min(95vw, ${getCustomisationValue('window_width', 'mobile_chat_window_width')}px)`
                 : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
               height: isMobileView 
-                ? `min(50vh, ${getCustomisationValue('window_height', 'mobile_chat_window_height')}px)`
+                ? `min(90vh, ${getCustomisationValue('window_height', 'mobile_chat_window_height')}px)`
                 : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
-              maxWidth: `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
-              maxHeight: `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
+              maxWidth: isMobileView 
+                ? '95vw'
+                : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
+              maxHeight: isMobileView 
+                ? '90vh'
+                : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
               ...(isFullscreen 
                 ? {
                     bottom: '24px',
@@ -1219,15 +1225,21 @@ export function TourChatWidget({
             borderRadius: `${getCustomisationValue('chat_window_border_radius', 'mobile_chat_window_border_radius')}px`,
             boxShadow: getChatWindowShadowStyle(),
             fontFamily: getCustomisationValue('font_family', 'mobile_font_family') as string,
-            // Use only inline styles for dimensions - no hardcoded Tailwind classes
+            // Use only inline styles for dimensions - no hardcoded Tailwind classes.
+            // Mobile honours the configured px, only guarding against viewport overflow
+            // (95vw / 90vh) so the window can't spill off small screens.
             width: isMobileView 
-              ? `min(90vw, ${getCustomisationValue('window_width', 'mobile_chat_window_width')}px)`
+              ? `min(95vw, ${getCustomisationValue('window_width', 'mobile_chat_window_width')}px)`
               : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
             height: isMobileView 
-              ? `min(50vh, ${getCustomisationValue('window_height', 'mobile_chat_window_height')}px)`
+              ? `min(90vh, ${getCustomisationValue('window_height', 'mobile_chat_window_height')}px)`
               : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
-            maxWidth: `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
-            maxHeight: `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
+            maxWidth: isMobileView 
+              ? '95vw'
+              : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
+            maxHeight: isMobileView 
+              ? '90vh'
+              : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
             // Dynamic positioning for both fullscreen and normal modes
             ...(isFullscreen 
               ? {

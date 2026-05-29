@@ -21,6 +21,24 @@ export const getEffectiveValue = (
 };
 
 /**
+ * Device-scoped value selection for custom uploads (logos, header icon, avatars).
+ * Unlike getEffectiveValue, this NEVER inherits across devices: a desktop upload must
+ * not appear on mobile (and vice versa), matching the live embed behaviour.
+ */
+export const getDeviceScopedValue = (
+  customisation: Partial<ChatbotCustomisation>,
+  desktopKey: keyof ChatbotCustomisation,
+  mobileKey: keyof ChatbotCustomisation,
+  fallback: any,
+  mode: 'desktop' | 'mobile'
+) => {
+  if (mode === 'mobile') {
+    return customisation[mobileKey] ?? fallback;
+  }
+  return customisation[desktopKey] ?? fallback;
+};
+
+/**
  * Get complete effective customisation object for playground use
  */
 export const getEffectiveCustomisation = (
@@ -51,10 +69,10 @@ export const getEffectiveCustomisation = (
     show_powered_by: getEffectiveValue(customisation, 'show_powered_by', 'mobile_show_powered_by', true, mode),
     brand_name: 'TourBots AI',
     brand_url: 'https://tourbots.ai',
-    custom_logo_url: getEffectiveValue(customisation, 'custom_logo_url', 'mobile_custom_logo_url', null, mode),
+    custom_logo_url: getDeviceScopedValue(customisation, 'custom_logo_url', 'mobile_custom_logo_url', null, mode),
     header_icon_size: getEffectiveValue(customisation, 'header_icon_size', 'mobile_header_icon_size', 20, mode),
     header_icon: getEffectiveValue(customisation, 'header_icon', 'mobile_header_icon', 'Bot', mode),
-    custom_header_icon_url: getEffectiveValue(customisation, 'custom_header_icon_url', 'mobile_custom_header_icon_url', null, mode),
+    custom_header_icon_url: getDeviceScopedValue(customisation, 'custom_header_icon_url', 'mobile_custom_header_icon_url', null, mode),
     icon_size: getEffectiveValue(customisation, 'icon_size', 'mobile_icon_size', 24, mode),
     chat_button_icon: getEffectiveValue(customisation, 'chat_button_icon', 'mobile_chat_button_icon', 'MessageCircle', mode),
     chat_button_position: getEffectiveValue(customisation, 'chat_button_position', 'mobile_chat_button_position', 'bottom-right', mode),
@@ -85,8 +103,8 @@ export const getEffectiveCustomisation = (
     show_bot_avatar: getEffectiveValue(customisation, 'show_bot_avatar', 'mobile_show_bot_avatar', true, mode),
     user_avatar_icon: getEffectiveValue(customisation, 'user_avatar_icon', 'mobile_user_avatar_icon', 'User', mode),
     bot_avatar_icon: getEffectiveValue(customisation, 'bot_avatar_icon', 'mobile_bot_avatar_icon', 'Bot', mode),
-    custom_user_avatar_url: getEffectiveValue(customisation, 'custom_user_avatar_url', 'mobile_custom_user_avatar_url', null, mode),
-    custom_bot_avatar_url: getEffectiveValue(customisation, 'custom_bot_avatar_url', 'mobile_custom_bot_avatar_url', null, mode),
+    custom_user_avatar_url: getDeviceScopedValue(customisation, 'custom_user_avatar_url', 'mobile_custom_user_avatar_url', null, mode),
+    custom_bot_avatar_url: getDeviceScopedValue(customisation, 'custom_bot_avatar_url', 'mobile_custom_bot_avatar_url', null, mode),
     
     // Avatar Style (circle/square/rounded)
     avatar_style: getEffectiveValue(customisation, 'avatar_style', 'mobile_avatar_style', 'circle', mode),
