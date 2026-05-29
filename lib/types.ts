@@ -517,7 +517,7 @@ export interface ChatbotCustomisation {
   chat_button_size_px: number;
   chat_button_position: 'bottom-right' | 'bottom-left';
   chat_button_icon: string;
-  icon_size: number; // Size of the icon in pixels (16-80)
+  icon_size: number; // Size of the icon in pixels (16-128, matches chat button size range)
   header_icon_size: number; // Size of the header icon in pixels (12-32)
   header_icon: string; // Header icon selection (Bot, MessageCircle, Headphones, Users, Crown, Shield)
   header_background_color: string;

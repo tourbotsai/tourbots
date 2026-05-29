@@ -16,6 +16,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
+import { getTourEmbedParentTrackingContext } from '@/lib/tour-embed-parent-context';
 import { resolveSendButtonSizePx, sendButtonIconSizePx } from '@/lib/send-button-size';
 import {
   getAnimationTiming,
@@ -44,6 +45,21 @@ const ICON_MAP = {
 const SEND_ICON_MAP = {
   Send, ArrowRight, ChevronRight, Play, MessageCircle
 };
+
+// A conversation is identified by a UUID (the conversations.conversation_id column is
+// a uuid). The id is generated once when a conversation starts and reused for every
+// message in it, so the dashboard counts conversations — not messages.
+function createConversationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // RFC4122 v4 fallback for environments without crypto.randomUUID.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = (Math.random() * 16) | 0;
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
 
 interface TourChatWidgetProps {
   venueId: string;
@@ -141,7 +157,7 @@ export function TourChatWidget({
       setSessionId(`tour-${venueId}-${Date.now()}`);
     }
     if (!conversationId) {
-      setConversationId(`tour-conv-${venueId}-${Date.now()}`);
+      setConversationId(createConversationId());
     }
   }, [isPublicDemo, venueId, venueName, sessionId, conversationId]);
 
@@ -422,6 +438,11 @@ export function TourChatWidget({
   const sendMessage = async () => {
     if (!inputMessage.trim() || !venueId || isLoading || !config?.is_active) return;
 
+    // Resolve the parent page domain the same way embed view tracking does, since the
+    // widget runs inside an iframe served from tourbots.ai (window.location would be
+    // tourbots.ai, not the host site). Falls back to own location when first-party.
+    const parentTrackingCtx = getTourEmbedParentTrackingContext();
+
     // Initialize IDs if not set
     let currentSessionId = sessionId;
     let currentConversationId = conversationId;
@@ -432,7 +453,7 @@ export function TourChatWidget({
     }
     
     if (!currentConversationId) {
-      currentConversationId = `tour-conv-${venueId}-${Date.now()}`;
+      currentConversationId = createConversationId();
       setConversationId(currentConversationId);
       setPreviousResponseId(null);
     }
@@ -490,8 +511,8 @@ export function TourChatWidget({
           conversationId: currentConversationId,
           embedId: embedId || `tour-widget-${venueId}`,
           embedToken,
-          domain: window.location.hostname,
-          pageUrl: window.location.href,
+          domain: parentTrackingCtx?.domain ?? window.location.hostname,
+          pageUrl: parentTrackingCtx?.pageUrl ?? window.location.href,
           tourContext: tour ? {
             title: tour.title,
             description: tour.description,
