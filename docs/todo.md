@@ -1,4 +1,5 @@
-why emebd protal no ful width, why height lmitmed 900px on emed code?
+give agency contrl hide tour settings menu tabs like settings idnidial  ones make colapse expandabel dfa
+give agnecy control portal bg colour currently slate
 
 
 - Run full end-to-end testing on the Body Active demo website: embed & agency portal

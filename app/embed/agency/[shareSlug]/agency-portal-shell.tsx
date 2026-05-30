@@ -20,6 +20,7 @@ import { TourTrendChart, TourTrendPoint } from '@/components/app/tours/tour-tren
 import { EmbedStatistics } from '@/components/app/chatbots/shared/embed-statistics';
 import { ConversationSessions } from '@/components/app/chatbots/shared/conversation-sessions';
 import { useUser } from '@/hooks/useUser';
+import { cn } from '@/lib/utils';
 
 type ModuleName = 'tour' | 'settings' | 'customisation' | 'analytics';
 
@@ -139,6 +140,18 @@ export function AgencyPortalShell({
   const [message, setMessage] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<ModuleName>('tour');
   const [selectedTourTab, setSelectedTourTab] = useState<'setup' | 'menu'>('setup');
+
+  // The advanced (script) embed disables the iframe's internal scroll and
+  // auto-resizes it to fit content. That leaves the sticky-preview tabs
+  // (customisation + tour menu) with no scrolling ancestor, so we give them
+  // their own fixed-height scroll region. The simple iframe embed scrolls as a
+  // whole and supports sticky natively, so it omits the autoHeight flag and we
+  // leave those tabs flowing normally.
+  const autoHeightEmbed = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('autoHeight') === '1';
+  }, []);
+  const stickyScrollClass = autoHeightEmbed ? 'lg:h-[900px] lg:overflow-y-auto' : '';
 
   const [settingsData, setSettingsData] = useState<PortalSettings | null>(previewSettings);
   const [settingsLoading, setSettingsLoading] = useState(false);
@@ -805,7 +818,9 @@ export function AgencyPortalShell({
                           />
                         </TabsContent>
                         <TabsContent value="menu" className="mt-4">
-                          <TourMenuBuilder tourId={resolvedTourId} layoutMode="split" />
+                          <div className={stickyScrollClass}>
+                            <TourMenuBuilder tourId={resolvedTourId} layoutMode="split" />
+                          </div>
                         </TabsContent>
                       </Tabs>
                     )}
@@ -912,7 +927,12 @@ export function AgencyPortalShell({
                             Temporary preview mode: customisation is read-only until the share is saved.
                           </p>
                         ) : null}
-                        <div className={previewOnly ? 'pointer-events-none select-none' : ''}>
+                        <div
+                          className={cn(
+                            previewOnly ? 'pointer-events-none select-none' : '',
+                            stickyScrollClass,
+                          )}
+                        >
                           <CustomisationForm
                             customisation={{
                               ...customisationData,

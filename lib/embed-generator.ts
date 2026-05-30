@@ -418,6 +418,12 @@ export function generateUniversalAgencyPortalEmbed(agencyId: string, options: Ag
   });
 
   const srcUrl = `${baseUrl}/embed/agency-portal?${queryParams.toString()}`;
+  // The script embed auto-resizes the iframe and disables its internal scroll,
+  // so tabs that rely on a scrolling ancestor (the customisation + tour menu
+  // sticky preview) need their own fixed-height scroll region. The autoHeight
+  // flag tells the portal to enable that. The simple iframe scrolls as a whole,
+  // so it must NOT receive this flag (it already supports sticky natively).
+  const scriptSrcUrl = `${srcUrl}&autoHeight=1`;
   const width = options.width || '100%';
   // Initial height only - the script embed auto-resizes to fit the portal
   // content (the page posts its height via postMessage), so there is no fixed
@@ -432,7 +438,7 @@ export function generateUniversalAgencyPortalEmbed(agencyId: string, options: Ag
   var container = document.getElementById('${embedId}');
   if (!container) return;
   var iframe = document.createElement('iframe');
-  iframe.src = '${srcUrl}';
+  iframe.src = '${scriptSrcUrl}';
   iframe.width = '${width}';
   iframe.height = '${initialHeight}';
   iframe.frameBorder = '0';

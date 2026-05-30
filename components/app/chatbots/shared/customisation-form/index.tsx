@@ -257,8 +257,19 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
 
   const isStackedLayout = layoutMode === 'stacked';
 
+  // When rendered inside the agency portal embed the iframe auto-resizes to its
+  // content height. A viewport-relative min-height (min-h-screen) creates an
+  // infinite resize feedback loop: iframe grows -> 100vh grows -> reported
+  // height grows -> iframe grows again. Use an intrinsic min-height instead.
+  const isEmbeddedPortal =
+    typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/embed/agency/') ||
+      window.location.pathname.startsWith('/embed/agency-portal'));
+  const rootMinHeight =
+    isStackedLayout || isEmbeddedPortal ? 'min-h-0' : 'min-h-screen';
+
   return (
-    <div className={cn(isStackedLayout ? "min-h-0 dark:text-slate-100" : "min-h-screen dark:text-slate-100", className)}>
+    <div className={cn(rootMinHeight, 'dark:text-slate-100', className)}>
       {/* Header Action Bar */}
       <div className="px-4 pt-0 lg:sticky lg:top-0 lg:z-10 lg:px-6 lg:pt-4">
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-4 shadow-sm dark:border-input dark:bg-background">
