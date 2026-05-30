@@ -418,8 +418,13 @@ export function generateUniversalAgencyPortalEmbed(agencyId: string, options: Ag
   });
 
   const srcUrl = `${baseUrl}/embed/agency-portal?${queryParams.toString()}`;
+  const width = options.width || '100%';
+  // Initial height only - the script embed auto-resizes to fit the portal
+  // content (the page posts its height via postMessage), so there is no fixed
+  // height and no inner scrollbar.
+  const initialHeight = options.height || '900px';
 
-  const iframe = `<iframe src="${srcUrl}" width="${options.width || '100%'}" height="${options.height || '900px'}" frameborder="0" allowfullscreen></iframe>`;
+  const iframe = `<iframe src="${srcUrl}" width="${width}" height="${initialHeight}" frameborder="0" allowfullscreen></iframe>`;
 
   const script = `<div id="${embedId}"></div>
 <script>
@@ -428,13 +433,25 @@ export function generateUniversalAgencyPortalEmbed(agencyId: string, options: Ag
   if (!container) return;
   var iframe = document.createElement('iframe');
   iframe.src = '${srcUrl}';
-  iframe.width = '${options.width || '100%'}';
-  iframe.height = '${options.height || '900px'}';
+  iframe.width = '${width}';
+  iframe.height = '${initialHeight}';
   iframe.frameBorder = '0';
   iframe.allowFullscreen = true;
-  iframe.style.width = '${options.width || '100%'}';
+  iframe.scrolling = 'no';
+  iframe.style.width = '${width}';
   iframe.style.border = '0';
   container.appendChild(iframe);
+  window.addEventListener('message', function(event) {
+    if (event.origin !== '${baseUrl}') return;
+    if (event.source !== iframe.contentWindow) return;
+    var data = event.data;
+    if (!data || data.type !== 'tourbots-portal-resize') return;
+    var height = parseInt(data.height, 10);
+    if (height > 0) {
+      iframe.style.height = height + 'px';
+      iframe.setAttribute('height', String(height));
+    }
+  });
 })();
 </script>`;
 

@@ -965,6 +965,9 @@ export function AgencySettings() {
                       <Code className="h-4 w-4" />
                       Simple IFrame Embed
                     </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Easiest option. Uses a fixed height - adjust the height value to suit your page.
+                    </p>
                     <Textarea
                       value={universalEmbed.iframe}
                       readOnly
@@ -1002,6 +1005,9 @@ export function AgencySettings() {
                       <Code className="h-4 w-4" />
                       Advanced Script Embed
                     </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Recommended. Automatically resizes to fit the portal - no fixed height or inner scrollbar.
+                    </p>
                     <Textarea
                       value={universalEmbed.script}
                       readOnly

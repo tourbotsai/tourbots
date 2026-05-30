@@ -688,7 +688,6 @@ export function AgencyPortalShell({
                     />
                   ) : null}
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-slate-100/90">Agency client portal</p>
                     <h1 className="text-2xl font-semibold">{agencyName}</h1>
                     <p className="mt-1 text-sm text-slate-100/90">{tourTitle} - {shareSlug}</p>
                   </div>
