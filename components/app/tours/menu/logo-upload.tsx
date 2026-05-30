@@ -36,6 +36,29 @@ export function LogoUpload({
   const [isCropSaving, setIsCropSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Inside the agency portal embed the client is authenticated via the portal
+  // session cookie (not an app bearer token), so uploads must go to the
+  // cookie-authenticated public endpoint with the CSRF token + share slug.
+  const isAgencyEmbed =
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/embed/agency');
+
+  const getAgencyCsrfToken = () => {
+    if (typeof document === 'undefined') return null;
+    const csrfCookie = document.cookie
+      .split('; ')
+      .find((cookie) => cookie.startsWith('tb_agency_csrf='));
+    if (!csrfCookie) return null;
+    return decodeURIComponent(csrfCookie.split('=')[1] || '');
+  };
+
+  const getAgencyShareSlug = () => {
+    if (typeof window === 'undefined') return null;
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    const agencyIndex = parts.findIndex((part) => part === 'agency');
+    if (agencyIndex === -1) return null;
+    return parts[agencyIndex + 1] || null;
+  };
+
   const cleanupCropObjectUrl = useCallback(() => {
     if (cropObjectUrl) {
       URL.revokeObjectURL(cropObjectUrl);
@@ -83,9 +106,23 @@ export function LogoUpload({
       formData.append('venueId', venueId);
       formData.append('tourId', tourId);
 
-      const response = await fetch('/api/app/tours/menu/upload-logo', {
+      const shareSlug = getAgencyShareSlug();
+      if (isAgencyEmbed && shareSlug) {
+        formData.append('shareSlug', shareSlug);
+      }
+
+      const uploadEndpoint = isAgencyEmbed
+        ? '/api/public/agency-portal/tour-menu/upload-logo'
+        : '/api/app/tours/menu/upload-logo';
+      const csrfToken = isAgencyEmbed ? getAgencyCsrfToken() : null;
+      const uploadHeaders = isAgencyEmbed
+        ? (csrfToken ? { 'x-csrf-token': csrfToken } : {})
+        : await getAuthHeaders();
+
+      const response = await fetch(uploadEndpoint, {
         method: 'POST',
-        headers: await getAuthHeaders(),
+        headers: uploadHeaders,
+        credentials: 'include',
         body: formData,
       });
 
@@ -182,16 +219,28 @@ export function LogoUpload({
     if (!value) return;
 
     try {
+      const shareSlug = getAgencyShareSlug();
+      const csrfToken = isAgencyEmbed ? getAgencyCsrfToken() : null;
+      const deleteEndpoint = isAgencyEmbed
+        ? '/api/public/agency-portal/tour-menu/upload-logo'
+        : '/api/app/tours/menu/upload-logo';
+      const deleteHeaders = isAgencyEmbed
+        ? {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+          }
+        : await getAuthHeaders({ 'Content-Type': 'application/json' });
+
       // Call API to delete the image
-      const response = await fetch('/api/app/tours/menu/upload-logo', {
+      const response = await fetch(deleteEndpoint, {
         method: 'DELETE',
-        headers: await getAuthHeaders({
-          'Content-Type': 'application/json',
-        }),
+        headers: deleteHeaders,
+        credentials: 'include',
         body: JSON.stringify({
           imageUrl: value,
           venueId,
           tourId,
+          ...(isAgencyEmbed && shareSlug ? { shareSlug } : {}),
         }),
       });
 

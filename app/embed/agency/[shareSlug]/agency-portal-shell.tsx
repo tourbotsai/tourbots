@@ -34,9 +34,14 @@ interface AgencyPortalShellProps {
   showHeader: boolean;
   primaryColour: string;
   secondaryColour: string;
+  backgroundColour?: string | null;
   modules: Partial<Record<ModuleName, boolean>>;
   venueId?: string | null;
   venueName?: string | null;
+  tourBlocks?: {
+    setup?: boolean;
+    menu?: boolean;
+  };
   settingsBlocks?: {
     config?: boolean;
     information?: boolean;
@@ -115,9 +120,11 @@ export function AgencyPortalShell({
   showHeader,
   primaryColour,
   secondaryColour,
+  backgroundColour,
   modules,
   venueId,
   venueName,
+  tourBlocks,
   settingsBlocks,
   previewOnly = false,
   initialSession = null,
@@ -184,6 +191,10 @@ export function AgencyPortalShell({
     return meta.filter((item) => Boolean(modules[item.value]));
   }, [modules]);
   const resolvedTourId = tourId || null;
+  const resolvedTourBlocks = {
+    setup: tourBlocks?.setup !== false,
+    menu: tourBlocks?.menu !== false,
+  };
   const resolvedSettingsBlocks = {
     config: settingsBlocks?.config !== false,
     information: settingsBlocks?.information !== false,
@@ -191,6 +202,17 @@ export function AgencyPortalShell({
     triggers: settingsBlocks?.triggers !== false,
   };
   const informationReadOnly = previewOnly;
+
+  // Keep the active tour sub-tab pointing at an enabled block. If the agency
+  // hides one of them, fall back to the other so the user never lands on a tab
+  // that renders nothing.
+  useEffect(() => {
+    if (selectedTourTab === 'setup' && !resolvedTourBlocks.setup && resolvedTourBlocks.menu) {
+      setSelectedTourTab('menu');
+    } else if (selectedTourTab === 'menu' && !resolvedTourBlocks.menu && resolvedTourBlocks.setup) {
+      setSelectedTourTab('setup');
+    }
+  }, [resolvedTourBlocks.setup, resolvedTourBlocks.menu, selectedTourTab]);
 
   function toKey(value: string) {
     return value
@@ -676,7 +698,10 @@ export function AgencyPortalShell({
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+    <main
+      className="min-h-screen px-4 py-8 sm:px-6 lg:px-8"
+      style={{ backgroundColor: backgroundColour || '#F8FAFC' }}
+    >
       <style jsx global>{`
         html, body, #__next {
           height: auto !important;
@@ -804,24 +829,36 @@ export function AgencyPortalShell({
                   <TabsContent value="tour" className="mt-3">
                     {!resolvedTourId ? (
                       <p className="text-sm text-slate-600">No tour selected for this share.</p>
+                    ) : !resolvedTourBlocks.setup && !resolvedTourBlocks.menu ? (
+                      <p className="text-sm text-slate-600">No tour sections are enabled for this share.</p>
                     ) : (
                       <Tabs value={selectedTourTab} onValueChange={(value) => setSelectedTourTab(value as 'setup' | 'menu')}>
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="setup">Tour Setup</TabsTrigger>
-                          <TabsTrigger value="menu">Tour Menu</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="setup" className="mt-4">
-                          <TourViewer
-                            selectedTourIdOverride={resolvedTourId}
-                            forcedVenueId={venueId || appUser?.venue?.id}
-                            forcedVenueName={venueName || appUser?.venue?.name}
-                          />
-                        </TabsContent>
-                        <TabsContent value="menu" className="mt-4">
+                        {resolvedTourBlocks.setup && resolvedTourBlocks.menu && (
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="setup">Tour Setup</TabsTrigger>
+                            <TabsTrigger value="menu">Tour Menu</TabsTrigger>
+                          </TabsList>
+                        )}
+                        {resolvedTourBlocks.setup && (
+                          <TabsContent value="setup" className="mt-4">
+                            <TourViewer
+                              selectedTourIdOverride={resolvedTourId}
+                              forcedVenueId={venueId || appUser?.venue?.id}
+                              forcedVenueName={venueName || appUser?.venue?.name}
+                            />
+                          </TabsContent>
+                        )}
+                        {resolvedTourBlocks.menu && (
+                          <TabsContent value="menu" className="mt-4">
                           <div className={stickyScrollClass}>
-                            <TourMenuBuilder tourId={resolvedTourId} layoutMode="split" />
+                            <TourMenuBuilder
+                              tourId={resolvedTourId}
+                              venueId={venueId || appUser?.venue?.id}
+                              layoutMode="split"
+                            />
                           </div>
-                        </TabsContent>
+                          </TabsContent>
+                        )}
                       </Tabs>
                     )}
                   </TabsContent>

@@ -23,7 +23,7 @@ export default async function AgencyPortalUniversalPage({
 
   const { data: settings } = await supabase
     .from('agency_portal_settings')
-    .select('agency_name, logo_url, primary_colour, secondary_colour, is_enabled, allowed_domains')
+    .select('agency_name, logo_url, primary_colour, secondary_colour, portal_background_colour, is_enabled, allowed_domains')
     .eq('venue_id', agencyId)
     .maybeSingle();
 
@@ -61,6 +61,7 @@ export default async function AgencyPortalUniversalPage({
       agencyLogoUrl={settings.logo_url || null}
       primaryColour={settings.primary_colour || '#1E40AF'}
       secondaryColour={settings.secondary_colour || '#0F172A'}
+      backgroundColour={settings.portal_background_colour || null}
       showHeader={showHeader}
     />
   );

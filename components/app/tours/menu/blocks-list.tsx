@@ -9,10 +9,11 @@ interface BlocksListProps {
   blocks: any[];
   onBlocksChange: (blocks: any[]) => void;
   tourId?: string;
+  venueId?: string;
   activeDevice?: 'desktop' | 'mobile';
 }
 
-export function BlocksList({ blocks, onBlocksChange, tourId, activeDevice = 'desktop' }: BlocksListProps) {
+export function BlocksList({ blocks, onBlocksChange, tourId, venueId, activeDevice = 'desktop' }: BlocksListProps) {
   const addBlock = (blockType: string) => {
     const newBlock = {
       id: `block-${Date.now()}`,
@@ -185,6 +186,7 @@ export function BlocksList({ blocks, onBlocksChange, tourId, activeDevice = 'des
               onDelete={() => deleteBlock(block.id)}
               onMove={(direction) => moveBlock(block.id, direction)}
               tourId={tourId}
+              venueId={venueId}
               activeDevice={activeDevice}
             />
           ))}

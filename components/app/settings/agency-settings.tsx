@@ -56,6 +56,7 @@ interface AgencyPortalSettings {
   logo_url: string | null;
   primary_colour: string | null;
   secondary_colour: string | null;
+  portal_background_colour: string | null;
   allowed_domains: string[];
 }
 
@@ -85,6 +86,10 @@ interface ShareRow {
     settings?: boolean;
     customisation?: boolean;
     analytics?: boolean;
+    tour_blocks?: {
+      setup?: boolean;
+      menu?: boolean;
+    };
     settings_blocks?: {
       config?: boolean;
       information?: boolean;
@@ -100,6 +105,10 @@ const defaultModules = {
   settings: true,
   customisation: true,
   analytics: true,
+};
+const defaultTourBlocks = {
+  setup: true,
+  menu: true,
 };
 const defaultSettingsBlocks = {
   config: true,
@@ -163,6 +172,7 @@ export function AgencySettings() {
   const [shareSlug, setShareSlug] = useState("");
   const [shareActive, setShareActive] = useState(true);
   const [enabledModules, setEnabledModules] = useState(defaultModules);
+  const [tourBlocks, setTourBlocks] = useState(defaultTourBlocks);
   const [settingsBlocks, setSettingsBlocks] = useState(defaultSettingsBlocks);
   const [clientEmail, setClientEmail] = useState("");
   const [clientPassword, setClientPassword] = useState("");
@@ -214,11 +224,14 @@ export function AgencySettings() {
       tourTitle: selectedTour?.title || "Tour",
       primaryColour: settings?.primary_colour || "#1E40AF",
       secondaryColour: settings?.secondary_colour || "#0F172A",
+      backgroundColour: settings?.portal_background_colour || "#F8FAFC",
       showHeader: "true",
       tour: String(enabledModules.tour ?? true),
       settings: String(enabledModules.settings ?? true),
       customisation: String(enabledModules.customisation ?? true),
       analytics: String(enabledModules.analytics ?? true),
+      tourSetup: String(tourBlocks.setup ?? true),
+      tourMenu: String(tourBlocks.menu ?? true),
       settingsConfig: String(settingsBlocks.config ?? true),
       settingsInformation: String(settingsBlocks.information ?? true),
       settingsDocuments: String(settingsBlocks.documents ?? true),
@@ -232,11 +245,14 @@ export function AgencySettings() {
     settings?.logo_url,
     settings?.primary_colour,
     settings?.secondary_colour,
+    settings?.portal_background_colour,
     selectedTour?.title,
     enabledModules.settings,
     enabledModules.tour,
     enabledModules.customisation,
     enabledModules.analytics,
+    tourBlocks.setup,
+    tourBlocks.menu,
     settingsBlocks.config,
     settingsBlocks.information,
     settingsBlocks.documents,
@@ -384,6 +400,7 @@ export function AgencySettings() {
           isActive: true,
           enabledModules: {
             ...defaultModules,
+            tour_blocks: defaultTourBlocks,
             settings_blocks: defaultSettingsBlocks,
           },
           clientEmail: email,
@@ -477,6 +494,7 @@ export function AgencySettings() {
           logo_url: settings.logo_url || null,
           primary_colour: settings.primary_colour || null,
           secondary_colour: settings.secondary_colour || null,
+          portal_background_colour: settings.portal_background_colour || null,
           allowed_domains: parsedDomains,
         }),
       });
@@ -578,6 +596,10 @@ export function AgencySettings() {
       customisation: existingShare?.enabled_modules?.customisation ?? true,
       analytics: existingShare?.enabled_modules?.analytics ?? true,
     });
+    setTourBlocks({
+      setup: existingShare?.enabled_modules?.tour_blocks?.setup ?? true,
+      menu: existingShare?.enabled_modules?.tour_blocks?.menu ?? true,
+    });
     setSettingsBlocks({
       config: existingShare?.enabled_modules?.settings_blocks?.config ?? true,
       information: existingShare?.enabled_modules?.settings_blocks?.information ?? true,
@@ -610,6 +632,7 @@ export function AgencySettings() {
           isActive: shareActive,
           enabledModules: {
             ...enabledModules,
+            tour_blocks: tourBlocks,
             settings_blocks: settingsBlocks,
           },
           clientEmail: clientEmail || undefined,
@@ -874,6 +897,17 @@ export function AgencySettings() {
                     onChange={(value) => {
                       if (!entitled) return;
                       setSettings((prev) => (prev ? { ...prev, secondary_colour: value } : prev));
+                    }}
+                    showPresets={false}
+                  />
+                </div>
+                <div className={entitled ? "" : "pointer-events-none opacity-60"}>
+                  <ColorPicker
+                    label="Portal background colour"
+                    value={settings.portal_background_colour || "#F8FAFC"}
+                    onChange={(value) => {
+                      if (!entitled) return;
+                      setSettings((prev) => (prev ? { ...prev, portal_background_colour: value } : prev));
                     }}
                     showPresets={false}
                   />
@@ -1328,6 +1362,25 @@ export function AgencySettings() {
                     <Switch
                       checked={Boolean(value)}
                       onCheckedChange={(checked) => setEnabledModules((prev) => ({ ...prev, [key]: checked }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3 dark:border-input dark:bg-background">
+              <p className="text-sm font-medium">Tour blocks</p>
+              <p className="text-xs text-muted-foreground">
+                Control which sections appear inside the Tour tab for this share.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(tourBlocks).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <Label className="capitalize">{key}</Label>
+                    <Switch
+                      checked={Boolean(value)}
+                      onCheckedChange={(checked) => setTourBlocks((prev) => ({ ...prev, [key]: checked }))}
+                      disabled={!enabledModules.tour}
                     />
                   </div>
                 ))}

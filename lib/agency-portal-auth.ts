@@ -171,6 +171,16 @@ export interface AgencyPortalSessionContext {
     settings?: boolean;
     customisation?: boolean;
     analytics?: boolean;
+    tour_blocks?: {
+      setup?: boolean;
+      menu?: boolean;
+    };
+    settings_blocks?: {
+      config?: boolean;
+      information?: boolean;
+      documents?: boolean;
+      triggers?: boolean;
+    };
   };
   user: {
     id: string;

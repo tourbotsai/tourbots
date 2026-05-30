@@ -13,6 +13,10 @@ interface EnabledModules {
   settings?: boolean;
   customisation?: boolean;
   analytics?: boolean;
+  tour_blocks?: {
+    setup?: boolean;
+    menu?: boolean;
+  };
   settings_blocks?: {
     config?: boolean;
     information?: boolean;
@@ -35,6 +39,7 @@ interface AgencyPortalEntryProps {
   agencyLogoUrl: string | null;
   primaryColour: string;
   secondaryColour: string;
+  backgroundColour?: string | null;
   showHeader: boolean;
 }
 
@@ -44,6 +49,7 @@ export function AgencyPortalEntry({
   agencyLogoUrl,
   primaryColour,
   secondaryColour,
+  backgroundColour,
   showHeader,
 }: AgencyPortalEntryProps) {
   const [status, setStatus] = useState<'loading' | 'login' | 'authed'>('loading');
@@ -173,6 +179,7 @@ export function AgencyPortalEntry({
         showHeader={showHeader}
         primaryColour={primaryColour}
         secondaryColour={secondaryColour}
+        backgroundColour={backgroundColour}
         modules={{
           tour: modules.tour !== false,
           settings: modules.settings !== false,
@@ -180,6 +187,10 @@ export function AgencyPortalEntry({
           analytics: modules.analytics !== false,
         }}
         venueId={agencyId}
+        tourBlocks={{
+          setup: modules.tour_blocks?.setup !== false,
+          menu: modules.tour_blocks?.menu !== false,
+        }}
         settingsBlocks={{
           config: modules.settings_blocks?.config !== false,
           information: modules.settings_blocks?.information !== false,
