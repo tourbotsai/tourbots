@@ -16,8 +16,8 @@ import { useAuthHeaders } from "@/hooks/useAuthHeaders";
 import { useUser } from "@/hooks/useUser";
 import { useBilling } from "@/hooks/app/useBilling";
 import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
-import { generateAgencyPortalEmbed } from "@/lib/embed-generator";
-import { Building2, Copy, ExternalLink, Info, KeyRound, Loader2, Lock, Plus, Save, Share2, Trash2, UserPlus, X } from "lucide-react";
+import { generateAgencyPortalEmbed, generateUniversalAgencyPortalEmbed } from "@/lib/embed-generator";
+import { Building2, Code, Copy, ExternalLink, Info, KeyRound, Loader2, Lock, Plus, Save, Share2, Trash2, UserPlus, X } from "lucide-react";
 
 function extractMatterportId(url: string): string {
   const trimmed = url.trim();
@@ -189,6 +189,16 @@ export function AgencySettings() {
       showHeader: true,
     });
   }, [shareSlug, selectedShare?.share_slug, embedWidth, embedHeight]);
+
+  const universalEmbed = useMemo(() => {
+    const venueId = user?.venue?.id;
+    if (!venueId) return null;
+    return generateUniversalAgencyPortalEmbed(venueId, {
+      width: "100%",
+      height: "900px",
+      showHeader: true,
+    });
+  }, [user?.venue?.id]);
 
   const canUsePermanentPreview = useMemo(() => {
     return Boolean(selectedShare && settings?.is_enabled);
@@ -751,8 +761,11 @@ export function AgencySettings() {
 
         <TabsContent value="settings" className="space-y-6">
           <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Agency Portal Branding</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Customise how the branded portal appears to your end clients.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {!entitled && (
@@ -760,10 +773,6 @@ export function AgencySettings() {
               Your plan does not include the agency portal. Upgrade to the Agency plan in Billing to activate these settings.
             </div>
           )}
-
-          <p className="text-sm text-muted-foreground">
-            Customise how the branded portal appears to your end clients.
-          </p>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
@@ -936,6 +945,92 @@ export function AgencySettings() {
             </Button>
           </div>
         </CardContent>
+          </Card>
+
+          <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
+            <CardHeader className="pb-4">
+              <CardTitle>Client Portal Embed Link</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Embed this once on your site to give every client a single login page. Each client signs in with their own
+                credentials and is taken straight to their own portal.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {universalEmbed && settings?.is_enabled ? (
+                <>
+                  <div className="h-px bg-slate-200 dark:bg-slate-800" />
+
+                  <div className="space-y-3">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <Code className="h-4 w-4" />
+                      Simple IFrame Embed
+                    </h3>
+                    <Textarea
+                      value={universalEmbed.iframe}
+                      readOnly
+                      rows={3}
+                      className="resize-none border-slate-300 bg-slate-50 font-mono text-xs text-slate-700 dark:border-input dark:bg-background dark:text-slate-300"
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyText(universalEmbed.iframe, "iFrame embed code")}
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy Code
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                      >
+                        <a href={universalEmbed.previewUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Preview login page
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-slate-200 dark:bg-slate-800" />
+
+                  <div className="space-y-3">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <Code className="h-4 w-4" />
+                      Advanced Script Embed
+                    </h3>
+                    <Textarea
+                      value={universalEmbed.script}
+                      readOnly
+                      rows={7}
+                      className="resize-none border-slate-300 bg-slate-50 font-mono text-xs text-slate-700 dark:border-input dark:bg-background dark:text-slate-300"
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyText(universalEmbed.script, "Script embed code")}
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy Code
+                      </Button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Client emails must be unique across your agency for the login to route each client correctly.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Enable the agency portal in Agency Portal Branding and save agency settings to generate your embed code.
+                </p>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
 

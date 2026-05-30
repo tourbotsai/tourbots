@@ -106,6 +106,24 @@ async function upsertPortalUser(params: {
   mustResetPassword?: boolean;
   createdByUserId: string;
 }) {
+  // Email must be unique within an agency so the universal portal login can
+  // resolve a single client by email. Block the same email on another share.
+  const venueDuplicate = await supabase
+    .from('agency_portal_users')
+    .select('id')
+    .eq('venue_id', params.venueId)
+    .eq('is_active', true)
+    .neq('share_id', params.shareId)
+    .ilike('email', params.email)
+    .limit(1);
+
+  if (venueDuplicate.error) {
+    throw new Error(venueDuplicate.error.message);
+  }
+  if (venueDuplicate.data && venueDuplicate.data.length > 0) {
+    throw new Error('This email is already in use for another client. Use a different email.');
+  }
+
   const existingLookup = await supabase
     .from('agency_portal_users')
     .select('id')

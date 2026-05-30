@@ -9,11 +9,19 @@ import {
   verifyStoredPassword,
 } from '@/lib/agency-portal-auth';
 
-const loginSchema = z.object({
-  shareSlug: z.string().trim().min(3).max(120),
-  email: z.string().email(),
-  password: z.string().min(8).max(200),
-});
+const loginSchema = z
+  .object({
+    // Per-client embed login is scoped to a share slug. The universal agency
+    // portal embed instead passes the agency (venue) id and we resolve the
+    // matching client by email across that agency's active shares.
+    shareSlug: z.string().trim().min(3).max(120).optional(),
+    agencyId: z.string().uuid().optional(),
+    email: z.string().email(),
+    password: z.string().min(8).max(200),
+  })
+  .refine((data) => Boolean(data.shareSlug) !== Boolean(data.agencyId), {
+    message: 'Provide either a share slug or an agency id.',
+  });
 
 const MAX_FAILED_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW_MINUTES = 15;
@@ -90,14 +98,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid login payload.' }, { status: 400 });
     }
 
-    const shareSlug = parsed.data.shareSlug.trim().toLowerCase();
+    const agencyId = parsed.data.agencyId;
+    const shareSlug = parsed.data.shareSlug?.trim().toLowerCase();
     const email = parsed.data.email.trim().toLowerCase();
     const password = parsed.data.password;
     const ipAddress = getClientIp(request);
     const windowStartIso = getWindowStartIso(RATE_LIMIT_WINDOW_MINUTES);
 
+    // Rate-limit key: per-client login keys on the slug, universal agency login
+    // keys on the agency id (since the slug is only known after resolution).
+    const rateKey = shareSlug ? shareSlug : `agency:${agencyId}`;
+
     const [identityFailures, ipFailures] = await Promise.all([
-      countFailedAttemptsForIdentity(shareSlug, email, windowStartIso),
+      countFailedAttemptsForIdentity(rateKey, email, windowStartIso),
       ipAddress ? countFailedAttemptsForIp(ipAddress, windowStartIso) : Promise.resolve(0),
     ]);
     if (identityFailures >= MAX_FAILED_ATTEMPTS || ipFailures >= MAX_FAILED_ATTEMPTS) {
@@ -112,38 +125,98 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: share, error: shareError } = await supabase
-      .from('agency_portal_shares')
-      .select('id, venue_id, share_slug, is_active, enabled_modules')
-      .eq('share_slug', shareSlug)
-      .maybeSingle();
+    let share: { id: string; venue_id: string; share_slug: string; is_active: boolean; enabled_modules: any; tour_id: string | null } | null = null;
+    let user: { id: string; email: string; password_hash: string; display_name: string | null; is_active: boolean; must_reset_password: boolean } | null = null;
 
-    if (shareError || !share || !share.is_active) {
-      await recordLoginAttempt({ shareSlug, email, ipAddress, success: false });
-      return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 });
+    if (agencyId) {
+      // Universal agency portal: resolve the client by email across the agency's
+      // active users. Email is unique per agency, so there is at most one match.
+      const { data: users, error: usersError } = await supabase
+        .from('agency_portal_users')
+        .select('id, email, password_hash, display_name, is_active, must_reset_password, share_id')
+        .eq('venue_id', agencyId)
+        .eq('is_active', true)
+        .ilike('email', email)
+        .limit(2);
+
+      if (usersError) {
+        return NextResponse.json({ error: usersError.message }, { status: 500 });
+      }
+
+      const matches = users || [];
+      if (matches.length > 1) {
+        return NextResponse.json(
+          { error: 'This account needs attention. Please contact your agency.' },
+          { status: 409 }
+        );
+      }
+
+      const candidate = matches[0];
+      if (candidate) {
+        const { data: shareRow } = await supabase
+          .from('agency_portal_shares')
+          .select('id, venue_id, share_slug, is_active, enabled_modules, tour_id')
+          .eq('id', candidate.share_id)
+          .eq('venue_id', agencyId)
+          .maybeSingle();
+        if (shareRow && shareRow.is_active) {
+          share = shareRow;
+          user = candidate;
+        }
+      }
+
+      const accessError = await validatePortalVenueAccess(request, agencyId);
+      if (accessError) return accessError;
+    } else {
+      const { data: shareRow, error: shareError } = await supabase
+        .from('agency_portal_shares')
+        .select('id, venue_id, share_slug, is_active, enabled_modules, tour_id')
+        .eq('share_slug', shareSlug!)
+        .maybeSingle();
+
+      if (shareError || !shareRow || !shareRow.is_active) {
+        await recordLoginAttempt({ shareSlug: rateKey, email, ipAddress, success: false });
+        return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 });
+      }
+
+      share = shareRow;
+
+      const accessError = await validatePortalVenueAccess(request, share.venue_id);
+      if (accessError) return accessError;
+
+      const { data: userRow, error: userError } = await supabase
+        .from('agency_portal_users')
+        .select('id, email, password_hash, display_name, is_active, must_reset_password')
+        .eq('share_id', share.id)
+        .eq('venue_id', share.venue_id)
+        .ilike('email', email)
+        .maybeSingle();
+
+      if (userError || !userRow || !userRow.is_active) {
+        await recordLoginAttempt({ shareSlug: rateKey, email, ipAddress, success: false });
+        return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 });
+      }
+
+      user = userRow;
     }
 
-    const accessError = await validatePortalVenueAccess(request, share.venue_id);
-    if (accessError) return accessError;
-
-    const { data: user, error: userError } = await supabase
-      .from('agency_portal_users')
-      .select('id, email, password_hash, display_name, is_active, must_reset_password')
-      .eq('share_id', share.id)
-      .eq('venue_id', share.venue_id)
-      .ilike('email', email)
-      .maybeSingle();
-
-    if (userError || !user || !user.is_active) {
-      await recordLoginAttempt({ shareSlug, email, ipAddress, success: false });
+    if (!share || !user) {
+      await recordLoginAttempt({ shareSlug: rateKey, email, ipAddress, success: false });
       return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 });
     }
 
     const passwordOk = verifyStoredPassword(password, user.password_hash);
     if (!passwordOk) {
-      await recordLoginAttempt({ shareSlug, email, ipAddress, success: false });
+      await recordLoginAttempt({ shareSlug: rateKey, email, ipAddress, success: false });
       return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 });
     }
+
+    const { data: tourRow } = await supabase
+      .from('tours')
+      .select('title')
+      .eq('id', share.tour_id)
+      .maybeSingle();
+    const tourTitle = tourRow?.title || 'Tour';
 
     const sessionToken = generateToken();
     const csrfToken = generateToken(32);
@@ -169,7 +242,7 @@ export async function POST(request: NextRequest) {
       .from('agency_portal_users')
       .update({ last_login_at: new Date().toISOString() })
       .eq('id', user.id);
-    await recordLoginAttempt({ shareSlug, email, ipAddress, success: true });
+    await recordLoginAttempt({ shareSlug: rateKey, email, ipAddress, success: true });
 
     const response = NextResponse.json({
       authenticated: true,
@@ -183,6 +256,8 @@ export async function POST(request: NextRequest) {
         id: share.id,
         shareSlug: share.share_slug,
         enabledModules: share.enabled_modules || {},
+        tourId: share.tour_id,
+        tourTitle,
       },
     });
 
