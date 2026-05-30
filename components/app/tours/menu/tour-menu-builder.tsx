@@ -16,6 +16,7 @@ import { TourMenuSettings } from "@/lib/types";
 
 interface TourMenuBuilderProps {
   tourId?: string;
+  venueId?: string;
   layoutMode?: 'split' | 'stacked';
   onSwitchToViewer?: () => void;
 }
@@ -44,7 +45,7 @@ const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = {
   widget_shadow_intensity: 'none',
 };
 
-export function TourMenuBuilder({ tourId, layoutMode = 'split', onSwitchToViewer }: TourMenuBuilderProps = {}) {
+export function TourMenuBuilder({ tourId, venueId, layoutMode = 'split', onSwitchToViewer }: TourMenuBuilderProps = {}) {
   const { toast } = useToast();
   const isStackedLayout = layoutMode === 'stacked';
   
@@ -305,6 +306,7 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split', onSwitchToViewer
                             blocks={blocks}
                             onBlocksChange={setBlocks}
                             tourId={activeTourId}
+                            venueId={venueId}
                             activeDevice={activeDevice}
                           />
                         </CardContent>

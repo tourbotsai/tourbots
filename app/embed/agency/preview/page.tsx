@@ -25,11 +25,14 @@ export default async function AgencyEmbedDraftPreviewPage({
     tourTitle?: string;
     primaryColour?: string;
     secondaryColour?: string;
+    backgroundColour?: string;
     showHeader?: string;
     tour?: string;
     settings?: string;
     customisation?: string;
     analytics?: string;
+    tourSetup?: string;
+    tourMenu?: string;
     settingsConfig?: string;
     settingsInformation?: string;
     settingsDocuments?: string;
@@ -43,6 +46,7 @@ export default async function AgencyEmbedDraftPreviewPage({
   const tourTitle = searchParams.tourTitle || 'Tour';
   const primaryColour = searchParams.primaryColour || '#1E40AF';
   const secondaryColour = searchParams.secondaryColour || '#0F172A';
+  const backgroundColour = searchParams.backgroundColour || null;
   const showHeader = toBool(searchParams.showHeader, true);
 
   async function getPreviewData() {
@@ -191,11 +195,16 @@ export default async function AgencyEmbedDraftPreviewPage({
       showHeader={showHeader}
       primaryColour={primaryColour}
       secondaryColour={secondaryColour}
+      backgroundColour={backgroundColour}
       modules={{
         tour: toBool(searchParams.tour, true),
         settings: toBool(searchParams.settings, true),
         customisation: toBool(searchParams.customisation, true),
         analytics: toBool(searchParams.analytics, true),
+      }}
+      tourBlocks={{
+        setup: toBool(searchParams.tourSetup, true),
+        menu: toBool(searchParams.tourMenu, true),
       }}
       settingsBlocks={{
         config: toBool(searchParams.settingsConfig, true),

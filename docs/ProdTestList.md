@@ -84,7 +84,7 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 - [X] Paste into `https://apexvrtours.vercel.app/tourmanagement`.
 - [X] Publish/redeploy.
 - [X] Confirm agency embed loads.
-- [ ] Confirm login works inside embed.
+- [X] Confirm login works inside embed.
 - [ ] Confirm allowed actions work from embed context.
 
 ## J) Billing Flow

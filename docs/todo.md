@@ -1,14 +1,10 @@
-give agency contrl hide tour settings menu tabs like settings idnidial  ones make colapse expandabel dfa
+
 give agnecy control portal bg colour currently slate
 
-
-- Run full end-to-end testing on the Body Active demo website: embed & agency portal
-
 - Agency to be able to allocate message credits to each client
+- Rollout WhiteLabelEmbed.md
 
 - Set up website tour demo account properly
-
-- Rollout WhiteLabelEmbed.md
 - Set up hello@tourbots.ai and partners@tourbots.ai email
 - SPF/DKIM/DMARC
 

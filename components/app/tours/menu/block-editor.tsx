@@ -21,10 +21,11 @@ interface BlockEditorProps {
   onDelete: () => void;
   onMove: (direction: 'up' | 'down') => void;
   tourId?: string;
+  venueId?: string;
   activeDevice?: 'desktop' | 'mobile';
 }
 
-export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onMove, tourId, activeDevice = 'desktop' }: BlockEditorProps) {
+export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onMove, tourId, venueId, activeDevice = 'desktop' }: BlockEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const safeMarginTop = Number.isFinite(block.margin_top) ? block.margin_top : 0;
   const safeMarginBottom = Number.isFinite(block.margin_bottom) ? block.margin_bottom : 12;
@@ -123,7 +124,7 @@ export function BlockEditor({ block, index, totalBlocks, onUpdate, onDelete, onM
             <ButtonsBlockEditor block={block} onUpdate={onUpdate} />
           )}
           {block.block_type === 'logo' && (
-            <LogoBlockEditor block={block} onUpdate={onUpdate} tourId={tourId} activeDevice={activeDevice} />
+            <LogoBlockEditor block={block} onUpdate={onUpdate} tourId={tourId} venueId={venueId} activeDevice={activeDevice} />
           )}
           {block.block_type === 'table' && (
             <TableBlockEditor block={block} onUpdate={onUpdate} />

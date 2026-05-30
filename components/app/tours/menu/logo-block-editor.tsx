@@ -12,11 +12,15 @@ interface LogoBlockEditorProps {
   block: any;
   onUpdate: (updates: any) => void;
   tourId?: string;
+  venueId?: string;
   activeDevice?: 'desktop' | 'mobile';
 }
 
-export function LogoBlockEditor({ block, onUpdate, tourId, activeDevice = 'desktop' }: LogoBlockEditorProps) {
+export function LogoBlockEditor({ block, onUpdate, tourId, venueId, activeDevice = 'desktop' }: LogoBlockEditorProps) {
   const { user } = useUser();
+  // In the agency portal embed there is no app user, so the venue id is passed
+  // down from the portal session instead of coming from useUser().
+  const resolvedVenueId = venueId || user?.venue?.id;
 
   const clampDesktopLogoSize = (size: number) => Math.max(12, Math.min(196, size));
   const clampMobileLogoSize = (size: number) => Math.max(12, Math.min(128, size));
@@ -85,11 +89,11 @@ export function LogoBlockEditor({ block, onUpdate, tourId, activeDevice = 'deskt
   return (
     <div className="space-y-4">
       {/* Logo Upload */}
-      {user?.venue?.id && tourId ? (
+      {resolvedVenueId && tourId ? (
         <LogoUpload
           value={block.content.image_url}
           onChange={(imageUrl) => updateContent('image_url', imageUrl || '')}
-          venueId={user.venue.id}
+          venueId={resolvedVenueId}
           tourId={tourId}
           label="Logo Image"
         />
