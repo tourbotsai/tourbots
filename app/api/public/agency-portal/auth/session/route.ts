@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import {
   AGENCY_CSRF_COOKIE,
   resolveAgencyPortalSession,
@@ -22,6 +23,16 @@ export async function GET(request: NextRequest) {
 
     const csrfToken = request.cookies.get(AGENCY_CSRF_COOKIE)?.value || null;
 
+    let tourTitle = 'Tour';
+    if (context.tourId) {
+      const { data: tourRow } = await supabase
+        .from('tours')
+        .select('title')
+        .eq('id', context.tourId)
+        .maybeSingle();
+      if (tourRow?.title) tourTitle = tourRow.title;
+    }
+
     return NextResponse.json({
       authenticated: true,
       csrfToken,
@@ -30,6 +41,7 @@ export async function GET(request: NextRequest) {
         shareSlug: context.shareSlug,
         venueId: context.venueId,
         tourId: context.tourId,
+        tourTitle,
         enabledModules: context.enabledModules,
       },
       user: {

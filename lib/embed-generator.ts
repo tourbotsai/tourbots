@@ -402,6 +402,52 @@ export function generateAgencyPortalEmbed(shareSlug: string, options: AgencyPort
 }
 
 /**
+ * Generates a single universal agency portal embed for the whole agency. Clients
+ * sign in with their own credentials and are routed to their own portal, so the
+ * agency only needs to embed this once (rather than one embed per client).
+ */
+export function generateUniversalAgencyPortalEmbed(agencyId: string, options: AgencyPortalEmbedOptions = {}) {
+  const embedId = `agency-portal-${agencyId}`;
+  const baseUrl = typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.host}`
+    : 'https://tourbots.ai';
+
+  const queryParams = new URLSearchParams({
+    agency: agencyId,
+    ...(options.showHeader !== undefined ? { showHeader: String(options.showHeader) } : {}),
+  });
+
+  const srcUrl = `${baseUrl}/embed/agency-portal?${queryParams.toString()}`;
+
+  const iframe = `<iframe src="${srcUrl}" width="${options.width || '100%'}" height="${options.height || '900px'}" frameborder="0" allowfullscreen></iframe>`;
+
+  const script = `<div id="${embedId}"></div>
+<script>
+(function() {
+  var container = document.getElementById('${embedId}');
+  if (!container) return;
+  var iframe = document.createElement('iframe');
+  iframe.src = '${srcUrl}';
+  iframe.width = '${options.width || '100%'}';
+  iframe.height = '${options.height || '900px'}';
+  iframe.frameBorder = '0';
+  iframe.allowFullscreen = true;
+  iframe.style.width = '${options.width || '100%'}';
+  iframe.style.border = '0';
+  container.appendChild(iframe);
+})();
+</script>`;
+
+  return {
+    iframe,
+    script,
+    embedId,
+    previewUrl: srcUrl,
+    options,
+  };
+}
+
+/**
  * Maps legacy customisation fields for backward compatibility
  */
 function mapLegacyCustomisation(customisation: ChatbotCustomisation) {
