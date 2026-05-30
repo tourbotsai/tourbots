@@ -2,13 +2,13 @@
 
 Date: 14/04/2026  
 Target: `tourbots.ai`  
-External test site: `https://bodyactivegym.vercel.app`
+External test sites: `https://bodyactivegym.vercel.app` & `https://apexvrtours.vercel.app`
 
 User Test Account (Bodyactive Vercel) Email: `testone@test.com`  
 User Test Account Password: `Test1234*`
 
-Agency Test Account Email: `touragency@test.com`
-Agency Test Account Password: `Test1234*`
+Agency Owner Test Account Email: `touragency@test.com`
+Agency Owner Test Account Password: `Test1234*`
 
 Agency Client Test Account Email: `uniqueclient@test.com`
 Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
@@ -79,11 +79,11 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 
 ## I) Agency Embed Flow (External Site)
 
-- [ ] Set up allowed domains.
-- [ ] Copy agency embed code.
-- [ ] Paste into `bodyactivegym.vercel.app` (or test page).
-- [ ] Publish/redeploy.
-- [ ] Confirm agency embed loads.
+- [X] Set up allowed domains.
+- [X] Copy agency embed code.
+- [X] Paste into `https://apexvrtours.vercel.app/tourmanagement`.
+- [X] Publish/redeploy.
+- [X] Confirm agency embed loads.
 - [ ] Confirm login works inside embed.
 - [ ] Confirm allowed actions work from embed context.
 
