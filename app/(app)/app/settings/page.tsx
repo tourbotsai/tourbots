@@ -5,9 +5,8 @@ import { AppTitle } from "@/components/shared/app-title";
 import { ProfileForm } from "@/components/app/settings/profile-form";
 import { VenueSettings } from "@/components/app/settings/venue-settings";
 import { Subscription } from "@/components/app/settings/subscription";
-import { AgencySettings } from "@/components/app/settings/agency-settings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +20,13 @@ export default function SettingsPage() {
 
 function SettingsContent() {
   const mobileTabsScrollRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState("profile");
+  const goToBilling = () => {
+    setActiveTab("billing");
+    requestAnimationFrame(() => {
+      mobileTabsScrollRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   const settingsTabTriggerClass =
     "h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100";
 
@@ -39,9 +45,9 @@ function SettingsContent() {
       />
 
       {/* Settings Tabs */}
-      <Tabs defaultValue="profile" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <div ref={mobileTabsScrollRef} className="overflow-x-auto md:overflow-visible">
-          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-border/80 bg-muted/70 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-4">
+          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-border/80 bg-muted/70 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-3">
             <TabsTrigger
               value="profile"
               className={settingsTabTriggerClass}
@@ -60,12 +66,6 @@ function SettingsContent() {
             >
               Billing
             </TabsTrigger>
-            <TabsTrigger
-              value="agency"
-              className={settingsTabTriggerClass}
-            >
-              Agency Settings
-            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -74,15 +74,11 @@ function SettingsContent() {
         </TabsContent>
 
         <TabsContent value="venue" className="space-y-6">
-          <VenueSettings />
+          <VenueSettings onManagePlan={goToBilling} />
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">
           <Subscription />
-        </TabsContent>
-
-        <TabsContent value="agency" className="space-y-6">
-          <AgencySettings />
         </TabsContent>
       </Tabs>
     </div>

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useAuth } from "reactfire";
+import { clearUserCache } from "@/hooks/useUser";
 import { Eye, EyeOff, UserPlus, Mail, Lock, User, Building } from "lucide-react";
 
 const formSchema = z.object({
@@ -85,6 +86,11 @@ export const SignUpForm: FC<SignUpFormProps> = ({ onShowLogin, onSignUp }) => {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to complete registration');
         }
+
+        // Registration may have raced an earlier check-user that cached a
+        // venue-less copy of this user. Clear it so the dashboard reads the
+        // freshly linked profile instead of bouncing to /login?complete=true.
+        clearUserCache();
 
         toast({ 
           title: "Registration Successful!", 

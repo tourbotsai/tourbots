@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { AppTitle } from "@/components/shared/app-title";
 import { TourChatbotManagement } from "@/components/app/chatbots/tour-chatbot-management";
@@ -16,17 +16,28 @@ function ChatbotsContent() {
   const { getAuthHeaders } = useAuthHeaders();
   const [tours, setTours] = useState<Tour[]>([]);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
+  const loadedVenueRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const venueId = user?.venue?.id || null;
+
+    // When the venue changes (e.g. switching account), clear any tour selected
+    // for the previous venue so child fetches never query a foreign tour.
+    if (loadedVenueRef.current !== venueId) {
+      loadedVenueRef.current = venueId;
+      setTours([]);
+      setSelectedTourId(null);
+    }
+
     const loadTours = async () => {
-      if (!user?.venue?.id) {
+      if (!venueId) {
         setTours([]);
         setSelectedTourId(null);
         return;
       }
 
       try {
-        const response = await fetch(`/api/app/tours/venue/${encodeURIComponent(user.venue.id)}/all`, {
+        const response = await fetch(`/api/app/tours/venue/${encodeURIComponent(venueId)}/all`, {
           headers: await getAuthHeaders(),
         });
         if (!response.ok) {
@@ -36,7 +47,12 @@ function ChatbotsContent() {
         const rows = (await response.json()) as Tour[];
         const locationRows = rows.filter((tour) => tour.tour_type === "primary" || !tour.tour_type);
         setTours(locationRows);
-        setSelectedTourId((prev) => prev || locationRows[0]?.id || null);
+        // Only keep an existing selection if it belongs to this venue.
+        setSelectedTourId((prev) =>
+          prev && locationRows.some((tour) => tour.id === prev)
+            ? prev
+            : locationRows[0]?.id || null
+        );
       } catch (error) {
         console.error("Failed to load tours for chatbot selector", error);
       }

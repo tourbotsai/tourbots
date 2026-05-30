@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Monitor, Smartphone, Loader2, Eye } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Save, Monitor, Smartphone, Loader2, Eye, Camera, ArrowLeft, LayoutList, ChevronDown, ChevronRight } from "lucide-react";
 import { GlobalSettingsPanel } from "./global-settings-panel";
 import { BlocksList } from "./blocks-list";
 import { TourMenuPreview } from "./tour-menu-preview";
@@ -16,6 +17,7 @@ import { TourMenuSettings } from "@/lib/types";
 interface TourMenuBuilderProps {
   tourId?: string;
   layoutMode?: 'split' | 'stacked';
+  onSwitchToViewer?: () => void;
 }
 
 const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = {
@@ -23,6 +25,7 @@ const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = {
   position: 'center',
   max_width: 600,
   padding: 24,
+  padding_vertical: 0,
   border_radius: 16,
   menu_background_color: '#FFFFFF',
   backdrop_blur: true,
@@ -41,7 +44,7 @@ const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = {
   widget_shadow_intensity: 'none',
 };
 
-export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilderProps = {}) {
+export function TourMenuBuilder({ tourId, layoutMode = 'split', onSwitchToViewer }: TourMenuBuilderProps = {}) {
   const { toast } = useToast();
   const isStackedLayout = layoutMode === 'stacked';
   
@@ -63,7 +66,7 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilde
   const [isSaving, setIsSaving] = useState(false);
   const [activeDevice, setActiveDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [showPreview, setShowPreview] = useState(true);
-  const [workspaceTab, setWorkspaceTab] = useState<'content' | 'settings'>('settings');
+  const [contentBlocksOpen, setContentBlocksOpen] = useState(false);
 
   // Sync saved data to local state
   useEffect(() => {
@@ -123,21 +126,28 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilde
   if (!activeTourId) {
     return (
       <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-        <div className="p-12 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto dark:border dark:border-input dark:bg-background">
-              <Monitor className="w-8 h-8 text-slate-700" />
-            </div>
-            <div>
-              <h3 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
-                No Tour Selected
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Go to the "Tour Setup" tab and select a tour to customise its menu.
-              </p>
-            </div>
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <div className="mb-6 rounded-full bg-slate-100 p-6 dark:border dark:border-input dark:bg-background">
+            <Camera className="h-12 w-12 text-slate-500" />
           </div>
-        </div>
+          <h3 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
+            No tour selected
+          </h3>
+          <p className="mb-6 max-w-md text-center text-slate-600 dark:text-slate-400">
+            Set up your tour first to customise its menu.
+          </p>
+          <Button
+            onClick={() => {
+              if (onSwitchToViewer) {
+                onSwitchToViewer();
+              }
+            }}
+            className="bg-slate-900 text-white hover:bg-slate-800 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Go to Tour Setup
+          </Button>
+        </CardContent>
       </Card>
     );
   }
@@ -259,43 +269,50 @@ export function TourMenuBuilder({ tourId, layoutMode = 'split' }: TourMenuBuilde
         {/* Left - Editor Sections */}
         <div className="space-y-5">
           <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-            <CardContent className="p-4">
-              <Tabs
-                value={workspaceTab}
-                onValueChange={(value) => setWorkspaceTab(value as 'content' | 'settings')}
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-2 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-input dark:bg-background">
-                  <TabsTrigger
-                    value="settings"
-                    className="rounded-md text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
-                  >
-                    Menu Settings
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="content"
-                    className="rounded-md text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
-                  >
-                    Content Blocks
-                  </TabsTrigger>
-                </TabsList>
+            <CardContent className="space-y-4 p-4">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Menu Settings</h3>
 
-                <TabsContent value="settings" className="mt-4">
-                  <GlobalSettingsPanel
-                    settings={settings}
-                    onSettingsChange={setSettings}
-                  />
-                </TabsContent>
-
-                <TabsContent value="content" className="mt-4">
-                  <BlocksList
-                    blocks={blocks}
-                    onBlocksChange={setBlocks}
-                    tourId={activeTourId}
-                    activeDevice={activeDevice}
-                  />
-                </TabsContent>
-              </Tabs>
+              <GlobalSettingsPanel
+                settings={settings}
+                onSettingsChange={setSettings}
+                contentBlocksSlot={
+                  <Card className="overflow-hidden">
+                    <Collapsible open={contentBlocksOpen} onOpenChange={setContentBlocksOpen}>
+                      <CollapsibleTrigger asChild>
+                        <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="text-gray-600 dark:text-gray-400">
+                                <LayoutList className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <h3 className="font-medium text-sm dark:text-white">Content Blocks</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Build and arrange the menu content</p>
+                              </div>
+                            </div>
+                            {contentBlocksOpen ? (
+                              <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                            )}
+                          </div>
+                        </CardContent>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <Separator />
+                        <CardContent className="p-4">
+                          <BlocksList
+                            blocks={blocks}
+                            onBlocksChange={setBlocks}
+                            tourId={activeTourId}
+                            activeDevice={activeDevice}
+                          />
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </Card>
+                }
+              />
             </CardContent>
           </Card>
         </div>

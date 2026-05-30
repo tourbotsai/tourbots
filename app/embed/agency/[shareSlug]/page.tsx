@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { AgencyPortalShell } from './agency-portal-shell';
 import { isAllowedDomain } from '@/lib/agency-portal-auth';
+import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +39,11 @@ async function getAgencyPreviewData(shareSlug: string) {
 
   const { data: billingRecord, error: billingError } = await supabase
     .from('venue_billing_records')
-    .select('addon_agency_portal')
+    .select(ENTITLEMENT_COLUMNS)
     .eq('venue_id', share.venue_id)
     .maybeSingle();
 
-  const entitlementActive = billingError ? true : Boolean(billingRecord?.addon_agency_portal);
+  const entitlementActive = billingError ? true : venueHasAgencyPortal(billingRecord as any);
   return { share, settings, entitlementActive };
 }
 

@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
 
 interface TableBlockEditorProps {
   block: any;
@@ -143,31 +144,17 @@ export function TableBlockEditor({ block, onUpdate }: TableBlockEditorProps) {
       <div className="pt-4 border-t space-y-3">
         <Label className="text-sm font-semibold">Table Styling</Label>
         
-        <div>
-          <Label className="text-xs mb-2 block">Header Background</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={block.content.header_background}
-              onChange={(e) => updateContent('header_background', e.target.value)}
-              className="w-10 h-10 rounded border cursor-pointer"
-            />
-            <span className="text-xs text-gray-600">{block.content.header_background}</span>
-          </div>
-        </div>
+        <ColorPicker
+          label="Header Background"
+          value={block.content.header_background}
+          onChange={(value) => updateContent('header_background', value)}
+        />
 
-        <div>
-          <Label className="text-xs mb-2 block">Border Colour</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={block.content.border_color}
-              onChange={(e) => updateContent('border_color', e.target.value)}
-              className="w-10 h-10 rounded border cursor-pointer"
-            />
-            <span className="text-xs text-gray-600">{block.content.border_color}</span>
-          </div>
-        </div>
+        <ColorPicker
+          label="Border Colour"
+          value={block.content.border_color}
+          onChange={(value) => updateContent('border_color', value)}
+        />
 
         <div>
           <Label className="text-xs">Text Size (px)</Label>

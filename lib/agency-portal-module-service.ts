@@ -201,12 +201,29 @@ export async function updateScopedTourCustomisation(
 }
 
 export async function getScopedTourAnalyticsStats(venueId: string, tourId: string) {
-  const { data, error } = await supabase
-    .from('conversations')
-    .select('conversation_id, session_id, message_type')
-    .eq('venue_id', venueId)
-    .eq('tour_id', tourId)
-    .eq('chatbot_type', 'tour');
+  const [
+    { data, error },
+    tourViewsResult,
+    tourMovesResult,
+  ] = await Promise.all([
+    supabase
+      .from('conversations')
+      .select('conversation_id, session_id, message_type')
+      .eq('venue_id', venueId)
+      .eq('tour_id', tourId)
+      .eq('chatbot_type', 'tour'),
+    supabase
+      .from('embed_stats')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('tour_id', tourId)
+      .eq('embed_type', 'tour'),
+    supabase
+      .from('embed_tour_moves')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('tour_id', tourId),
+  ]);
 
   if (error) {
     throw error;
@@ -221,7 +238,120 @@ export async function getScopedTourAnalyticsStats(venueId: string, tourId: strin
     totalMessages,
     totalConversations: uniqueConversations.size,
     totalSessions: uniqueSessions.size,
+    tourViews: tourViewsResult.count || 0,
+    tourMoves: tourMovesResult.count || 0,
   };
+}
+
+export async function getScopedTourEmbedStats(venueId: string, tourId: string) {
+  const { data, error } = await supabase
+    .from('embed_stats')
+    .select('*')
+    .eq('venue_id', venueId)
+    .eq('tour_id', tourId)
+    .eq('embed_type', 'tour')
+    .order('last_viewed_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function getScopedTourConversations(venueId: string, tourId: string) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('venue_id', venueId)
+    .eq('tour_id', tourId)
+    .eq('chatbot_type', 'tour')
+    .order('created_at', { ascending: false })
+    .limit(2000);
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
+ * Daily tour activity trend (views, moves, messages, conversations) over the
+ * last `days` days, scoped to a venue + tour. Mirrors the dashboard trend
+ * computation so the portal chart matches the main app.
+ */
+export async function getScopedTourAnalyticsTrend(venueId: string, tourId: string, days = 90) {
+  const rangeStart = new Date();
+  rangeStart.setDate(rangeStart.getDate() - (days - 1));
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeStartIso = rangeStart.toISOString();
+
+  const [embedRowsResult, tourMoveRowsResult, conversationRowsResult] = await Promise.all([
+    supabase
+      .from('embed_stats')
+      .select('created_at')
+      .eq('venue_id', venueId)
+      .eq('tour_id', tourId)
+      .eq('embed_type', 'tour')
+      .gte('created_at', rangeStartIso),
+    supabase
+      .from('embed_tour_moves')
+      .select('created_at')
+      .eq('venue_id', venueId)
+      .eq('tour_id', tourId)
+      .gte('created_at', rangeStartIso),
+    supabase
+      .from('conversations')
+      .select('created_at, message_type, conversation_id')
+      .eq('venue_id', venueId)
+      .eq('tour_id', tourId)
+      .eq('chatbot_type', 'tour')
+      .gte('created_at', rangeStartIso),
+  ]);
+
+  if (embedRowsResult.error) throw embedRowsResult.error;
+  if (tourMoveRowsResult.error) throw tourMoveRowsResult.error;
+  if (conversationRowsResult.error) throw conversationRowsResult.error;
+
+  const dailyMap: Record<
+    string,
+    { tourViews: number; tourMoves: number; chatMessages: number; conversationIds: Set<string> }
+  > = {};
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const key = date.toISOString().slice(0, 10);
+    dailyMap[key] = { tourViews: 0, tourMoves: 0, chatMessages: 0, conversationIds: new Set<string>() };
+  }
+
+  (embedRowsResult.data || []).forEach((row) => {
+    const key = String(row.created_at).slice(0, 10);
+    if (dailyMap[key]) dailyMap[key].tourViews += 1;
+  });
+
+  (tourMoveRowsResult.data || []).forEach((row) => {
+    const key = String(row.created_at).slice(0, 10);
+    if (dailyMap[key]) dailyMap[key].tourMoves += 1;
+  });
+
+  (conversationRowsResult.data || []).forEach((row) => {
+    const key = String(row.created_at).slice(0, 10);
+    if (!dailyMap[key]) return;
+    if (row.message_type === 'visitor') dailyMap[key].chatMessages += 1;
+    if (row.conversation_id) dailyMap[key].conversationIds.add(row.conversation_id);
+  });
+
+  return Object.entries(dailyMap).map(([key, value]) => {
+    const date = new Date(`${key}T00:00:00.000Z`);
+    return {
+      date: date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
+      tourViews: value.tourViews,
+      tourMoves: value.tourMoves,
+      chatMessages: value.chatMessages,
+      conversations: value.conversationIds.size,
+    };
+  });
 }
 
 export async function getScopedTourAnalyticsSessions(venueId: string, tourId: string, limit = 50) {

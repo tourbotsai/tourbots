@@ -5,8 +5,10 @@ import { CustomisationForm } from "../shared/customisation-form/index";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useBilling } from "@/hooks/app/useBilling";
+import { venueHasWhiteLabel, venueHasAgencyPortal } from "@/lib/billing-entitlements";
 import { Loader2, ArrowLeft, Bot, AlertCircle } from "lucide-react";
 import { useEffect } from "react";
+import { NoTourEmptyState } from "../no-tour-empty-state";
 
 interface TourChatbotCustomisationProps {
   onSwitchToSettings?: () => void;
@@ -41,13 +43,7 @@ export function TourChatbotCustomisation({ onSwitchToSettings, selectedTourId }:
   }
 
   if (!selectedTourId) {
-    return (
-      <Card className="dark:border-input dark:bg-background">
-        <CardContent className="flex items-center justify-center py-16">
-          <p className="text-sm text-muted-foreground">Select a tour to manage chatbot customisation.</p>
-        </CardContent>
-      </Card>
-    );
+    return <NoTourEmptyState description="Upload your Matterport tour first, then return here to customise your AI chatbot." />;
   }
 
   if (error) {
@@ -104,8 +100,12 @@ export function TourChatbotCustomisation({ onSwitchToSettings, selectedTourId }:
     );
   }
 
-  // Let the CustomisationForm show its full comprehensive interface
-  const customBrandingEnabled = Boolean(billingRecord?.addon_white_label);
+  // White-label unlocks branding control. It is entitled via the dedicated
+  // add-on (Pro) or built into the Agency plan.
+  const customBrandingEnabled = venueHasWhiteLabel(billingRecord);
+  // Agency venues are white-label by default with no powered-by control, so
+  // hide the toggle entirely (matching the agency portal).
+  const isAgencyPlan = venueHasAgencyPortal(billingRecord);
 
   return (
     <CustomisationForm
@@ -114,6 +114,7 @@ export function TourChatbotCustomisation({ onSwitchToSettings, selectedTourId }:
       onReset={resetToDefaults}
       isLoading={isLoading}
       customBrandingEnabled={customBrandingEnabled}
+      hidePoweredByControl={isAgencyPlan}
     />
   );
 } 

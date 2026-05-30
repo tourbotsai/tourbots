@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Form,
   FormControl,
@@ -23,6 +24,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useUser } from "@/hooks/useUser";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
+import { useBilling } from "@/hooks/app/useBilling";
 import { supabase } from "@/lib/supabase";
 import { TeamMembersSettings } from "@/components/app/settings/team-members-settings";
 
@@ -40,12 +42,27 @@ const venueSchema = z.object({
 
 type VenueFormData = z.infer<typeof venueSchema>;
 
-export function VenueSettings() {
+export function VenueSettings({ onManagePlan }: { onManagePlan?: () => void }) {
   const { user, updateUser } = useUser();
   const { getAuthHeaders } = useAuthHeaders();
   const { toast } = useToast();
+  const { billingRecord, fetchBilling } = useBilling();
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
+  useEffect(() => {
+    if (user?.venue_id) {
+      fetchBilling();
+    }
+  }, [user?.venue_id, fetchBilling]);
+
+  const planCode = billingRecord?.plan_code || "free";
+  const planLabel = planCode === "agency" ? "Agency" : planCode === "pro" ? "Pro" : "Free";
+  const addonParts: string[] = [];
+  if ((billingRecord?.addon_extra_spaces || 0) > 0) addonParts.push(`${billingRecord?.addon_extra_spaces}x storage`);
+  if ((billingRecord?.addon_message_blocks || 0) > 0) addonParts.push(`${billingRecord?.addon_message_blocks}x message credits`);
+  if (billingRecord?.addon_white_label) addonParts.push("white-label");
+  const accountTypeText = `Plan: ${planLabel}. Add-ons: ${addonParts.length ? addonParts.join(", ") : "None"}`;
 
   const form = useForm<VenueFormData>({
     resolver: zodResolver(venueSchema),
@@ -275,26 +292,24 @@ export function VenueSettings() {
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="website_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Website URL
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="url"
-                      placeholder="https://www.yourvenue.com"
-                      className="h-10 sm:h-11"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-xs" />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Account type</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={accountTypeText}
+                  className="h-10 sm:h-11 cursor-default"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 shrink-0 whitespace-nowrap dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800 sm:h-11"
+                  onClick={onManagePlan}
+                >
+                  Manage plan
+                </Button>
+              </div>
+            </div>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
               <Button

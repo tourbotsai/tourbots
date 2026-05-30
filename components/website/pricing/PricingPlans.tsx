@@ -10,7 +10,7 @@ export function PricingPlans() {
       name: "Free",
       description: "Try TourBots before you commit to pro.",
       priceLabel: "£0",
-      subLabel: "test account",
+      subLabel: "get started free",
       href: "/login",
       bullets: [
         "One test tour",
@@ -44,6 +44,25 @@ export function PricingPlans() {
       cta: "Go Pro",
       featured: true,
     },
+    {
+      name: "Agency",
+      description: "For agencies managing tours.",
+      priceLabel: "£49.99",
+      subLabel: "per month, white-label included",
+      href: "/demo",
+      bullets: [
+        "3 active spaces included",
+        "3,000 chatbot messages included",
+        "Branded client portals",
+        "White-label included as standard",
+        "Priority account support",
+        "Centralised client management",
+        "Everything in Pro",
+      ],
+      disabledBullets: [],
+      cta: "Go Agency",
+      featured: false,
+    },
   ];
 
   const addOns = [
@@ -65,13 +84,6 @@ export function PricingPlans() {
       detail: "per account, per month",
       description: "Remove TourBots branding and deliver a cleaner client-facing experience.",
     },
-    {
-      title: "Agency portal add-on",
-      price: "£49.99",
-      detail: "per account, per month",
-      description:
-        "Give clients secure access to tour setup, chatbot settings and analytics in your branded portal.",
-    },
   ];
 
   return (
@@ -85,7 +97,7 @@ export function PricingPlans() {
         </p>
       </div>
 
-      <div className="mx-auto grid max-w-4xl gap-6 lg:grid-cols-2">
+      <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => (
           <article
             key={plan.name}
@@ -138,12 +150,12 @@ export function PricingPlans() {
 
       <div className="mx-auto mt-8 max-w-6xl overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/50 shadow-[0_18px_44px_rgba(2,6,23,0.28)]">
         <div className="border-b border-white/10 p-6 text-center md:p-8">
-          <h3 className="text-2xl font-semibold text-white md:text-3xl">Add-ons</h3>
+          <h3 className="text-2xl font-semibold text-white md:text-3xl">Pro add-ons</h3>
           <p className="mt-2 text-sm text-slate-300 md:text-base">
-            Expand capacity and branding control without changing your core plan.
+            Expand capacity and branding control without changing your core plan. Agency plans can add extra spaces and message blocks at £9.99 each per month.
           </p>
         </div>
-        <div className="grid lg:grid-cols-4">
+        <div className="grid lg:grid-cols-3">
           {addOns.map((addOn, index) => (
             <article
               key={addOn.title}

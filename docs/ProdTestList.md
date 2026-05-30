@@ -4,12 +4,14 @@ Date: 14/04/2026
 Target: `tourbots.ai`  
 External test site: `https://bodyactivegym.vercel.app`
 
-Test account email: `apexfacilitiespricing@gmail.com`  
-Test account password: `Test1234*`
-Apex Test
+User Test Account (Bodyactive Vercel) Email: `testone@test.com`  
+User Test Account Password: `Test1234*`
 
-Local Test account email: `testone@test.com`  
-Test account password: `Test1234*`
+Agency Test Account Email: `touragency@test.com`
+Agency Test Account Password: `Test1234*`
+
+Agency Client Test Account Email: `uniqueclient@test.com`
+Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 
 ## TO DO
 - [X] Confirm live app opens at `tourbots.ai`.
@@ -58,25 +60,26 @@ Test account password: `Test1234*`
 
 ## G) Tracking and Analytics
 
-- [ ] Generate real embed interactions (views, messages, navigation).
-- [ ] Check TourBots analytics for matching events.
-- [ ] Confirm events are tied to correct venue/tour.
+- [X] Generate real embed interactions (views, moves, messages, navigation).
+- [X] Check TourBots analytics for matching events.
+- [X] Confirm events are tied to correct venue/tour.
 
 ## H) Agency Portal Flow
 
-- [ ] Enable/confirm agency portal add-on for account.
-- [ ] Go to `Settings -> Agency Settings`.
-- [ ] Configure branding and allowed domains.
-- [ ] Create agency share for a test tour.
-- [ ] Create/reset agency client login credentials.
-- [ ] Open agency preview URL.
-- [ ] Log in as agency client.
-- [ ] Confirm enabled modules load.
-- [ ] Confirm disabled modules are blocked.
-- [ ] Confirm logout and session handling work.
+- [X] Upgrade to agency plan for account.
+- [X] Go to `Settings -> Agency Settings`.
+- [X] Configure branding 
+- [X] Create client portal for a test tour.
+- [X] Create/reset agency client login credentials.
+- [X] Open agency preview URL.
+- [X] Log in as agency client.
+- [X] Confirm logout and session handling work.
+- [X] Confirm enabled modules load.
+- [X] Confirm disabled modules are blocked.
 
 ## I) Agency Embed Flow (External Site)
 
+- [ ] Set up allowed domains.
 - [ ] Copy agency embed code.
 - [ ] Paste into `bodyactivegym.vercel.app` (or test page).
 - [ ] Publish/redeploy.
@@ -84,7 +87,45 @@ Test account password: `Test1234*`
 - [ ] Confirm login works inside embed.
 - [ ] Confirm allowed actions work from embed context.
 
-## J) Platform Admin Flow
+## J) Billing Flow
+
+- Plans (free / pro / agency):
+  - [x] Go to `Settings -> Billing`; three plan cards (Free, Pro, Agency), current plan, status, and limits display.
+  - [ ] On a free account, click `Upgrade plan` on Pro; complete Stripe checkout; confirm plan `Pro`, status `active`, limits update, invoice appears.
+  - [x] On a free account, click `Upgrade plan` on Agency; complete Stripe checkout; plan `Agency`, status `active`, 3 spaces / 3,000 messages, white-label enabled, invoice appears. *(verified 30/05/2026, local Stripe test)*
+  - [x] Confirm the Agency plan card lists its four features (incl. white-label / branded client portals).
+  - [x] After upgrading to Agency, the `Agency` tab appears in the app sidebar and the portal is active with no manual enable step. *(verified 30/05/2026)*
+
+- Plan switching (pro <-> agency):
+  - [ ] On Pro, click `Switch to Agency`; confirm no checkout (in-app), plan becomes `Agency` with prorated billing and limits update to the agency pool.
+  - [ ] On Agency, click `Switch to Pro`; confirm plan becomes `Pro` and agency add-ons section disappears (core add-ons section appears).
+  - [ ] Confirm an invoice / proration line appears for the switch.
+
+- Core add-ons (Pro only):
+  - [ ] On free or agency, confirm the `Core add-ons` section is not shown (Pro only).
+  - [ ] On Pro, buy extra spaces (quantity > 1); confirm count + total limits update.
+  - [ ] On Pro, buy a message block; confirm count + total messages update.
+  - [ ] On Pro, enable white-label; confirm status shows `active`.
+
+- Agency add-ons (Agency only):
+  - [x] On free or pro, confirm the `Agency add-ons` section is not shown (Agency only).
+  - [x] On Agency, buy an agency additional space (£9.99); total spaces update (4 active) and a separate invoice is generated. *(verified 30/05/2026, local Stripe test)*
+  - [x] On Agency, buy an agency message block (£9.99); total messages update (+1,000 -> 4,000) and a separate invoice is generated. *(verified 30/05/2026, local Stripe test)*
+  - [x] Confirm white-label is NOT offered as a purchasable add-on on Agency (included with the plan).
+
+- Current plan / add-on display:
+  - [x] Current plan bar shows status `active` and a next payment date (not `pending` / `Not available`). *(verified 30/05/2026)*
+  - [x] Each purchased add-on appears as its own row with status, start date, next payment, amount and quantity (separate rows per purchase). *(verified 30/05/2026)*
+  - [x] `Manage plan` opens the Stripe customer portal showing the plan and all add-on subscriptions. *(verified 30/05/2026)*
+  - [x] All subscriptions and invoices for a venue share a single Stripe customer (plan + add-ons grouped together). *(verified 30/05/2026)*
+
+- Cancellation:
+  - [ ] Pro: cancel a single core add-on; confirm only that add-on is scheduled and others stay active.
+  - [ ] Agency: cancel a single agency add-on; confirm only that add-on is scheduled and others stay active.
+  - [ ] Cancel the main plan via `Manage plan` (Stripe customer portal); confirm at period end the plan drops to free and add-ons clear.
+  - [ ] `Reactivate` a scheduled cancellation; confirm it resumes correctly.
+
+## K) Platform Admin Flow
 
 - [ ] Log in with a platform admin account (email matches `PLATFORM_ADMIN_EMAIL`).
 - [ ] Confirm `Platform Admin` link appears in the app sidebar and opens `/admin/dashboard`.
@@ -125,19 +166,20 @@ Test account password: `Test1234*`
   - [ ] `Blogs`: create + publish (or schedule) a blog; view public page; delete the test blog.
   - [ ] `Guides`: create + publish a guide (set difficulty); view public page; delete the test guide.
 
-## K) Bugs and UX Sweep (Do Throughout)
+## L) Bugs and UX Sweep (Do Throughout)
 
 - [ ] Log every bug immediately (what happened, expected, screenshot).
 - [ ] Mark severity: `P0`, `P1`, `P2`, `P3`.
 - [ ] Fix critical issues found during run.
 - [ ] Re-test each fixed issue.
 
-## L) Final Sign-off
+## M) Final Sign-off
 
 - [ ] Customer flow passes end-to-end.
 - [ ] Tour embed passes on external site.
 - [ ] Tracking/analytics pass.
 - [ ] Agency portal flow passes.
 - [ ] Agency embed flow passes.
+- [ ] Billing flow passes.
 - [ ] Platform admin flow passes.
 - [ ] No open `P0` or `P1` issues.

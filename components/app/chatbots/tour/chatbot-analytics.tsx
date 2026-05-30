@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import { useTourChatbotConfig } from "@/hooks/app/useTourChatbotConfig";
 import { useTheme } from "@/components/app/shared/theme-provider";
+import { NoTourEmptyState } from "../no-tour-empty-state";
 
 const COLORS = ['#0F172A', '#1E3A8A', '#334155', '#64748B', '#94A3B8'];
 
@@ -154,13 +155,7 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
   }
 
   if (!selectedTourId) {
-    return (
-      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-        <CardContent className="py-10 text-center text-slate-600">
-          Select a tour to view chatbot analytics.
-        </CardContent>
-      </Card>
-    );
+    return <NoTourEmptyState description="Upload your Matterport tour first, then return here to view your AI chatbot analytics." />;
   }
 
   if (!tourConfig) {

@@ -91,9 +91,13 @@ function ToursContent() {
       : false;
 
     if (!isSelectedStillValid) {
-      setSelectedTourId(locationTours[0].id);
+      const requestedTourId = searchParams.get("tourId");
+      const requestedTour = requestedTourId
+        ? locationTours.find((tour) => tour.id === requestedTourId)
+        : null;
+      setSelectedTourId(requestedTour ? requestedTour.id : locationTours[0].id);
     }
-  }, [locationTours, selectedTourId]);
+  }, [locationTours, selectedTourId, searchParams]);
 
   const handleHeaderSelect = (value: string) => {
     if (value === "__manage_locations__") {
@@ -180,7 +184,10 @@ function ToursContent() {
         </TabsContent>
 
         <TabsContent value="menu" className="mt-6">
-          <TourMenuBuilder tourId={selectedTourId || undefined} />
+          <TourMenuBuilder
+            tourId={selectedTourId || undefined}
+            onSwitchToViewer={() => setActiveTab("viewer")}
+          />
         </TabsContent>
 
         <TabsContent value="share" className="mt-6">

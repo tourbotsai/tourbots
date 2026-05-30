@@ -6,6 +6,7 @@ import { initAdmin } from '@/lib/firebase-admin';
 import { getUserWithVenue } from '@/lib/user-service';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { notifyOpsAlert, recordApi5xxEvent } from '@/lib/ops-monitoring';
+import { ENTITLEMENT_COLUMNS, effectivePlanCode } from '@/lib/billing-entitlements';
 
 initAdmin();
 const auth = getAuth();
@@ -17,7 +18,17 @@ const checkoutSchema = z.object({
   quantity: z.number().int().min(1).max(100).optional(),
 });
 
-const ADDON_CODES = ['extra_space', 'message_block', 'white_label', 'agency_portal'] as const;
+const ADDON_CODES = [
+  'extra_space',
+  'message_block',
+  'white_label',
+  'agency_extra_space',
+  'agency_message_block',
+] as const;
+
+// Core add-ons scale the Pro allowance; agency add-ons scale the Agency pool.
+const AGENCY_ADDON_CODES = ['agency_extra_space', 'agency_message_block'];
+const SINGLE_QUANTITY_ADDON_CODES = ['white_label'];
 
 function getStripe() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -104,32 +115,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
     }
 
+    // Reuse the venue's existing Stripe customer so the plan and every add-on
+    // live under one customer. This keeps all invoices resolvable, lets add-on
+    // state/cancellation be read back, and lets the customer portal manage
+    // everything in one place. Only fall back to customer_email for the very
+    // first checkout when no customer exists yet.
+    let existingCustomerId: string | null = null;
+    const { data: billingForCustomer } = await supabase
+      .from('venue_billing_records')
+      .select('stripe_customer_id')
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    existingCustomerId = billingForCustomer?.stripe_customer_id || null;
+    if (!existingCustomerId) {
+      const { data: subForCustomer } = await supabase
+        .from('subscriptions')
+        .select('stripe_customer_id')
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      existingCustomerId = subForCustomer?.stripe_customer_id || null;
+    }
+    const customerField: Stripe.Checkout.SessionCreateParams = existingCustomerId
+      ? { customer: existingCustomerId }
+      : { customer_email: userEmail };
+
     let session: Stripe.Checkout.Session;
     let savedPlanName = 'unknown';
 
     if (action === 'upgrade_plan') {
-      if (planCode !== 'pro') {
-        return NextResponse.json({ error: 'Only pro plan upgrades are supported in app checkout.' }, { status: 400 });
+      // Checkout is for acquiring a paid plan from free (no card on file yet).
+      // Switching between paid plans (pro <-> agency) is handled by the
+      // /api/app/billing/switch-plan endpoint (Stripe subscription update).
+      if (planCode !== 'pro' && planCode !== 'agency') {
+        return NextResponse.json({ error: 'Only pro or agency plan upgrades are supported in app checkout.' }, { status: 400 });
       }
+      const targetPlan = planCode;
 
       const { data: plan, error: planError } = await supabase
         .from('billing_plans')
         .select('*')
-        .eq('code', 'pro')
+        .eq('code', targetPlan)
         .single();
 
       if (planError || !plan) {
-        return NextResponse.json({ error: 'Pro plan is not configured.' }, { status: 400 });
+        return NextResponse.json({ error: `${targetPlan} plan is not configured.` }, { status: 400 });
       }
 
       const priceId = stripeMode === 'live' ? plan.stripe_price_monthly_live : plan.stripe_price_monthly_sandbox;
       if (!priceId) {
-        return NextResponse.json({ error: `Missing Stripe price ID for Pro plan in ${stripeMode} mode.` }, { status: 400 });
+        return NextResponse.json({ error: `Missing Stripe price ID for ${targetPlan} plan in ${stripeMode} mode.` }, { status: 400 });
       }
 
       session = await stripe.checkout.sessions.create({
         mode: 'subscription',
-        customer_email: userEmail,
+        ...customerField,
         line_items: [
           {
             price: priceId,
@@ -139,7 +178,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           billing_action: 'upgrade_plan',
           venue_id: venueId,
-          plan_name: 'pro',
+          plan_name: targetPlan,
           billing_cycle: 'monthly',
           requested_by_user_id: userId,
         },
@@ -147,7 +186,7 @@ export async function POST(request: NextRequest) {
           metadata: {
             billing_action: 'upgrade_plan',
             venue_id: venueId,
-            plan_name: 'pro',
+            plan_name: targetPlan,
             requested_by_user_id: userId,
           },
         },
@@ -156,10 +195,30 @@ export async function POST(request: NextRequest) {
         allow_promotion_codes: true,
       });
 
-      savedPlanName = 'pro';
+      savedPlanName = targetPlan;
     } else {
       if (!addonCode || !ADDON_CODES.includes(addonCode as typeof ADDON_CODES[number])) {
         return NextResponse.json({ error: 'Valid addon code is required.' }, { status: 400 });
+      }
+
+      // Add-ons are plan-scoped: core add-ons require Pro, agency add-ons require Agency.
+      const requiredPlan = AGENCY_ADDON_CODES.includes(addonCode) ? 'agency' : 'pro';
+      const { data: billingRecord } = await supabase
+        .from('venue_billing_records')
+        .select(ENTITLEMENT_COLUMNS)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+
+      if (effectivePlanCode(billingRecord as any) !== requiredPlan) {
+        return NextResponse.json(
+          {
+            error:
+              requiredPlan === 'agency'
+                ? 'Agency add-ons require an active Agency plan.'
+                : 'Core add-ons require an active Pro plan.',
+          },
+          { status: 403 }
+        );
       }
 
       const { data: addon, error: addonError } = await supabase
@@ -172,7 +231,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Addon is not configured.' }, { status: 400 });
       }
 
-      const normalizedQuantity = ['white_label', 'agency_portal'].includes(addonCode) ? 1 : quantity;
+      const normalizedQuantity = SINGLE_QUANTITY_ADDON_CODES.includes(addonCode) ? 1 : quantity;
       const addonPriceId = stripeMode === 'live' ? addon.stripe_price_monthly_live : addon.stripe_price_monthly_sandbox;
       if (!addonPriceId) {
         return NextResponse.json(
@@ -183,7 +242,7 @@ export async function POST(request: NextRequest) {
 
       session = await stripe.checkout.sessions.create({
         mode: 'subscription',
-        customer_email: userEmail,
+        ...customerField,
         line_items: [
           {
             price: addonPriceId,

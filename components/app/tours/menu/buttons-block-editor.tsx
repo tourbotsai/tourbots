@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
 import { useUser } from "@/hooks/useUser";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
 
@@ -424,40 +425,16 @@ export function ButtonsBlockEditor({ block, onUpdate }: ButtonsBlockEditorProps)
 
                   {/* Colors */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs mb-2 block dark:text-gray-200">Button Colour</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={button.button_color}
-                          onChange={(e) => updateButton(button.id, { button_color: e.target.value })}
-                          className="w-10 h-10 rounded border cursor-pointer"
-                        />
-                        <Input
-                          value={button.button_color}
-                          onChange={(e) => updateButton(button.id, { button_color: e.target.value })}
-                          placeholder="#3B82F6"
-                          className="flex-1 text-xs font-mono uppercase"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-2 block dark:text-gray-200">Text Colour</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={button.text_color}
-                          onChange={(e) => updateButton(button.id, { text_color: e.target.value })}
-                          className="w-10 h-10 rounded border cursor-pointer"
-                        />
-                        <Input
-                          value={button.text_color}
-                          onChange={(e) => updateButton(button.id, { text_color: e.target.value })}
-                          placeholder="#FFFFFF"
-                          className="flex-1 text-xs font-mono uppercase"
-                        />
-                      </div>
-                    </div>
+                    <ColorPicker
+                      label="Button Colour"
+                      value={button.button_color}
+                      onChange={(value) => updateButton(button.id, { button_color: value })}
+                    />
+                    <ColorPicker
+                      label="Text Colour"
+                      value={button.text_color}
+                      onChange={(value) => updateButton(button.id, { text_color: value })}
+                    />
                   </div>
                 </CardContent>
               </Card>

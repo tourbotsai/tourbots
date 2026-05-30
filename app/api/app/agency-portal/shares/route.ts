@@ -3,6 +3,7 @@ import { randomBytes, scryptSync } from 'crypto';
 import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
+import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 
 const enabledModulesSchema = z.object({
   tour: z.boolean().optional(),
@@ -78,10 +79,10 @@ function hashPassword(password: string): string {
 async function getEntitlement(venueId: string): Promise<boolean> {
   const { data } = await supabase
     .from('venue_billing_records')
-    .select('addon_agency_portal')
+    .select(ENTITLEMENT_COLUMNS)
     .eq('venue_id', venueId)
     .maybeSingle();
-  return Boolean(data?.addon_agency_portal);
+  return venueHasAgencyPortal(data as any);
 }
 
 async function assertTourInVenue(venueId: string, tourId: string) {
@@ -225,7 +226,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      entitlement: { addon_agency_portal: entitlementEnabled },
+      entitlement: { entitled: entitlementEnabled },
       tours: tours || [],
       shares: (shares || []).map((share) => ({
         ...share,

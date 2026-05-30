@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +10,43 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
+import { useUser } from "@/hooks/useUser";
+import { useBilling } from "@/hooks/app/useBilling";
 import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
 import { generateAgencyPortalEmbed } from "@/lib/embed-generator";
-import { Building2, Copy, ExternalLink, KeyRound, Loader2, Lock, Save, Share2, Trash2 } from "lucide-react";
+import { Building2, Copy, ExternalLink, Info, KeyRound, Loader2, Lock, Plus, Save, Share2, Trash2, UserPlus, X } from "lucide-react";
+
+function extractMatterportId(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed);
+    const fromQuery = parsed.searchParams.get("m");
+    if (fromQuery) return fromQuery.trim();
+  } catch {
+    // fall through to regex
+  }
+  const match = trimmed.match(/[?&]m=([^&\s]+)/);
+  return match ? match[1].trim() : "";
+}
+
+function parseDomainTokens(input: string): string[] {
+  return input
+    .split(/[\n,\s]+/)
+    .map((entry) =>
+      entry
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "")
+        .replace(/\/.*$/, "")
+        .replace(/:\d+$/, "")
+    )
+    .filter(Boolean);
+}
 
 interface AgencyPortalSettings {
   id: string;
@@ -87,6 +120,9 @@ function normaliseShareSlug(input: string): string {
 export function AgencySettings() {
   const { toast } = useToast();
   const { getAuthHeaders } = useAuthHeaders();
+  const { user } = useUser();
+  const { limits, fetchBilling } = useBilling();
+  const router = useRouter();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -98,7 +134,29 @@ export function AgencySettings() {
   const [tours, setTours] = useState<TourRow[]>([]);
   const [shares, setShares] = useState<ShareRow[]>([]);
 
-  const [domainsText, setDomainsText] = useState("");
+  const [domains, setDomains] = useState<string[]>([]);
+  const [domainInput, setDomainInput] = useState("");
+
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false);
+  const [addClientStep, setAddClientStep] = useState<"form" | "success">("form");
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [acClientName, setAcClientName] = useState("");
+  const [acTourName, setAcTourName] = useState("");
+  const [acTourNameEdited, setAcTourNameEdited] = useState(false);
+  const [acMatterportUrl, setAcMatterportUrl] = useState("");
+  const [acDescription, setAcDescription] = useState("");
+  const [acSlug, setAcSlug] = useState("");
+  const [acSlugEdited, setAcSlugEdited] = useState(false);
+  const [acClientEmail, setAcClientEmail] = useState("");
+  const [acClientPassword, setAcClientPassword] = useState("");
+  const [createdClient, setCreatedClient] = useState<{
+    tourId: string;
+    tourName: string;
+    slug: string;
+    email: string;
+    password: string | null;
+  } | null>(null);
+
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedTour, setSelectedTour] = useState<TourRow | null>(null);
   const [selectedShare, setSelectedShare] = useState<ShareRow | null>(null);
@@ -110,6 +168,7 @@ export function AgencySettings() {
   const [clientPassword, setClientPassword] = useState("");
   const [regenPassword, setRegenPassword] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const temporaryPasswordRef = useRef<HTMLDivElement | null>(null);
   const [embedWidth, setEmbedWidth] = useState("100%");
   const [embedHeight, setEmbedHeight] = useState("900px");
 
@@ -195,8 +254,8 @@ export function AgencySettings() {
       }
 
       setSettings(settingsJson.settings);
-      setEntitled(Boolean(settingsJson.entitlement?.addon_agency_portal));
-      setDomainsText((settingsJson.settings?.allowed_domains || []).join("\n"));
+      setEntitled(Boolean(settingsJson.entitlement?.entitled));
+      setDomains(settingsJson.settings?.allowed_domains || []);
       setTours(sharesJson.tours || []);
       setShares(sharesJson.shares || []);
     } catch (error: any) {
@@ -214,15 +273,190 @@ export function AgencySettings() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (user?.venue_id) {
+      void fetchBilling();
+    }
+  }, [user?.venue_id, fetchBilling]);
+
+  const primarySpacesUsed = useMemo(
+    () => tours.filter((tour) => tour.tour_type === "primary" || !tour.tour_type).length,
+    [tours]
+  );
+  const totalSpaces = limits?.totalSpaces ?? null;
+  const canAddClient = totalSpaces == null ? true : primarySpacesUsed < totalSpaces;
+
+  const resetAddClientForm = () => {
+    setAddClientStep("form");
+    setAcClientName("");
+    setAcTourName("");
+    setAcTourNameEdited(false);
+    setAcMatterportUrl("");
+    setAcDescription("");
+    setAcSlug("");
+    setAcSlugEdited(false);
+    setAcClientEmail("");
+    setAcClientPassword("");
+    setCreatedClient(null);
+  };
+
+  const openAddClient = () => {
+    resetAddClientForm();
+    setIsAddClientOpen(true);
+  };
+
+  const handleAddClientOpenChange = (open: boolean) => {
+    setIsAddClientOpen(open);
+    if (!open) resetAddClientForm();
+  };
+
+  const createClient = async () => {
+    const venueId = user?.venue?.id;
+    if (!venueId) {
+      toast({ title: "Error", description: "Unable to determine your account.", variant: "destructive" });
+      return;
+    }
+
+    const clientName = acClientName.trim();
+    const tourName = (acTourNameEdited ? acTourName : acTourName || acClientName).trim();
+    const matterportUrl = acMatterportUrl.trim();
+    const matterportId = extractMatterportId(matterportUrl);
+    const email = acClientEmail.trim();
+
+    if (!clientName) {
+      toast({ title: "Client name required", description: "Enter the client or business name.", variant: "destructive" });
+      return;
+    }
+    if (!matterportUrl || !matterportId) {
+      toast({ title: "Matterport URL required", description: "Enter a valid Matterport tour URL (it should contain ?m=...).", variant: "destructive" });
+      return;
+    }
+    if (!email) {
+      toast({ title: "Client login email required", description: "Enter the email your client will use to log in.", variant: "destructive" });
+      return;
+    }
+    if (acClientPassword && acClientPassword.length < 8) {
+      toast({ title: "Password too short", description: "The client password must be at least 8 characters.", variant: "destructive" });
+      return;
+    }
+
+    setIsCreatingClient(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+
+      const tourResponse = await fetch("/api/app/tours", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          venueId,
+          title: tourName || clientName,
+          description: acDescription.trim() || null,
+          matterportTourId: matterportId,
+          matterportUrl,
+          tourType: "primary",
+        }),
+      });
+      const tourData = await tourResponse.json();
+      if (!tourResponse.ok) {
+        throw new Error(tourData.error || "Failed to create the client tour.");
+      }
+
+      const newTourId = tourData.id as string;
+      const slug = normaliseShareSlug(acSlug || `${tourName || clientName}-chatbot`);
+
+      const shareResponse = await fetch("/api/app/agency-portal/shares", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action: "upsert_share",
+          tourId: newTourId,
+          shareSlug: slug,
+          isActive: true,
+          enabledModules: {
+            ...defaultModules,
+            settings_blocks: defaultSettingsBlocks,
+          },
+          clientEmail: email,
+          clientPassword: acClientPassword || undefined,
+        }),
+      });
+      const shareData = await shareResponse.json();
+
+      await fetchData();
+      await fetchBilling();
+
+      if (!shareResponse.ok) {
+        throw new Error(
+          shareData.error ||
+            "The tour was created, but the client portal could not be set up. Finish it from the list below."
+        );
+      }
+
+      setCreatedClient({
+        tourId: newTourId,
+        tourName: tourName || clientName,
+        slug: shareData.share?.share_slug || slug,
+        email,
+        password: acClientPassword || shareData.temporaryPassword || null,
+      });
+      setAddClientStep("success");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add the client.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: "Copied", description: `${label} copied to clipboard.` });
+    } catch {
+      toast({ title: "Copy failed", description: "Unable to copy to clipboard.", variant: "destructive" });
+    }
+  };
+
+  const goPositionCreatedTour = () => {
+    if (!createdClient) return;
+    const tourId = createdClient.tourId;
+    handleAddClientOpenChange(false);
+    router.push(`/app/tours?tab=viewer&tourId=${encodeURIComponent(tourId)}`);
+  };
+
+  const addDomainsFromInput = () => {
+    const tokens = parseDomainTokens(domainInput);
+    if (tokens.length === 0) return;
+    setDomains((prev) => {
+      const existing = new Set(prev.map((domain) => domain.toLowerCase()));
+      const merged = [...prev];
+      tokens.forEach((token) => {
+        if (!existing.has(token)) {
+          existing.add(token);
+          merged.push(token);
+        }
+      });
+      return merged;
+    });
+    setDomainInput("");
+  };
+
+  const removeDomain = (domainIndex: number) => {
+    setDomains((prev) => prev.filter((_, currentIndex) => currentIndex !== domainIndex));
+  };
+
   const saveSettings = async () => {
     if (!settings) return;
     setIsSavingSettings(true);
     try {
       const headers = await getAuthHeaders({ "Content-Type": "application/json" });
-      const parsedDomains = domainsText
-        .split(/[\n,]/)
-        .map((entry) => entry.trim().toLowerCase())
-        .filter(Boolean);
+      const pendingDomains = parseDomainTokens(domainInput);
+      const parsedDomains = Array.from(
+        new Set([...domains, ...pendingDomains].map((entry) => entry.trim().toLowerCase()).filter(Boolean))
+      );
 
       const response = await fetch("/api/app/agency-portal/settings", {
         method: "PUT",
@@ -243,7 +477,8 @@ export function AgencySettings() {
       }
 
       setSettings(data);
-      setDomainsText((data.allowed_domains || []).join("\n"));
+      setDomains(data.allowed_domains || []);
+      setDomainInput("");
       toast({
         title: "Saved",
         description: "Agency settings updated successfully.",
@@ -448,8 +683,13 @@ export function AgencySettings() {
       setTemporaryPassword(data.temporaryPassword || null);
       toast({
         title: "Credentials regenerated",
-        description: "Share the new temporary password with your client.",
+        description: "Copy the new password below - it is only shown once.",
       });
+      if (data.temporaryPassword) {
+        requestAnimationFrame(() => {
+          temporaryPasswordRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
       await fetchData();
     } catch (error: any) {
       toast({
@@ -491,40 +731,41 @@ export function AgencySettings() {
     );
   }
 
-  const showAgencyPortalContent = settings.is_enabled;
+  const showAgencyPortalContent = entitled || settings.is_enabled;
+  const agencyTabTriggerClass =
+    "h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100";
 
   return (
-    <div className="space-y-6">
-      <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
+    <>
+      <Tabs defaultValue="settings" className="space-y-6">
+        <div className="overflow-x-auto md:overflow-visible">
+          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-2">
+            <TabsTrigger value="settings" className={agencyTabTriggerClass}>
+              Agency Settings
+            </TabsTrigger>
+            <TabsTrigger value="client" className={agencyTabTriggerClass}>
+              Client Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="settings" className="space-y-6">
+          <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
         <CardHeader>
           <CardTitle>Agency Portal Branding</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {!entitled && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-              Agency Portal add-on is not enabled on this account yet. Purchase the add-on in Billing to activate this tab.
+              Your plan does not include the agency portal. Upgrade to the Agency plan in Billing to activate these settings.
             </div>
           )}
 
-          <div className="flex items-center justify-between rounded-lg border p-3 dark:border-input dark:bg-background">
-            <div>
-              <p className="font-medium">Enable agency portal</p>
-              <p className="text-xs text-muted-foreground">Turn on branded end-client access for shared tours.</p>
-            </div>
-            <Switch
-              checked={settings.is_enabled}
-              onCheckedChange={(value) => setSettings((prev) => (prev ? { ...prev, is_enabled: value } : prev))}
-              disabled={!entitled}
-            />
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Customise how the branded portal appears to your end clients.
+          </p>
 
-          {!showAgencyPortalContent ? (
-            <p className="text-xs text-muted-foreground">
-              Turn this on and save to unlock agency branding, domain allowlisting, and per-tour client sharing.
-            </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="agency-name">Agency name</Label>
                   <Input
@@ -630,19 +871,63 @@ export function AgencySettings() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="allowed-domains">Allowed domains (one per line)</Label>
-                <Textarea
-                  id="allowed-domains"
-                  rows={4}
-                  value={domainsText}
-                  onChange={(event) => setDomainsText(event.target.value)}
-                  placeholder={"vrtour360.co.uk\nwww.vrtour360.co.uk"}
-                  disabled={!entitled}
-                />
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="allowed-domains">Allowed domains</Label>
+              <span className="group relative inline-flex">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" aria-label="About allowed domains" />
+                <span className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-80 rounded-md border bg-popover px-3 py-2 text-xs font-normal leading-relaxed text-popover-foreground shadow-md group-hover:block dark:border-input">
+                  Enter your own agency domain (e.g. vrtour360.co.uk) where you host the portal page. The branded portal can only be embedded on the domains listed here. Your clients visit that page on your site to manage their AI settings, fully white-labelled as your product. If left blank, the portal is blocked on all external sites.
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="allowed-domains"
+                value={domainInput}
+                onChange={(event) => setDomainInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addDomainsFromInput();
+                  }
+                }}
+                placeholder="e.g. vrtour360.co.uk - then press + or Enter"
+                disabled={!entitled}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={addDomainsFromInput}
+                disabled={!entitled || !domainInput.trim()}
+                aria-label="Add domain"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {domains.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {domains.map((domain, domainIndex) => (
+                  <button
+                    key={`${domain}-${domainIndex}`}
+                    type="button"
+                    onClick={() => removeDomain(domainIndex)}
+                    className="group inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-xs text-slate-700 hover:bg-slate-200/80 disabled:cursor-not-allowed disabled:opacity-60 dark:border-input dark:bg-background dark:text-slate-200 dark:hover:bg-neutral-800"
+                    disabled={!entitled}
+                    title="Click to remove domain"
+                  >
+                    {domain}
+                    <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
+                  </button>
+                ))}
               </div>
-            </>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Add your own agency domain where you embed the portal (e.g. vrtour360.co.uk) - not your client&apos;s site. Any &quot;www.&quot; or &quot;https://&quot; is trimmed automatically, and www / subdomains are matched for you.
+              </p>
+            )}
+          </div>
 
           <div className="flex justify-end">
             <Button onClick={saveSettings} disabled={!entitled || isSavingSettings}>
@@ -651,16 +936,36 @@ export function AgencySettings() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </TabsContent>
 
+        <TabsContent value="client" className="space-y-6">
       {showAgencyPortalContent ? (
         <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
           <CardHeader>
-            <CardTitle>Per-tour Client Sharing</CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Manage client portals</CardTitle>
+                {totalSpaces != null ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Spaces used: <span className="font-semibold text-foreground">{primarySpacesUsed}/{totalSpaces}</span>
+                  </p>
+                ) : null}
+              </div>
+              <Button onClick={openAddClient} disabled={!entitled || !canAddClient}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add client
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {!canAddClient ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                You have used all available spaces. Buy an agency additional space in Billing to add another client.
+              </div>
+            ) : null}
             {tours.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active tours available.</p>
+              <p className="text-sm text-muted-foreground">No clients yet. Use &quot;Add client&quot; to set up your first client portal.</p>
             ) : (
               tours.map((tour) => {
                 const share = shareByTourId[tour.id];
@@ -687,8 +992,8 @@ export function AgencySettings() {
                           disabled={!entitled}
                         >
                           <Share2 className="mr-2 h-4 w-4" />
-                          <span className="sm:hidden">Share</span>
-                          <span className="hidden sm:inline">Share chatbot settings</span>
+                          <span className="sm:hidden">Manage</span>
+                          <span className="hidden sm:inline">Manage client</span>
                         </Button>
                       </div>
                     </div>
@@ -698,20 +1003,210 @@ export function AgencySettings() {
             )}
           </CardContent>
         </Card>
-      ) : null}
+      ) : (
+        <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            The Agency plan is required to share tour chatbots with your clients. Upgrade in Billing to activate client sharing.
+          </CardContent>
+        </Card>
+      )}
+        </TabsContent>
+      </Tabs>
 
-      <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
-        <DialogContent className="sm:max-w-[46rem] max-h-[90vh] overflow-visible flex flex-col">
+      <Dialog open={isAddClientOpen} onOpenChange={handleAddClientOpenChange}>
+        <DialogContent className="sm:max-w-[40rem] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              {selectedTour ? `Share Settings - ${selectedTour.title}` : "Share Settings"}
+              <UserPlus className="h-5 w-5" />
+              {addClientStep === "success" ? "Client added" : "Add new client"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 overflow-y-auto px-1 pb-1">
+          {addClientStep === "form" ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Set up a new client tour and their branded portal in one step. After creating, you&apos;ll be taken to the tour viewer to check and position the tour.
+              </p>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ac-client-name">Client / business name</Label>
+                  <Input
+                    id="ac-client-name"
+                    value={acClientName}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setAcClientName(value);
+                      if (!acTourNameEdited) setAcTourName(value);
+                    }}
+                    placeholder="Shropshire Wedding Venue"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ac-tour-name">Tour name</Label>
+                  <Input
+                    id="ac-tour-name"
+                    value={acTourName}
+                    onChange={(event) => {
+                      setAcTourName(event.target.value);
+                      setAcTourNameEdited(true);
+                    }}
+                    placeholder="Main Venue Tour"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ac-matterport-url">Matterport tour URL</Label>
+                <Input
+                  id="ac-matterport-url"
+                  value={acMatterportUrl}
+                  onChange={(event) => setAcMatterportUrl(event.target.value)}
+                  placeholder="https://my.matterport.com/show/?m=XXXXXXXXXXX"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Paste the full share URL - the model ID is detected automatically.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ac-description">Description (optional)</Label>
+                <Textarea
+                  id="ac-description"
+                  rows={2}
+                  value={acDescription}
+                  onChange={(event) => setAcDescription(event.target.value)}
+                  placeholder="A short description of this client's tour."
+                />
+              </div>
+
+              <div className="space-y-3 rounded-lg border p-3 dark:border-input dark:bg-background">
+                <p className="text-sm font-medium">Client portal login</p>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ac-client-email">Client login email</Label>
+                    <Input
+                      id="ac-client-email"
+                      type="email"
+                      value={acClientEmail}
+                      onChange={(event) => setAcClientEmail(event.target.value)}
+                      placeholder="client@theirbusiness.com"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ac-client-password">Password (optional)</Label>
+                    <Input
+                      id="ac-client-password"
+                      type="text"
+                      value={acClientPassword}
+                      onChange={(event) => setAcClientPassword(event.target.value)}
+                      placeholder="Leave blank to auto-generate"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ac-slug">Portal slug</Label>
+                  <Input
+                    id="ac-slug"
+                    value={acSlug || normaliseShareSlug(`${(acTourNameEdited ? acTourName : acTourName || acClientName) || ""}-chatbot`)}
+                    onChange={(event) => {
+                      setAcSlug(event.target.value);
+                      setAcSlugEdited(true);
+                    }}
+                    placeholder="shropshire-wedding-venue-chatbot"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used in the portal address. Letters, numbers and dashes only.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => handleAddClientOpenChange(false)} disabled={isCreatingClient}>
+                  Cancel
+                </Button>
+                <Button onClick={createClient} disabled={isCreatingClient}>
+                  {isCreatingClient ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create client"
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : createdClient ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
+                {createdClient.tourName} has been created with its client portal. Share the login details below with your client.
+              </div>
+
+              <div className="space-y-2 rounded-lg border p-3 dark:border-input dark:bg-background">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Login email</p>
+                    <p className="truncate text-sm font-medium">{createdClient.email}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdClient.email, "Email")}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copy
+                  </Button>
+                </div>
+                {createdClient.password ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 border-t pt-2 dark:border-input">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Password</p>
+                        <p className="truncate font-mono text-sm font-medium">{createdClient.password}</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdClient.password || "", "Password")}>
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
+                        Copy
+                      </Button>
+                    </div>
+                    <p className="border-t pt-2 text-xs font-medium text-amber-600 dark:border-input dark:text-amber-400">
+                      Copy this password now - for security it is only shown once and cannot be retrieved later. If lost, regenerate it from &quot;Share chatbot settings&quot;.
+                    </p>
+                  </>
+                ) : (
+                  <p className="border-t pt-2 text-xs text-muted-foreground dark:border-input">
+                    The existing password for this email was kept. Use &quot;Share chatbot settings&quot; to reset it if needed.
+                  </p>
+                )}
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Next, open the tour to check it. You can fine-tune the portal settings any time via &quot;Client Settings&quot;.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => handleAddClientOpenChange(false)}>
+                  Done
+                </Button>
+                <Button onClick={goPositionCreatedTour}>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Open tour
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
+        <DialogContent className="sm:max-w-[46rem] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              {selectedTour ? `Client Settings - ${selectedTour.title}` : "Client Settings"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 px-1 pb-1">
             <div className="space-y-1.5">
-              <Label htmlFor="share-slug">Share slug</Label>
+              <Label htmlFor="share-slug">Tour slug</Label>
               <Input
                 id="share-slug"
                 value={shareSlug}
@@ -720,16 +1215,22 @@ export function AgencySettings() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 rounded-lg border p-3 dark:border-input dark:bg-background">
-              {Object.entries(enabledModules).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <Label className="capitalize">{key}</Label>
-                  <Switch
-                    checked={Boolean(value)}
-                    onCheckedChange={(checked) => setEnabledModules((prev) => ({ ...prev, [key]: checked }))}
-                  />
-                </div>
-              ))}
+            <div className="space-y-2 rounded-lg border p-3 dark:border-input dark:bg-background">
+              <p className="text-sm font-medium">Portal tabs</p>
+              <p className="text-xs text-muted-foreground">
+                Control which tabs appear in this client&apos;s portal. Disabled tabs are hidden entirely.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(enabledModules).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <Label className="capitalize">{key}</Label>
+                    <Switch
+                      checked={Boolean(value)}
+                      onCheckedChange={(checked) => setEnabledModules((prev) => ({ ...prev, [key]: checked }))}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2 rounded-lg border p-3 dark:border-input dark:bg-background">
@@ -776,7 +1277,7 @@ export function AgencySettings() {
 
             <div className="flex items-center justify-between rounded-lg border p-3 dark:border-input dark:bg-background">
               <div>
-                <p className="text-sm font-medium">Share active</p>
+                <p className="text-sm font-medium">Portal active</p>
                 <p className="text-xs text-muted-foreground">Disable to immediately block portal access.</p>
               </div>
               <Switch checked={shareActive} onCheckedChange={setShareActive} />
@@ -790,7 +1291,7 @@ export function AgencySettings() {
                   disabled={isSavingShare}
                 >
                   <Lock className="mr-2 h-4 w-4" />
-                  {selectedShare.is_active ? "Disable share" : "Enable share"}
+                  {selectedShare.is_active ? "Disable portal" : "Enable portal"}
                 </Button>
                 <Button
                   variant="outline"
@@ -800,6 +1301,37 @@ export function AgencySettings() {
                   <KeyRound className="mr-2 h-4 w-4" />
                   Regenerate password
                 </Button>
+              </div>
+            )}
+
+            {temporaryPassword && (
+              <div ref={temporaryPasswordRef} className="space-y-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-700 dark:bg-emerald-950/40">
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                  New password generated. Share the login details below with your client.
+                </p>
+                <div className="flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-background">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Login email</p>
+                    <p className="truncate text-sm font-medium">{clientEmail}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => copyText(clientEmail, "Email")}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copy
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-background">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Password</p>
+                    <p className="truncate font-mono text-sm font-medium">{temporaryPassword}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => copyText(temporaryPassword, "Password")}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copy
+                  </Button>
+                </div>
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Copy this password now - for security it is only shown once and cannot be retrieved later. If lost, regenerate it again from here.
+                </p>
               </div>
             )}
 
@@ -862,21 +1394,6 @@ export function AgencySettings() {
                   value={embedCodes.script}
                 />
 
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    asChild
-                  >
-                    <a
-                      href={canUsePermanentPreview ? embedCodes.previewUrl : temporaryPreviewUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      {canUsePermanentPreview ? "Open preview" : "Open temporary preview"}
-                    </a>
-                  </Button>
-                </div>
                 {!selectedShare ? (
                   <p className="text-xs text-muted-foreground">
                     Temporary preview works before save. Save share to enable permanent preview and embed code.
@@ -890,27 +1407,27 @@ export function AgencySettings() {
               </div>
             )}
 
-            {temporaryPassword && (
-              <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 dark:border-green-900 dark:bg-green-950/30">
-                <p className="text-sm font-medium text-green-900 dark:text-green-300">Temporary password</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <code className="rounded bg-white px-2 py-1 text-sm dark:bg-background">{temporaryPassword}</code>
-                  <Button size="sm" variant="outline" onClick={() => copyText(temporaryPassword, "Temporary password")}>
-                    Copy
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              {embedCodes ? (
+                <Button variant="outline" asChild>
+                  <a
+                    href={canUsePermanentPreview ? embedCodes.previewUrl : temporaryPreviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    {canUsePermanentPreview ? "Open preview" : "Open temporary preview"}
+                  </a>
+                </Button>
+              ) : null}
               <Button onClick={saveShare} disabled={isSavingShare || !selectedTour}>
-                {isSavingShare ? "Saving..." : "Save share"}
+                {isSavingShare ? "Saving..." : "Save settings"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 

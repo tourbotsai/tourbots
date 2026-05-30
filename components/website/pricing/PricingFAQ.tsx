@@ -28,7 +28,7 @@ export function PricingFAQ() {
         "Yes. White-label is a £19.99 per month add-on that removes TourBots branding from the client experience.",
     },
     {
-      question: "What is the Agency portal?",
+      question: "What is the Agency plan?",
       answer:
         "It allows you to provide clients secure branded portal access to manage their tour, chatbot, and analytics.",
     },

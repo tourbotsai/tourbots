@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "reactfire";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { clearUserCache } from "@/hooks/useUser";
 import { ModalForgotPassword } from "@/components/auth/modal-forgot-password";
 import { Eye, EyeOff, LogIn, Mail, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -51,6 +52,9 @@ export const SignInForm: FC<SignInFormProps> = ({ onShowSignUp }) => {
     try {
       setIsLoading(true);
       await signInWithEmailAndPassword(auth, email, password);
+      // Start the session from a clean cache so we never read a stale
+      // (e.g. transiently venue-less) copy left from a prior attempt.
+      clearUserCache();
       toast({
         title: "Welcome back!",
         description: "Successfully signed in to your TourBots AI dashboard.",

@@ -24,6 +24,7 @@ interface DesktopCustomisationProps {
   isLoading?: boolean;
   onCustomImageChange?: (imageUrl: string | null) => void;
   customBrandingEnabled?: boolean;
+  hidePoweredByControl?: boolean;
 }
 
 const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
@@ -32,6 +33,7 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
   isLoading = false,
   onCustomImageChange,
   customBrandingEnabled = true,
+  hidePoweredByControl = false,
 }) => {
   const [sectionStates, setSectionStates] = React.useState({
     chatButton: false,
@@ -529,21 +531,23 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                 />
               </div>
               
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border dark:border-input dark:bg-background">
-                <div className="flex flex-col">
-                  <Label className="text-sm font-medium">Show &quot;Powered by TourBots&quot;</Label>
-                  <span className="text-xs text-gray-500 mt-1 dark:text-slate-400">
-                    {customBrandingEnabled
-                      ? "Display branding text at bottom of chat"
-                      : "Locked until White-label add-on is active on your billing plan"}
-                  </span>
+              {!hidePoweredByControl && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border dark:border-input dark:bg-background">
+                  <div className="flex flex-col">
+                    <Label className="text-sm font-medium">Show &quot;Powered by TourBots&quot;</Label>
+                    <span className="text-xs text-gray-500 mt-1 dark:text-slate-400">
+                      {customBrandingEnabled
+                        ? "Display branding text at bottom of chat"
+                        : "Locked until White-label add-on is active on your billing plan"}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={customBrandingEnabled ? values.show_powered_by : true}
+                    onCheckedChange={(checked) => onChange('show_powered_by', checked)}
+                    disabled={!customBrandingEnabled}
+                  />
                 </div>
-                <Switch
-                  checked={customBrandingEnabled ? values.show_powered_by : true}
-                  onCheckedChange={(checked) => onChange('show_powered_by', checked)}
-                  disabled={!customBrandingEnabled}
-                />
-              </div>
+              )}
             </CardContent>
           </CollapsibleContent>
         </Card>
@@ -654,22 +658,24 @@ const DesktopCustomisation: FC<DesktopCustomisationProps> = ({
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label>Branding Text Size (px)</Label>
-                  <Input
-                    type="number"
-                    value={values.branding_text_size}
-                    onChange={(e) => onChange('branding_text_size', parseInt(e.target.value) || 12)}
-                    min="8"
-                    max="16"
-                    disabled={!customBrandingEnabled}
-                  />
-                  {!customBrandingEnabled && (
-                    <p className="text-xs text-muted-foreground">
-                      White-label add-on required to edit branding text size.
-                    </p>
-                  )}
-                </div>
+                {!hidePoweredByControl && (
+                  <div className="space-y-2">
+                    <Label>Branding Text Size (px)</Label>
+                    <Input
+                      type="number"
+                      value={values.branding_text_size}
+                      onChange={(e) => onChange('branding_text_size', parseInt(e.target.value) || 12)}
+                      min="8"
+                      max="16"
+                      disabled={!customBrandingEnabled}
+                    />
+                    {!customBrandingEnabled && (
+                      <p className="text-xs text-muted-foreground">
+                        White-label add-on required to edit branding text size.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </CollapsibleContent>

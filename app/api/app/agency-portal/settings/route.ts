@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
+import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 
 const updateSettingsSchema = z.object({
   is_enabled: z.boolean().optional(),
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
         .single(),
       supabase
         .from('venue_billing_records')
-        .select('addon_agency_portal')
+        .select(ENTITLEMENT_COLUMNS)
         .eq('venue_id', venueId)
         .maybeSingle(),
     ]);
@@ -59,10 +60,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: billingError.message }, { status: 500 });
     }
 
+    const entitled = venueHasAgencyPortal(billingRecord as any);
+
+    // Agency portal is part of the Agency plan, so it is always active for
+    // entitled venues - no manual enable step is required.
+    let effectiveSettings = settings;
+    if (entitled && settings && !settings.is_enabled) {
+      const { data: enabledSettings } = await supabase
+        .from('agency_portal_settings')
+        .update({ is_enabled: true })
+        .eq('venue_id', venueId)
+        .select('*')
+        .single();
+      if (enabledSettings) {
+        effectiveSettings = enabledSettings;
+      }
+    }
+
     return NextResponse.json({
-      settings,
+      settings: effectiveSettings,
       entitlement: {
-        addon_agency_portal: Boolean(billingRecord?.addon_agency_portal),
+        entitled,
       },
     });
   } catch (error: any) {

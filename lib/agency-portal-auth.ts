@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
+import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 
 export const AGENCY_SESSION_COOKIE = 'tb_agency_session';
 export const AGENCY_CSRF_COOKIE = 'tb_agency_csrf';
@@ -108,7 +109,7 @@ export function isAllowedDomain(allowedDomains: string[] = [], requestDomains: s
 export async function getAgencyPortalVenueSettings(venueId: string): Promise<{
   is_enabled: boolean;
   allowed_domains: string[];
-  addon_agency_portal: boolean | null;
+  agency_entitled: boolean | null;
 } | null> {
   const [{ data, error }, { data: billingData, error: billingError }] = await Promise.all([
     supabase
@@ -118,7 +119,7 @@ export async function getAgencyPortalVenueSettings(venueId: string): Promise<{
       .maybeSingle(),
     supabase
       .from('venue_billing_records')
-      .select('addon_agency_portal')
+      .select(ENTITLEMENT_COLUMNS)
       .eq('venue_id', venueId)
       .maybeSingle(),
   ]);
@@ -128,7 +129,7 @@ export async function getAgencyPortalVenueSettings(venueId: string): Promise<{
   return {
     is_enabled: Boolean(data.is_enabled),
     allowed_domains: Array.isArray(data.allowed_domains) ? data.allowed_domains : [],
-    addon_agency_portal: billingError ? null : Boolean(billingData?.addon_agency_portal),
+    agency_entitled: billingError ? null : venueHasAgencyPortal(billingData as any),
   };
 }
 
@@ -140,8 +141,8 @@ export async function validatePortalVenueAccess(
   if (!settings?.is_enabled) {
     return NextResponse.json({ error: 'Agency portal is disabled for this account.' }, { status: 403 });
   }
-  if (settings.addon_agency_portal === false) {
-    return NextResponse.json({ error: 'Agency portal add-on is not active.' }, { status: 403 });
+  if (settings.agency_entitled === false) {
+    return NextResponse.json({ error: 'Agency plan is not active for this account.' }, { status: 403 });
   }
 
   const requestDomains = getRequestDomainCandidates(request);

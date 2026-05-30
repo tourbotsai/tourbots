@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { completeVenueRegistration } from '@/lib/user-service';
 import { auth, initAdmin } from '@/lib/firebase-admin';
+import { invalidateAuthContextCacheForUid } from '@/lib/server-auth-context';
 
 initAdmin();
 
@@ -47,6 +48,11 @@ export async function POST(req: NextRequest) {
       venue_name,
       phone: phone || null,
     });
+
+    // A concurrent check-user during registration can cache a transient
+    // venue-less copy of this user. Drop it so the next read returns the
+    // freshly linked user+venue instead of the stale (incomplete) profile.
+    invalidateAuthContextCacheForUid(firebase_uid);
 
     return NextResponse.json({
       success: true,
