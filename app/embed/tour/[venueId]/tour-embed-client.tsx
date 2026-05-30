@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Tour, Venue, ChatbotCustomisation } from '@/lib/types';
+import { Tour, Venue, ChatbotCustomisation, TourMenuSettings, TourMenuBlock } from '@/lib/types';
 import { TourChatWidget } from '@/components/app/tours/tour-chat-widget';
 import { MatterportSDKWrapper } from '@/components/matterport/matterport-sdk-wrapper';
 import { TourMenuOverlay } from '@/components/embed/tour-menu-overlay';
@@ -12,6 +12,8 @@ interface TourEmbedClientProps {
   tour: Tour;
   venue: Venue;
   customisation: ChatbotCustomisation | null;
+  menu?: { settings: TourMenuSettings | null; blocks: TourMenuBlock[] } | null;
+  chatbotConfig?: { chatbot_name: string; welcome_message: string; is_active: boolean } | null;
   options: {
     showTitle: boolean;
     showChat: boolean;
@@ -21,7 +23,7 @@ interface TourEmbedClientProps {
   embedToken?: string | null;
 }
 
-export function TourEmbedClient({ tour, venue, customisation, options, embedToken }: TourEmbedClientProps) {
+export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfig, options, embedToken }: TourEmbedClientProps) {
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [mpSdk, setMpSdk] = useState<any>(null);
   const [currentPosition, setCurrentPosition] = useState<any>(null);
@@ -318,6 +320,7 @@ export function TourEmbedClient({ tour, venue, customisation, options, embedToke
             }}
             scopeTourId={locationScopeTourId}
             customisation={customisation}
+            initialConfig={chatbotConfig ?? undefined}
             isFullscreen={false}
             isExpanded={isChatExpanded}
             onToggle={setIsChatExpanded}
@@ -330,6 +333,7 @@ export function TourEmbedClient({ tour, venue, customisation, options, embedToke
         <TourMenuOverlay 
           key={locationScopeTourId}
           tourId={locationScopeTourId} 
+          initialMenuData={menu ?? undefined}
           isTourReady={tourLoaded}
           onOpenChat={() => setIsChatExpanded(true)}
           isChatAvailable={options.showChat}

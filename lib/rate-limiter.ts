@@ -98,11 +98,21 @@ export class RateLimiter {
 
     await this.logRequest(venueId, chatbotType, ipAddress, now);
 
-    const currentMinuteCount = await this.getRequestCount(venueId, chatbotType, ipAddress, minuteStart, now);
-    const currentHourCount = await this.getRequestCount(venueId, chatbotType, ipAddress, hourStart, now);
-    const currentDayCount = await this.getRequestCount(venueId, chatbotType, ipAddress, dayStart, now);
-    const currentWeekCount = await this.getRequestCount(venueId, chatbotType, ipAddress, weekStart, now);
-    const currentMonthCount = await this.getRequestCount(venueId, chatbotType, ipAddress, monthStart, now);
+    // 🚀 SPEED: the five window counts are all subsets of the widest (month) window, so fetch
+    // the month's rows once and bucket them in memory instead of issuing five sequential
+    // queries. Results are identical, just one DB round trip instead of five.
+    const counts = await this.getWindowedRequestCounts(venueId, chatbotType, ipAddress, now, {
+      minuteStart,
+      hourStart,
+      dayStart,
+      weekStart,
+      monthStart,
+    });
+    const currentMinuteCount = counts.minute;
+    const currentHourCount = counts.hour;
+    const currentDayCount = counts.day;
+    const currentWeekCount = counts.week;
+    const currentMonthCount = counts.month;
 
     console.log(`📊 Current minute count: ${currentMinuteCount}/${config.requestsPerMinute}`);
     console.log(`📊 Current hour count: ${currentHourCount}/${config.requestsPerHour}`);
@@ -207,32 +217,46 @@ export class RateLimiter {
     }
   }
 
-  // Get request count for a specific time window
-  private async getRequestCount(
-    venueId: string, 
-    chatbotType: 'tour', 
-    ipAddress: string, 
-    windowStart: Date,
-    windowEnd: Date
-  ): Promise<number> {
+  // Get all window counts in a single query. The month window is the widest, so its rows are a
+  // superset of every shorter window; we fetch them once and sum per window in memory.
+  private async getWindowedRequestCounts(
+    venueId: string,
+    chatbotType: 'tour',
+    ipAddress: string,
+    now: Date,
+    windows: { minuteStart: Date; hourStart: Date; dayStart: Date; weekStart: Date; monthStart: Date }
+  ): Promise<{ minute: number; hour: number; day: number; week: number; month: number }> {
     const { data, error } = await supabase
       .from('rate_limit_logs')
-      .select('requests_count')
+      .select('requests_count, window_start')
       .eq('venue_id', venueId)
       .eq('chatbot_type', chatbotType)
       .eq('ip_address', ipAddress)
-      .gte('window_start', windowStart.toISOString())
-      .lt('window_start', windowEnd.toISOString());
+      .gte('window_start', windows.monthStart.toISOString())
+      .lt('window_start', now.toISOString());
 
     if (error) {
       console.error('❌ Error querying rate limit logs:', error);
-      return 0;
+      return { minute: 0, hour: 0, day: 0, week: 0, month: 0 };
     }
 
-    const total = data?.reduce((sum, log) => sum + log.requests_count, 0) || 0;
-    console.log(`📊 Request count for ${ipAddress} in window ${windowStart.toISOString()} to ${windowEnd.toISOString()}: ${total}`);
-    
-    return total;
+    const rows = data || [];
+    const sumSince = (start: Date): number => {
+      const startMs = start.getTime();
+      return rows.reduce(
+        (total: number, log: any) =>
+          new Date(log.window_start).getTime() >= startMs ? total + log.requests_count : total,
+        0
+      );
+    };
+
+    return {
+      minute: sumSince(windows.minuteStart),
+      hour: sumSince(windows.hourStart),
+      day: sumSince(windows.dayStart),
+      week: sumSince(windows.weekStart),
+      month: sumSince(windows.monthStart),
+    };
   }
 }
 

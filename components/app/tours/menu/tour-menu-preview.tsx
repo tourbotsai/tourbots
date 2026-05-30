@@ -369,7 +369,7 @@ export function TourMenuPreview({ settings, blocks, mode = 'desktop', isPreviewM
   // Wrap with mobile frame if needed
   if (mode === 'mobile') {
     return (
-      <div className="flex items-center justify-center rounded-lg bg-gray-100 p-4 sm:p-6">
+      <div className="flex items-center justify-center rounded-lg bg-gray-100 p-4 sm:p-6 dark:bg-neutral-900">
         <div className="relative w-full max-w-[375px] aspect-[375/667]">
           {/* Mobile device frame */}
           <div className="absolute inset-0 bg-black rounded-[3rem] p-3 shadow-2xl">

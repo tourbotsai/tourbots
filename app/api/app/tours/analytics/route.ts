@@ -67,7 +67,15 @@ export async function GET(request: NextRequest) {
 
     const withScope = (query: any) => query.eq('venue_id', scopedVenueId).eq('tour_id', tourId);
 
-    const [tourViewsResult, uniqueDomainRows, sampleDataResult, tourChatMessagesResult, conversationIdsResult] =
+    const [
+      tourViewsResult,
+      uniqueDomainRows,
+      sampleDataResult,
+      tourChatMessagesResult,
+      conversationIdsResult,
+      tourMovesCountResult,
+      tourMovesRowsResult,
+    ] =
       await Promise.all([
         withScope(
           supabase
@@ -101,6 +109,18 @@ export async function GET(request: NextRequest) {
             .select('conversation_id')
             .eq('chatbot_type', 'tour')
         ),
+        withScope(
+          supabase
+            .from('embed_tour_moves')
+            .select('*', { count: 'exact', head: true })
+        ),
+        withScope(
+          supabase
+            .from('embed_tour_moves')
+            .select('created_at')
+            .order('created_at', { ascending: false })
+            .limit(1000)
+        ),
       ]);
 
     const domainRows = (uniqueDomainRows.data || []) as Array<{ domain: string | null }>;
@@ -113,8 +133,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: sampleDataResult.data || [],
+      moves: tourMovesRowsResult.data || [],
       summary: {
         tourViews: tourViewsResult.count || 0,
+        tourMoves: tourMovesCountResult.count || 0,
         totalConversations: uniqueConversations,
         tourChatMessages: tourChatMessagesResult.count || 0,
         uniqueDomains,

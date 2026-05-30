@@ -64,12 +64,12 @@ export function QuickStats({ className }: QuickStatsProps) {
           <Card key={i}>
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-medium">
-                <div className="h-3 bg-gray-200 rounded animate-pulse w-16"></div>
+                <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-16"></div>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="h-6 bg-gray-200 rounded animate-pulse w-12 mb-1"></div>
-              <div className="h-2 bg-gray-200 rounded animate-pulse w-20"></div>
+              <div className="h-6 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-12 mb-1"></div>
+              <div className="h-2 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-20"></div>
             </CardContent>
           </Card>
         ))}
@@ -101,7 +101,7 @@ export function QuickStats({ className }: QuickStatsProps) {
           <Card key={i}>
             <CardContent className="flex items-center justify-center py-6">
               <div className="text-center text-muted-foreground">
-                <div className="h-4 w-4 bg-gray-200 rounded mx-auto mb-1"></div>
+                <div className="h-4 w-4 bg-gray-200 dark:bg-neutral-800 rounded mx-auto mb-1"></div>
                 <p className="text-xs">No data</p>
               </div>
             </CardContent>

@@ -235,28 +235,28 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-600">Conversations</p>
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Conversations</p>
                 <Users className="h-4 w-4 text-slate-400" />
               </div>
               <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{conversationGroups.length.toLocaleString()}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-600">Visitor messages</p>
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Visitor messages</p>
                 <MessageCircle className="h-4 w-4 text-slate-400" />
               </div>
               <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{visitorMessages.toLocaleString()}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-600">Avg response</p>
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Avg response</p>
                 <Clock className="h-4 w-4 text-slate-400" />
               </div>
               <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{avgResponseTime}ms</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-600">Active domains</p>
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Active domains</p>
                 <Globe className="h-4 w-4 text-slate-400" />
               </div>
               <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{activeDomains}</p>
@@ -272,8 +272,8 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Messages per day</h3>
-                <p className="text-xs text-slate-500">Daily chatbot message activity over the last 7 days.</p>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Messages per day</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Daily chatbot message activity over the last 7 days.</p>
               </div>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
@@ -297,8 +297,8 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
 
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Device types</h3>
-                <p className="text-xs text-slate-500">Conversation distribution by device type.</p>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Device types</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Conversation distribution by device type.</p>
               </div>
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
@@ -308,7 +308,17 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percentage }) => `${name} (${percentage}%)`}
+                      label={({ cx, cy, midAngle, outerRadius, name, percentage }: any) => {
+                        const RADIAN = Math.PI / 180;
+                        const radius = outerRadius + 18;
+                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                        return (
+                          <text x={x} y={y} fill={isDarkMode ? "#E2E8F0" : "#0F172A"} textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={12}>
+                            {`${name} (${percentage}%)`}
+                          </text>
+                        );
+                      }}
                       outerRadius={80}
                       dataKey="value"
                     >

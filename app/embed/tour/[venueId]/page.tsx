@@ -17,6 +17,82 @@ function createPublicEmbedToken(venueId: string, embedId: string): string | null
   return `${payloadBase64}.${signature}`;
 }
 
+// Tour menu (settings + blocks) for instant first-paint of the overlay. Fetched server-side
+// so the embed no longer needs a client round trip after hydration.
+async function getMenuData(tourId: string) {
+  // Single round trip: settings with their blocks embedded via the menu_id foreign key.
+  const { data } = await supabase
+    .from('tour_menu_settings')
+    .select('*, tour_menu_blocks(*)')
+    .eq('tour_id', tourId)
+    .eq('enabled', true)
+    .maybeSingle();
+
+  if (!data) {
+    return { settings: null, blocks: [] };
+  }
+
+  const { tour_menu_blocks, ...settings } = data as any;
+  const blocks = (tour_menu_blocks || []).sort(
+    (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)
+  );
+
+  return { settings, blocks };
+}
+
+// Minimal chatbot config (name / welcome / active) so the widget can render immediately
+// without its own client config fetch. Returns null if no config exists for this tour, in
+// which case the widget falls back to its existing client fetch behaviour.
+async function getChatbotConfigData(venueId: string, locationTourId: string, venueName?: string) {
+  const { data: rows } = await supabase
+    .from('chatbot_configs')
+    .select('chatbot_name, welcome_message, is_active')
+    .eq('venue_id', venueId)
+    .eq('chatbot_type', 'tour')
+    .eq('tour_id', locationTourId)
+    .limit(1);
+
+  const config = rows && rows.length > 0 ? rows[0] : null;
+  // Only take the SSR fast path for active chatbots. If there is no config or it is inactive,
+  // return null so the widget keeps its existing client-fetch fallback behaviour unchanged.
+  if (!config || !config.is_active) {
+    return null;
+  }
+
+  const welcomeMessage =
+    config.welcome_message ||
+    `Hello! I'm ${config.chatbot_name}, your virtual tour guide${venueName ? ` for ${venueName}` : ''}. I'm here to help you explore and understand our facilities during your virtual tour. What would you like to know about our venue?`;
+
+  return {
+    chatbot_name: config.chatbot_name,
+    welcome_message: welcomeMessage,
+    is_active: true,
+  };
+}
+
+// Once the tour row is known, everything else (customisation, menu, chatbot config) depends
+// only on the location-scope tour id, so they run in a single parallel batch.
+async function buildTourResult(venueId: string, tour: any) {
+  const locationTourId = tour.parent_tour_id || tour.id;
+  const venue = tour.venues;
+
+  const [customisation, menu, chatbotConfig] = await Promise.all([
+    supabase
+      .from('chatbot_customisations')
+      .select('*')
+      .eq('venue_id', venueId)
+      .eq('tour_id', locationTourId)
+      .eq('chatbot_type', 'tour')
+      .eq('is_active', true)
+      .maybeSingle()
+      .then((res) => res.data || null),
+    getMenuData(locationTourId),
+    getChatbotConfigData(venueId, locationTourId, venue?.name),
+  ]);
+
+  return { tour, venue, customisation, menu, chatbotConfig };
+}
+
 async function getTourData(venueId: string, modelId?: string, requestedTourId?: string) {
   if (requestedTourId) {
     const { data: requestedTour, error: requestedTourError } = await supabase
@@ -37,21 +113,7 @@ async function getTourData(venueId: string, modelId?: string, requestedTourId?: 
       .maybeSingle();
 
     if (!requestedTourError && requestedTour) {
-      const locationTourId = requestedTour.parent_tour_id || requestedTour.id;
-      const { data: customisationResult } = await supabase
-        .from('chatbot_customisations')
-        .select('*')
-        .eq('venue_id', venueId)
-        .eq('tour_id', locationTourId)
-        .eq('chatbot_type', 'tour')
-        .eq('is_active', true)
-        .maybeSingle();
-
-      return {
-        tour: requestedTour,
-        venue: requestedTour.venues,
-        customisation: customisationResult || null
-      };
+      return buildTourResult(venueId, requestedTour);
     }
   }
 
@@ -74,21 +136,7 @@ async function getTourData(venueId: string, modelId?: string, requestedTourId?: 
       .single();
 
     if (!tourError && tourResult) {
-      const locationTourId = tourResult.parent_tour_id || tourResult.id;
-      const { data: customisationResult } = await supabase
-        .from('chatbot_customisations')
-        .select('*')
-        .eq('venue_id', venueId)
-        .eq('tour_id', locationTourId)
-        .eq('chatbot_type', 'tour')
-        .eq('is_active', true)
-        .maybeSingle();
-
-      return { 
-        tour: tourResult, 
-        venue: tourResult.venues,
-        customisation: customisationResult || null
-      };
+      return buildTourResult(venueId, tourResult);
     }
   }
 
@@ -114,21 +162,7 @@ async function getTourData(venueId: string, modelId?: string, requestedTourId?: 
     return null;
   }
 
-  const locationTourId = tourResult.data.parent_tour_id || tourResult.data.id;
-  const { data: customisationResult } = await supabase
-    .from('chatbot_customisations')
-    .select('*')
-    .eq('venue_id', venueId)
-    .eq('tour_id', locationTourId)
-    .eq('chatbot_type', 'tour')
-    .eq('is_active', true)
-    .maybeSingle();
-
-  return { 
-    tour: tourResult.data, 
-    venue: tourResult.data.venues,
-    customisation: customisationResult || null
-  };
+  return buildTourResult(venueId, tourResult.data);
 }
 
 export default async function TourEmbedPage({ 
@@ -164,6 +198,8 @@ export default async function TourEmbedPage({
       tour={data.tour} 
       venue={data.venue} 
       customisation={data.customisation}
+      menu={data.menu}
+      chatbotConfig={data.chatbotConfig}
       options={options}
       embedToken={embedToken}
     />

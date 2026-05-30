@@ -65,14 +65,14 @@ export function RevenueChart({ className }: RevenueChartProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="text-center p-4 border rounded-lg">
-                  <div className="h-4 bg-gray-200 rounded animate-pulse w-20 mx-auto mb-2"></div>
-                  <div className="h-6 bg-gray-200 rounded animate-pulse w-16 mx-auto mb-1"></div>
-                  <div className="h-3 bg-gray-200 rounded animate-pulse w-24 mx-auto"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-20 mx-auto mb-2"></div>
+                  <div className="h-6 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-16 mx-auto mb-1"></div>
+                  <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-24 mx-auto"></div>
                 </div>
               ))}
             </div>
             {/* Chart skeleton */}
-            <div className="h-64 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-64 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
           </div>
         </CardContent>
       </Card>

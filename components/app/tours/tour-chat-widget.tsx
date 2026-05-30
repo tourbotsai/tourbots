@@ -76,6 +76,9 @@ interface TourChatWidgetProps {
   onExternalPromptConsumed?: () => void;
   embedId?: string;
   embedToken?: string;
+  // SSR-provided config (name / welcome / active) so the widget can render immediately
+  // without waiting on its own client config fetch.
+  initialConfig?: { chatbot_name?: string; welcome_message?: string; is_active?: boolean } | null;
 }
 
 export function TourChatWidget({ 
@@ -92,11 +95,13 @@ export function TourChatWidget({
   externalPrompt = null,
   onExternalPromptConsumed,
   embedId,
-  embedToken
+  embedToken,
+  initialConfig
 }: TourChatWidgetProps) {
   const { user } = useUser();
   const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(scopeTourId || tour?.id);
-  const [publicConfig, setPublicConfig] = useState<any>(null);
+  // Seed from SSR config when provided so the button renders fully on first paint.
+  const [publicConfig, setPublicConfig] = useState<any>(initialConfig ?? null);
   const [isPublicConfigLoading, setIsPublicConfigLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   
@@ -117,9 +122,10 @@ export function TourChatWidget({
   // Determine if this is a public/demo usage (no logged-in user)
   const isPublicDemo = !user;
 
-  // Load config for public demos WITHOUT storing messages
+  // Load config for public demos WITHOUT storing messages.
+  // Skipped entirely when SSR already provided the config (embed fast path).
   useEffect(() => {
-    if (isPublicDemo) {
+    if (isPublicDemo && !initialConfig) {
       const fetchPublicConfig = async () => {
         try {
           setIsPublicConfigLoading(true);
@@ -159,7 +165,7 @@ export function TourChatWidget({
     if (!conversationId) {
       setConversationId(createConversationId());
     }
-  }, [isPublicDemo, venueId, venueName, sessionId, conversationId]);
+  }, [isPublicDemo, venueId, venueName, sessionId, conversationId, initialConfig]);
 
   // Detect client-only viewport/device state
   useEffect(() => {
@@ -1239,10 +1245,13 @@ export function TourChatWidget({
         /* Expanded Chat Window */
         <div 
           className={cn(
-            "backdrop-blur-xl bg-white/95 dark:bg-gray-900/95 border border-white/20 dark:border-gray-700/50 flex flex-col overflow-hidden pointer-events-auto absolute z-50",
+            "backdrop-blur-xl border border-white/20 dark:border-gray-700/50 flex flex-col overflow-hidden pointer-events-auto absolute z-50",
             getChatEntranceAnimationClass()
           )}
           style={{
+            // Match the window background so any area revealed on over-scroll (rubber-band)
+            // is seamless with the messages area instead of showing a white base behind it.
+            backgroundColor: getCustomisationValue('window_background_color', 'mobile_window_background_color') as string,
             borderRadius: `${getCustomisationValue('chat_window_border_radius', 'mobile_chat_window_border_radius')}px`,
             boxShadow: getChatWindowShadowStyle(),
             fontFamily: getCustomisationValue('font_family', 'mobile_font_family') as string,
@@ -1274,23 +1283,6 @@ export function TourChatWidget({
             )
           }}
         >
-          {/* Glass morphism background effects */}
-          <div 
-            className="absolute inset-0 opacity-50" 
-            style={{ 
-              background: `linear-gradient(135deg, ${getCustomisationValue('chat_button_color', 'mobile_chat_button_color')}05 0%, transparent 50%, ${getCustomisationValue('chat_button_color', 'mobile_chat_button_color')}05 100%)`,
-              borderRadius: `${getCustomisationValue('chat_window_border_radius', 'mobile_chat_window_border_radius')}px`
-            }}
-          ></div>
-          
-          {/* Subtle pattern overlay */}
-          <div 
-            className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,255,255,0.1),transparent)]"
-            style={{
-              borderRadius: `${getCustomisationValue('chat_window_border_radius', 'mobile_chat_window_border_radius')}px`
-            }}
-          ></div>
-
           {/* Header */}
           <div 
             className="relative z-10 flex items-center justify-between px-4 border-b border-gray-200/50 dark:border-gray-700/50"
@@ -1373,7 +1365,7 @@ export function TourChatWidget({
               {/* Messages */}
               <div 
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4"
+                className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-4"
                 style={{
                   backgroundColor: getCustomisationValue('window_background_color', 'mobile_window_background_color') as string,
                 }}

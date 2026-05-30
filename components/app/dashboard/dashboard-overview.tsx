@@ -39,13 +39,13 @@ export function DashboardOverview({ className }: DashboardOverviewProps) {
           <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
+                <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-24"></div>
               </CardTitle>
-              <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-4 w-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
             </CardHeader>
             <CardContent>
-              <div className="h-8 bg-gray-200 rounded animate-pulse w-20 mb-2"></div>
-              <div className="h-3 bg-gray-200 rounded animate-pulse w-32"></div>
+              <div className="h-8 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-20 mb-2"></div>
+              <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-32"></div>
             </CardContent>
           </Card>
         ))}
@@ -78,7 +78,7 @@ export function DashboardOverview({ className }: DashboardOverviewProps) {
           <Card key={i}>
             <CardContent className="flex items-center justify-center py-8">
               <div className="text-center text-muted-foreground">
-                <div className="h-8 w-8 bg-gray-200 rounded-full mx-auto mb-2"></div>
+                <div className="h-8 w-8 bg-gray-200 dark:bg-neutral-800 rounded-full mx-auto mb-2"></div>
                 <p className="text-sm">No data available</p>
               </div>
             </CardContent>

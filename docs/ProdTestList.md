@@ -84,18 +84,60 @@ Test account password: `Test1234*`
 - [ ] Confirm login works inside embed.
 - [ ] Confirm allowed actions work from embed context.
 
-## J) Bugs and UX Sweep (Do Throughout)
+## J) Platform Admin Flow
+
+- [ ] Log in with a platform admin account (email matches `PLATFORM_ADMIN_EMAIL`).
+- [ ] Confirm `Platform Admin` link appears in the app sidebar and opens `/admin/dashboard`.
+- [ ] Confirm a normal (non-admin) user is redirected away from `/admin/*` and admin APIs return 401/403.
+
+- Dashboard:
+  - [ ] Confirm KPIs load (total accounts, total messages, total conversations, monthly revenue).
+  - [ ] Click `Refresh`; confirm "Last updated" timestamp changes.
+
+- Accounts:
+  - [ ] Open `Accounts`; confirm list loads (company, contact, email, phone, tours count, created).
+  - [ ] Open an account; edit and `Save` company details (name, email, phone, address).
+  - [ ] Toggle setup mode; refresh and confirm it persists.
+  - [ ] Confirm billing summary displays (revenue, message usage, active spaces, plan, add-ons).
+  - [ ] Select a tour; confirm `Tour Setup`, `Tour Menu`, `Share & Embed`, `Analytics` tabs load.
+  - [ ] In `Share & Embed`, copy preview URL / embed code and open preview.
+  - [ ] Edit + `Save` chatbot config (name, welcome, prompts, guardrails, active toggle, rate/hard limits).
+  - [ ] Add/edit a chatbot info section, upload a training document, add a trigger, apply customisation.
+
+- Payments:
+  - [ ] Open `Payments -> Subscriptions & Add-ons`; search a venue.
+  - [ ] Change plan / billing status / extra spaces / message blocks / limit overrides / white-label; `Save`.
+  - [ ] Confirm the change reflects on that account's billing panel.
+  - [ ] `Payment Links`: create a payment link (venue, email, plan, cycle); confirm it appears in the table; copy link.
+
+- Outbound:
+  - [ ] `Leads Database`: search a lead; open detail modal; add a note and `Save`.
+  - [ ] `Automated Sequences`: create a sequence with multiple email steps.
+  - [ ] Open sequence detail; `Add leads` (enrol a lead); confirm scheduled email actions appear.
+  - [ ] `Pause` then `Activate` the sequence.
+
+- Help Centre:
+  - [ ] `Help Articles`: create a draft article; publish it; view the public article.
+  - [ ] Edit then delete a test article.
+  - [ ] `Contact Form`: open a conversation; send a reply.
+
+- Resources:
+  - [ ] `Blogs`: create + publish (or schedule) a blog; view public page; delete the test blog.
+  - [ ] `Guides`: create + publish a guide (set difficulty); view public page; delete the test guide.
+
+## K) Bugs and UX Sweep (Do Throughout)
 
 - [ ] Log every bug immediately (what happened, expected, screenshot).
 - [ ] Mark severity: `P0`, `P1`, `P2`, `P3`.
 - [ ] Fix critical issues found during run.
 - [ ] Re-test each fixed issue.
 
-## K) Final Sign-off
+## L) Final Sign-off
 
 - [ ] Customer flow passes end-to-end.
 - [ ] Tour embed passes on external site.
 - [ ] Tracking/analytics pass.
 - [ ] Agency portal flow passes.
 - [ ] Agency embed flow passes.
+- [ ] Platform admin flow passes.
 - [ ] No open `P0` or `P1` issues.
