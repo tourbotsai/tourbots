@@ -137,8 +137,8 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
   if (configLoading || customisationLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-700" />
-        <span className="ml-2 text-slate-700">Loading playground...</span>
+        <Loader2 className="h-8 w-8 animate-spin text-slate-700 dark:text-slate-300" />
+        <span className="ml-2 text-slate-700 dark:text-slate-300">Loading playground...</span>
       </div>
     );
   }
@@ -206,7 +206,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Clear Chat
             </Button>
-            <div className="h-4 w-px bg-slate-200" />
+            <div className="h-4 w-px bg-slate-200 dark:bg-input" />
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -249,20 +249,20 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
           </CardHeader>
           <CardContent className="px-0 pb-0 pt-2 md:px-6 md:pb-5">
             {mode === 'desktop' ? (
-              <div className="overflow-hidden rounded-xl border-0 bg-slate-100/70 md:border md:border-slate-200">
-                <div className="hidden h-10 items-center gap-2 border-b border-slate-200 bg-white px-4 md:flex">
+              <div className="overflow-hidden rounded-xl border-0 bg-slate-100/70 md:border md:border-slate-200 dark:bg-neutral-900 md:dark:border-input">
+                <div className="hidden h-10 items-center gap-2 border-b border-slate-200 bg-white px-4 md:flex dark:border-input dark:bg-neutral-950">
                   <div className="h-2.5 w-2.5 rounded-full bg-red-300" />
                   <div className="h-2.5 w-2.5 rounded-full bg-amber-300" />
                   <div className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                  <div className="ml-2 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] text-slate-500">
+                  <div className="ml-2 flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] text-slate-500 dark:border-input dark:bg-neutral-900 dark:text-slate-400">
                     preview.tourbots.ai/venue
                   </div>
                 </div>
-                <div className="h-[740px] overflow-hidden bg-slate-100 p-0 md:p-5">
-                  <div className="flex h-full min-h-0 flex-col rounded-none border-0 bg-white p-3 shadow-none md:rounded-xl md:border md:border-slate-200 md:p-5 md:shadow-sm">
+                <div className="h-[740px] overflow-hidden bg-slate-100 p-0 md:p-5 dark:bg-neutral-900">
+                  <div className="flex h-full min-h-0 flex-col rounded-none border-0 bg-white p-3 shadow-none md:rounded-xl md:border md:border-slate-200 md:p-5 md:shadow-sm dark:bg-background md:dark:border-input">
                     <div className="mb-4">
-                      <div className="h-5 w-64 rounded-md bg-slate-200" />
-                      <div className="mt-2 h-3 w-[420px] max-w-full rounded-md bg-slate-100" />
+                      <div className="h-5 w-64 rounded-md bg-slate-200 dark:bg-neutral-700" />
+                      <div className="mt-2 h-3 w-[420px] max-w-full rounded-md bg-slate-100 dark:bg-neutral-800" />
                     </div>
                     <div className="relative min-h-0 flex-1 overflow-hidden rounded-none border-0 bg-white md:rounded-xl md:border md:border-slate-200 dark:bg-background dark:md:border-input">
                       {/* Faint mock website content so the widget has realistic context */}
@@ -299,13 +299,13 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                 </div>
               </div>
             ) : (
-              <div className="flex justify-center rounded-xl border-0 bg-slate-100/70 p-0 md:border md:border-slate-200 md:p-4">
+              <div className="flex justify-center rounded-xl border-0 bg-slate-100/70 p-0 md:border md:border-slate-200 md:p-4 dark:bg-neutral-900 md:dark:border-input">
                 <MobilePreviewFrame className="scale-[1.03] origin-center">
-                  <div className="h-full w-full overflow-hidden bg-white">
-                    <div className="flex h-full min-h-0 flex-col bg-white p-3">
+                  <div className="h-full w-full overflow-hidden bg-white dark:bg-background">
+                    <div className="flex h-full min-h-0 flex-col bg-white p-3 dark:bg-background">
                       <div className="mb-3">
-                        <div className="h-3.5 w-32 rounded bg-slate-200" />
-                        <div className="mt-1.5 h-2.5 w-44 rounded bg-slate-100" />
+                        <div className="h-3.5 w-32 rounded bg-slate-200 dark:bg-neutral-700" />
+                        <div className="mt-1.5 h-2.5 w-44 rounded bg-slate-100 dark:bg-neutral-800" />
                       </div>
 
                       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-input dark:bg-background">
@@ -378,7 +378,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                   onClick={() => handlePromptClick(prompt.text)}
                 >
                   <div className="flex w-full items-start gap-2.5">
-                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-white text-sm shadow-sm">
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-white text-sm shadow-sm dark:bg-neutral-800">
                       {prompt.emoji}
                     </div>
                     <div className="min-w-0 flex-1">

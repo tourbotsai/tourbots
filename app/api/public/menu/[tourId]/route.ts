@@ -9,38 +9,35 @@ export async function GET(
   try {
     const { tourId } = await params;
 
-    // Fetch menu settings - only if enabled
-    const { data: settings, error: settingsError } = await supabase
+    // Single round trip: enabled menu settings with their blocks embedded via the
+    // menu_id foreign key. maybeSingle() returns null (no error) when there are no rows.
+    const { data, error } = await supabase
       .from('tour_menu_settings')
-      .select('*')
+      .select('*, tour_menu_blocks(*)')
       .eq('tour_id', tourId)
       .eq('enabled', true) // Only return enabled menus
-      .single();
+      .maybeSingle();
 
-    if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 = no rows
-      throw settingsError;
+    if (error) {
+      throw error;
     }
 
     // If menu not found or disabled, return null
-    if (!settings) {
+    if (!data) {
       return NextResponse.json({
         settings: null,
         blocks: []
       });
     }
 
-    // Fetch blocks
-    const { data: blocks, error: blocksError } = await supabase
-      .from('tour_menu_blocks')
-      .select('*')
-      .eq('menu_id', settings.id)
-      .order('display_order', { ascending: true });
-
-    if (blocksError) throw blocksError;
+    const { tour_menu_blocks, ...settings } = data as any;
+    const blocks = (tour_menu_blocks || []).sort(
+      (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)
+    );
 
     return NextResponse.json({
       settings,
-      blocks: blocks || []
+      blocks
     });
 
   } catch (error: any) {

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TourMenuSettings, TourMenuBlock } from "@/lib/types";
 import { TourMenuWidget } from "./tour-menu-widget";
+
+type TourMenuData = { settings: TourMenuSettings | null; blocks: TourMenuBlock[] };
 
 interface TourMenuOverlayProps {
   tourId: string;
@@ -14,16 +16,48 @@ interface TourMenuOverlayProps {
   onOpenChat?: () => void; // Callback to open chat widget
   isChatAvailable?: boolean; // Whether chat widget is enabled
   currentModelId?: string; // Current active model ID - prevents redundant switches
+  initialMenuData?: TourMenuData | null; // SSR-provided menu data for instant first paint
 }
 
-export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTourReady = true, onOpenChat, isChatAvailable = false, currentModelId }: TourMenuOverlayProps) {
-  const [menuData, setMenuData] = useState<{ settings: TourMenuSettings | null; blocks: TourMenuBlock[] } | null>(null);
+export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTourReady = true, onOpenChat, isChatAvailable = false, currentModelId, initialMenuData }: TourMenuOverlayProps) {
+  const [menuData, setMenuData] = useState<TourMenuData | null>(initialMenuData ?? null);
   const [isVisible, setIsVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // When SSR data is present we are not loading on first paint.
+  const [isLoading, setIsLoading] = useState(!initialMenuData);
   const [showWidget, setShowWidget] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  // Tracks whether the SSR-provided data has already been applied, so we only use it on the
+  // very first mount and fall back to fetching when the scope tour changes afterwards.
+  const initialDataConsumedRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Apply a resolved menu payload to visibility state (shared by SSR + fetch paths).
+    function applyMenuData(data: TourMenuData | null) {
+      if (data?.settings?.enabled) {
+        setMenuData(data);
+
+        // Check if menu was already dismissed this session (skip in preview mode)
+        const dismissed = !isPreviewMode && sessionStorage.getItem(`tour-menu-dismissed-${tourId}`);
+
+        if (dismissed) {
+          // Menu was dismissed - show widget instead
+          setIsVisible(false);
+          setShowWidget(true);
+        } else {
+          // Show menu on first load
+          setIsVisible(true);
+          setShowWidget(false);
+        }
+      } else {
+        // Explicitly keep hidden if this tour has no enabled menu.
+        setMenuData(null);
+        setIsVisible(false);
+        setShowWidget(false);
+      }
+    }
+
     async function fetchMenu() {
       // Hard reset overlay state whenever scope tour changes.
       setIsLoading(true);
@@ -34,48 +68,48 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
       try {
         // Fetch menu data regardless of dismissed state (we need it for the widget)
         const response = await fetch(`/api/public/menu/${tourId}`);
-        
+
         if (!response.ok) {
           // Silently fail if API returns error - don't break the embed
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
           return;
         }
-        
-        const data = await response.json();
 
-        if (data.settings?.enabled) {
-          setMenuData(data);
-          
-          // Check if menu was already dismissed this session (skip in preview mode)
-          const dismissed = !isPreviewMode && sessionStorage.getItem(`tour-menu-dismissed-${tourId}`);
-          
-          if (dismissed) {
-            // Menu was dismissed - show widget instead
-            setIsVisible(false);
-            setShowWidget(true);
-          } else {
-            // Show menu on first load
-            setIsVisible(true);
-            setShowWidget(false);
-          }
-        } else {
-          // Explicitly keep hidden if this tour has no enabled menu.
-          setMenuData(null);
-          setIsVisible(false);
-          setShowWidget(false);
-        }
+        const data = await response.json();
+        if (cancelled) return;
+
+        applyMenuData(data);
       } catch (error) {
         // Silently fail - tour should still work even if menu fails to load
         console.error('Error fetching tour menu:', error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
 
-    if (tourId) {
-      fetchMenu();
+    if (!tourId) {
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [tourId, isPreviewMode]);
+
+    // 🚀 SPEED: on first mount use SSR-provided menu data so the overlay paints instantly,
+    // with no client round trip after hydration. Subsequent scope changes still fetch.
+    if (initialMenuData && !initialDataConsumedRef.current) {
+      initialDataConsumedRef.current = true;
+      setIsLoading(false);
+      applyMenuData(initialMenuData);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    fetchMenu();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tourId, isPreviewMode, initialMenuData]);
 
   // Detect mobile viewport
   useEffect(() => {

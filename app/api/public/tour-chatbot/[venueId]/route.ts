@@ -446,17 +446,18 @@ export async function POST(
       conversationId = randomUUID();
     }
 
-    // Track embed view
-    if (resolvedEmbedId) {
-      try {
-        await trackEmbedView(resolvedEmbedId, venueId, 'tour', domain, pageUrl, 'tour');
-      } catch (error) {
-        console.error('Failed to track embed view:', error);
-      }
-    }
-
-    // If this is a welcome message request, just return the welcome message WITHOUT storing it
+    // If this is a welcome message request, just return the welcome message WITHOUT storing it.
+    // Welcome replies return plain JSON (no stream to keep the function alive for background
+    // work), so embed-view tracking is awaited synchronously on this path.
     if (isWelcomeMessage) {
+      if (resolvedEmbedId) {
+        try {
+          await trackEmbedView(resolvedEmbedId, venueId, 'tour', domain, pageUrl, 'tour');
+        } catch (error) {
+          console.error('Failed to track embed view:', error);
+        }
+      }
+
       const welcomeMessage = config.welcome_message || `Hello! I'm ${config.chatbot_name}, your virtual tour guide for ${venue.name}. I'm here to help you explore and understand our facilities during your virtual tour. What would you like to know about our venue?`;
       
       // Return welcome message WITHOUT storing to database
@@ -493,47 +494,69 @@ export async function POST(
 
     const combinedMessages = [...(conversationHistory || []), { role: 'user', content: sanitisedMessage }];
     const userMessageCount = combinedMessages.filter((msg: any) => msg.role === 'user').length;
-    const activeTriggers = await getActiveChatbotTriggers(config.id);
 
-    // Log visitor message to database
-    let visitorMessagePosition = 1;
-    try {
-      // Get current message count for this conversation to determine position
-      const { count: messageCount } = await supabase
+    // 🚀 SPEED: fetch everything needed to build the prompt in parallel instead of one
+    // query after another. These reads are independent of each other:
+    //  - active triggers + info sections depend only on config.id
+    //  - venue tours depend only on venueId
+    //  - the conversation message count is only used to number stored messages
+    const [activeTriggers, infoSections, allVenueTours, existingMessageCount] = await Promise.all([
+      getActiveChatbotTriggers(config.id),
+      getChatbotInfoSections(config.id),
+      getAllToursForVenue(venueId),
+      supabase
         .from('conversations')
         .select('*', { count: 'exact', head: true })
-        .eq('conversation_id', conversationId);
+        .eq('conversation_id', conversationId)
+        .then((res) => res.count || 0),
+    ]);
 
-      visitorMessagePosition = (messageCount || 0) + 1;
+    const formattedVenueInfo = formatChatbotInfoSectionsForPrompt(infoSections);
 
-      const { error: visitorInsertError } = await supabase
-        .from('conversations')
-        .insert([{
-          venue_id: venueId,
-          tour_id: configResult?.selectedTourId || null,
-          session_id: finalSessionId,
-          conversation_id: conversationId,
-          message_position: visitorMessagePosition,
-          message_type: 'visitor',
-          message: sanitisedMessage,
-          chatbot_type: 'tour',
-          ip_address: ipAddress,
-          user_agent: userAgent,
-          page_url: pageUrl,
-          domain: domain,
-          embed_id: resolvedEmbedId
-        }]);
-      
-      if (visitorInsertError) {
-        console.error('Visitor message insert error:', visitorInsertError);
-      }
-    } catch (logError) {
-      console.error('Failed to log visitor message:', logError);
+    // Visitor message position derives from the existing message count.
+    const visitorMessagePosition = existingMessageCount + 1;
+
+    // 🚀 SPEED: writes the AI response does NOT depend on (analytics + visitor message log)
+    // are kicked off here and run concurrently with model generation rather than blocking
+    // the first token. They are awaited inside the stream (before it closes) so the
+    // serverless function stays alive long enough to guarantee they complete.
+    const backgroundWrites: Array<Promise<unknown>> = [];
+
+    if (resolvedEmbedId) {
+      backgroundWrites.push(
+        trackEmbedView(resolvedEmbedId, venueId, 'tour', domain, pageUrl, 'tour').catch((error) => {
+          console.error('Failed to track embed view:', error);
+        })
+      );
     }
 
-    // Get flexible chatbot information sections for the selected tour chatbot
-    const infoSections = await getChatbotInfoSections(config.id);
-    const formattedVenueInfo = formatChatbotInfoSectionsForPrompt(infoSections);
+    backgroundWrites.push(
+      (async () => {
+        try {
+          const { error } = await supabase
+            .from('conversations')
+            .insert([{
+              venue_id: venueId,
+              tour_id: configResult?.selectedTourId || null,
+              session_id: finalSessionId,
+              conversation_id: conversationId,
+              message_position: visitorMessagePosition,
+              message_type: 'visitor',
+              message: sanitisedMessage,
+              chatbot_type: 'tour',
+              ip_address: ipAddress,
+              user_agent: userAgent,
+              page_url: pageUrl,
+              domain: domain,
+              embed_id: resolvedEmbedId
+            }]);
+
+          if (error) console.error('Visitor message insert error:', error);
+        } catch (logError) {
+          console.error('Failed to log visitor message:', logError);
+        }
+      })()
+    );
 
     // Get tour information and navigation points
     let tours: any[] = [];
@@ -543,7 +566,7 @@ export async function POST(
 
     try {
       // Get tours for this location scope (primary location + linked models).
-      const allVenueTours = await getAllToursForVenue(venueId);
+      // allVenueTours was already fetched in the parallel batch above.
       const selectedLocationId = configResult?.selectedTourId || null;
       const shouldFallbackLegacySecondary =
         allVenueTours.filter(t => t.tour_type === 'primary' || !t.tour_type).length <= 1;
@@ -1195,6 +1218,9 @@ You also have a file search tool covering the venue's uploaded documents. If the
                 }
               })}\n\n`)
             );
+            // Ensure backgrounded analytics/visitor-log writes finish before the function
+            // tears down (the client already has its full response by this point).
+            await Promise.allSettled(backgroundWrites);
             controller.close();
           } catch (error) {
             console.error('Streaming error:', error);
@@ -1204,6 +1230,7 @@ You also have a file search tool covering the venue's uploaded documents. If the
                 error: error instanceof Error ? error.message : 'Unknown error'
               })}\n\n`)
             );
+            await Promise.allSettled(backgroundWrites);
             controller.close();
           }
         }
