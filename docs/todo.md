@@ -1,3 +1,6 @@
+why emebd protal no ful width, why height lmitmed 900px on emed code?
+
+
 - Run full end-to-end testing on the Body Active demo website: embed & agency portal
 
 - Agency to be able to allocate message credits to each client

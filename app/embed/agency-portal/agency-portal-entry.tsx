@@ -84,6 +84,47 @@ export function AgencyPortalEntry({
     };
   }, []);
 
+  // Auto-height: report the live content height to the embedding page so the
+  // host iframe can grow/shrink to fit (no inner scrollbar). The parent listens
+  // for `tourbots-portal-resize` messages (see the script embed snippet).
+  // ResizeObserver + requestAnimationFrame keeps this cheap: we only post when
+  // the height actually changes by more than a pixel.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.parent === window) return; // not embedded in an iframe
+
+    let lastHeight = 0;
+    let frame = 0;
+
+    const post = () => {
+      frame = 0;
+      const height = Math.ceil(document.documentElement.scrollHeight);
+      if (!height || Math.abs(height - lastHeight) < 2) return;
+      lastHeight = height;
+      window.parent.postMessage({ type: 'tourbots-portal-resize', height }, '*');
+    };
+
+    const schedule = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(post);
+    };
+
+    schedule();
+
+    const observer = new ResizeObserver(schedule);
+    observer.observe(document.documentElement);
+    if (document.body) observer.observe(document.body);
+    window.addEventListener('load', schedule);
+    window.addEventListener('resize', schedule);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('load', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
@@ -150,7 +191,7 @@ export function AgencyPortalEntry({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white px-4 py-8 sm:px-6 lg:px-8">
+    <main className="flex min-h-[440px] items-start justify-center bg-white px-4 pb-8 pt-16 sm:px-6 lg:px-8">
       <style jsx global>{`
         html, body, #__next {
           height: auto !important;
@@ -175,7 +216,6 @@ export function AgencyPortalEntry({
                   />
                 ) : null}
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-100/90">Agency client portal</p>
                   <h1 className="text-2xl font-semibold">{agencyName}</h1>
                 </div>
               </div>

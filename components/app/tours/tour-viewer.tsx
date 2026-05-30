@@ -154,6 +154,18 @@ export function TourViewer({
   }, []);
 
   const fetchTourCustomisation = useCallback(async (venueId: string, locationTourId: string) => {
+    // In the agency portal there is no app user; the customisation is fetched
+    // via the cookie-authenticated portal endpoint, which scopes to the
+    // signed-in client's venue + tour from the session.
+    if (isAgencyPortalPath()) {
+      const response = await fetch('/api/public/agency-portal/customisation', {
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      const data = await response.json().catch(() => null);
+      return (data?.customisation ?? null) as ChatbotCustomisation | null;
+    }
+
     if (!authUser) return null;
     const token = await authUser.getIdToken();
     const response = await fetch(
