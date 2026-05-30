@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useTheme } from "@/components/app/shared/theme-provider";
-import { Trash2, Navigation, AlertTriangle } from 'lucide-react';
+import { Trash2, Navigation, AlertTriangle, Pencil, Check, X } from 'lucide-react';
 
 interface TourPoint {
   id: string;
@@ -28,6 +29,7 @@ interface ManagePositionsModalProps {
   tourId: string;
   points: TourPoint[];
   onDelete: (pointId: string) => Promise<void>;
+  onRename?: (pointId: string, name: string) => Promise<void>;
   onTest: (point: TourPoint) => void;
   onRefresh: () => Promise<void>;
 }
@@ -38,6 +40,7 @@ export function ManagePositionsModal({
   tourId,
   points,
   onDelete,
+  onRename,
   onTest,
   onRefresh
 }: ManagePositionsModalProps) {
@@ -46,6 +49,35 @@ export function ManagePositionsModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteName, setConfirmDeleteName] = useState<string>('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [savingEditId, setSavingEditId] = useState<string | null>(null);
+
+  const startEditing = (point: TourPoint) => {
+    setEditingId(point.id);
+    setEditName(point.name);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditName('');
+  };
+
+  const handleSaveEdit = async (pointId: string) => {
+    if (!onRename) return;
+    const trimmed = editName.trim();
+    if (!trimmed) return;
+
+    setSavingEditId(pointId);
+    try {
+      await onRename(pointId, trimmed);
+      await onRefresh();
+      setEditingId(null);
+      setEditName('');
+    } finally {
+      setSavingEditId(null);
+    }
+  };
 
   const handleDelete = async () => {
     if (!confirmDeleteId) return;
@@ -83,34 +115,63 @@ export function ManagePositionsModal({
                 key={point.id}
                 className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-input dark:bg-background"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+                {editingId === point.id ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveEdit(point.id);
+                        } else if (e.key === 'Escape') {
+                          cancelEditing();
+                        }
+                      }}
+                      autoFocus
+                      placeholder="e.g., Main Hall, Reception"
+                      className="h-9 border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 dark:border-input dark:bg-background dark:text-slate-100"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleSaveEdit(point.id)}
+                      disabled={savingEditId === point.id || !editName.trim()}
+                      className="bg-slate-900 text-white hover:bg-slate-800 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    >
+                      {savingEditId === point.id ? (
+                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditing}
+                      disabled={savingEditId === point.id}
+                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold text-slate-900 dark:text-slate-100">
                       {point.name}
                     </h3>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                      Sweep ID: <span className="font-mono text-xs">{point.sweep_id}</span>
-                    </p>
+                    {onRename && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => startEditing(point)}
+                        className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                        aria-label={`Rename ${point.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded border border-slate-200 bg-slate-50/70 p-2 dark:border-input dark:bg-background">
-                    <span className="text-slate-600 dark:text-slate-400">Position:</span>
-                    <div className="mt-1 space-y-0.5 font-mono text-slate-700 dark:text-slate-300">
-                      <div>X: {point.position.x.toFixed(2)}</div>
-                      <div>Y: {point.position.y.toFixed(2)}</div>
-                      <div>Z: {point.position.z.toFixed(2)}</div>
-                    </div>
-                  </div>
-                  <div className="rounded border border-slate-200 bg-slate-50/70 p-2 dark:border-input dark:bg-background">
-                    <span className="text-slate-600 dark:text-slate-400">Rotation:</span>
-                    <div className="mt-1 space-y-0.5 font-mono text-slate-700 dark:text-slate-300">
-                      <div>X: {point.rotation.x.toFixed(2)}</div>
-                      <div>Y: {point.rotation.y.toFixed(2)}</div>
-                    </div>
-                  </div>
-                </div>
+                )}
 
                 <div className="flex gap-2">
                   <Button

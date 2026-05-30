@@ -10,6 +10,7 @@ import { useChatbotCustomisation } from "@/hooks/app/useChatbotCustomisation";
 import { Tour } from "@/lib/types";
 import { TourChatWidget } from "@/components/app/tours/tour-chat-widget";
 import MobilePreviewFrame from "@/components/app/chatbots/shared/preview/mobile-preview-frame";
+import { NoTourEmptyState } from "../no-tour-empty-state";
 
 interface TourChatbotPlaygroundProps {
   onSwitchToSettings?: () => void;
@@ -144,11 +145,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
   }
 
   if (!selectedTourId) {
-    return (
-      <div className="text-center p-8">
-        <p className="mb-4 text-slate-500">Select a tour location to test the chatbot playground</p>
-      </div>
-    );
+    return <NoTourEmptyState description="Upload your Matterport tour first, then return here to test your AI chatbot." />;
   }
 
   // Error state

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
+import { useEffect, useMemo } from "react";
 import { 
   Home, 
   Video, 
@@ -13,17 +14,20 @@ import {
   User,
   Shield,
   Bot,
+  Building2,
   HelpCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/useUser";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useBilling } from "@/hooks/app/useBilling";
+import { venueHasAgencyPortal } from "@/lib/billing-entitlements";
 import { useTheme } from "@/components/app/shared/theme-provider";
 import { Button } from "@/components/ui/button";
 import { signOut } from "firebase/auth";
 import { useAuth } from "reactfire";
 
-const navigation = [
+const baseNavigation = [
   {
     name: "Dashboard",
     href: "/app/dashboard",
@@ -51,6 +55,12 @@ const navigation = [
   },
 ];
 
+const agencyNavItem = {
+  name: "Agency",
+  href: "/app/agency",
+  icon: Building2,
+};
+
 interface SidebarProps {
   isCollapsed?: boolean;
   onToggle?: () => void;
@@ -61,9 +71,27 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
   const router = useRouter();
   const { user } = useUser();
   const { hasAdminAccess } = useAdminAuth();
+  const { billingRecord, fetchBilling } = useBilling();
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
   const auth = useAuth();
+
+  useEffect(() => {
+    if (user?.venue_id) {
+      void fetchBilling();
+    }
+  }, [user?.venue_id, fetchBilling]);
+
+  const isAgencyPlan = venueHasAgencyPortal(billingRecord);
+
+  const navigation = useMemo(() => {
+    if (!isAgencyPlan) return baseNavigation;
+    const items = [...baseNavigation];
+    const helpIndex = items.findIndex((item) => item.href === "/app/help");
+    const insertAt = helpIndex === -1 ? items.length : helpIndex;
+    items.splice(insertAt, 0, agencyNavItem);
+    return items;
+  }, [isAgencyPlan]);
 
   const handleLogout = async () => {
     try {

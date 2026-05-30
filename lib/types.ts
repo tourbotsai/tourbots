@@ -177,6 +177,7 @@ export interface TourMenuSettings {
   position: 'center' | 'top' | 'bottom';
   max_width: number;
   padding: number;
+  padding_vertical: number;
   border_radius: number;
   
   // Styling
@@ -924,7 +925,7 @@ export interface BillingPlan {
 
 export interface BillingAddon {
   id: string;
-  code: 'extra_space' | 'message_block' | 'white_label' | 'agency_portal' | string;
+  code: 'extra_space' | 'message_block' | 'white_label' | 'agency_extra_space' | 'agency_message_block' | string;
   name: string;
   description?: string | null;
   unit_label: string;

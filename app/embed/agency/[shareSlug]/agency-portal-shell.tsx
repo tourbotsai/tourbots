@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,13 +9,16 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Camera, FileJson, LineChart, Settings } from 'lucide-react';
+import { Camera, Eye, EyeOff, FileJson, LineChart, Settings } from 'lucide-react';
 import { CustomisationForm } from '@/components/app/chatbots/shared/customisation-form';
-import { ChatbotCustomisation, ChatbotTrigger } from '@/lib/types';
+import { ChatbotCustomisation, ChatbotTrigger, Conversation, EmbedStat } from '@/lib/types';
 import { getAdvancedDefaultCustomisation } from '@/lib/chatbot-customisation-service';
 import { TourChatbotSettings } from '@/components/app/chatbots/tour/chatbot-settings';
 import { TourViewer } from '@/components/app/tours/tour-viewer';
 import { TourMenuBuilder } from '@/components/app/tours/menu/tour-menu-builder';
+import { TourTrendChart, TourTrendPoint } from '@/components/app/tours/tour-trend-chart';
+import { EmbedStatistics } from '@/components/app/chatbots/shared/embed-statistics';
+import { ConversationSessions } from '@/components/app/chatbots/shared/conversation-sessions';
 import { useUser } from '@/hooks/useUser';
 
 type ModuleName = 'tour' | 'settings' | 'customisation' | 'analytics';
@@ -46,8 +48,9 @@ interface AgencyPortalShellProps {
   previewTriggers?: ChatbotTrigger[];
   previewCustomisation?: ChatbotCustomisation | null;
   previewAnalyticsStats?: PortalAnalyticsStats | null;
-  previewAnalyticsSessions?: PortalAnalyticsSession[];
-  previewSessionMessages?: PortalAnalyticsMessage[];
+  previewAnalyticsTrend?: TourTrendPoint[];
+  previewAnalyticsEmbedStats?: EmbedStat[];
+  previewAnalyticsConversations?: Conversation[];
 }
 
 interface SessionState {
@@ -74,21 +77,8 @@ interface PortalAnalyticsStats {
   totalMessages: number;
   totalConversations: number;
   totalSessions: number;
-}
-
-interface PortalAnalyticsSession {
-  sessionId: string;
-  conversationId: string | null;
-  lastMessageAt: string | null;
-  messageCount: number;
-}
-
-interface PortalAnalyticsMessage {
-  id: string;
-  message_type: 'visitor' | 'bot';
-  message: string | null;
-  response: string | null;
-  created_at: string;
+  tourViews: number;
+  tourMoves: number;
 }
 
 interface InformationField {
@@ -130,14 +120,16 @@ export function AgencyPortalShell({
   previewTriggers = [],
   previewCustomisation = null,
   previewAnalyticsStats = null,
-  previewAnalyticsSessions = [],
-  previewSessionMessages = [],
+  previewAnalyticsTrend = [],
+  previewAnalyticsEmbedStats = [],
+  previewAnalyticsConversations = [],
 }: AgencyPortalShellProps) {
   const { user: appUser } = useUser();
   const [session, setSession] = useState<SessionState>({ authenticated: false });
   const [loadingSession, setLoadingSession] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<ModuleName>('tour');
@@ -152,9 +144,9 @@ export function AgencyPortalShell({
   const [customisationSaving, setCustomisationSaving] = useState(false);
 
   const [analyticsStats, setAnalyticsStats] = useState<PortalAnalyticsStats | null>(previewAnalyticsStats);
-  const [analyticsSessions, setAnalyticsSessions] = useState<PortalAnalyticsSession[]>(previewAnalyticsSessions);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(previewAnalyticsSessions[0]?.sessionId || null);
-  const [sessionMessages, setSessionMessages] = useState<PortalAnalyticsMessage[]>(previewSessionMessages);
+  const [analyticsTrend, setAnalyticsTrend] = useState<TourTrendPoint[]>(previewAnalyticsTrend);
+  const [analyticsEmbedStats, setAnalyticsEmbedStats] = useState<EmbedStat[]>(previewAnalyticsEmbedStats);
+  const [analyticsConversations, setAnalyticsConversations] = useState<Conversation[]>(previewAnalyticsConversations);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const [informationLoading, setInformationLoading] = useState(false);
@@ -164,6 +156,15 @@ export function AgencyPortalShell({
   const [informationExpanded, setInformationExpanded] = useState(true);
   const [expandedInformationSections, setExpandedInformationSections] = useState<Record<string, boolean>>({});
   const moduleList = useMemo(() => (Object.keys(modules) as ModuleName[]), [modules]);
+  const visibleModules = useMemo(() => {
+    const meta: { value: ModuleName; label: string; icon: typeof Camera }[] = [
+      { value: 'tour', label: 'Tour', icon: Camera },
+      { value: 'settings', label: 'Settings', icon: Settings },
+      { value: 'customisation', label: 'Customisation', icon: FileJson },
+      { value: 'analytics', label: 'Analytics', icon: LineChart },
+    ];
+    return meta.filter((item) => Boolean(modules[item.value]));
+  }, [modules]);
   const resolvedTourId = tourId || null;
   const resolvedSettingsBlocks = {
     config: settingsBlocks?.config !== false,
@@ -455,60 +456,35 @@ export function AgencyPortalShell({
   async function loadAnalytics() {
     setAnalyticsLoading(true);
     try {
-      const [statsRes, sessionsRes] = await Promise.all([
+      const [statsRes, detailsRes] = await Promise.all([
         fetch(`/api/public/agency-portal/analytics?shareSlug=${encodeURIComponent(shareSlug)}&view=stats`, {
           credentials: 'include',
           headers: getPortalHeaders(),
         }),
-        fetch(`/api/public/agency-portal/analytics?shareSlug=${encodeURIComponent(shareSlug)}&view=sessions&limit=30`, {
+        fetch(`/api/public/agency-portal/analytics?shareSlug=${encodeURIComponent(shareSlug)}&view=details`, {
           credentials: 'include',
           headers: getPortalHeaders(),
         }),
       ]);
 
       const statsJson = await statsRes.json();
-      const sessionsJson = await sessionsRes.json();
+      const detailsJson = await detailsRes.json();
 
       if (!statsRes.ok) {
         setMessage(statsJson?.error || 'Failed to load analytics stats.');
         return;
       }
-      if (!sessionsRes.ok) {
-        setMessage(sessionsJson?.error || 'Failed to load analytics sessions.');
+      if (!detailsRes.ok) {
+        setMessage(detailsJson?.error || 'Failed to load analytics details.');
         return;
       }
 
       setAnalyticsStats(statsJson?.stats || null);
-      setAnalyticsSessions(sessionsJson?.sessions || []);
-      if (!selectedSessionId && (sessionsJson?.sessions || []).length > 0) {
-        setSelectedSessionId(sessionsJson.sessions[0].sessionId);
-      }
+      setAnalyticsTrend(detailsJson?.trend || []);
+      setAnalyticsEmbedStats(detailsJson?.embedStats || []);
+      setAnalyticsConversations(detailsJson?.conversations || []);
     } catch {
       setMessage('Failed to load analytics.');
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  }
-
-  async function loadSessionMessages(sessionId: string) {
-    setAnalyticsLoading(true);
-    try {
-      const res = await fetch(
-        `/api/public/agency-portal/analytics?shareSlug=${encodeURIComponent(shareSlug)}&view=messages&sessionId=${encodeURIComponent(sessionId)}`,
-        {
-          credentials: 'include',
-          headers: getPortalHeaders(),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setMessage(data?.error || 'Failed to load session messages.');
-        return;
-      }
-      setSelectedSessionId(sessionId);
-      setSessionMessages(data?.messages || []);
-    } catch {
-      setMessage('Failed to load session messages.');
     } finally {
       setAnalyticsLoading(false);
     }
@@ -678,16 +654,15 @@ export function AgencyPortalShell({
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
       <style jsx global>{`
         html, body, #__next {
           height: auto !important;
-          overflow-y: auto !important;
         }
       `}</style>
-      <div className="mx-auto max-w-5xl space-y-6">
-        <Card className="overflow-hidden border-slate-200">
-          {showHeader && (
+      <div className="mx-auto w-full max-w-[1600px] space-y-6">
+        {showHeader && (
+          <Card className="overflow-hidden border-slate-200">
             <div
               className="px-6 py-5 text-white"
               style={{
@@ -709,12 +684,11 @@ export function AgencyPortalShell({
                     <p className="mt-1 text-sm text-slate-100/90">{tourTitle} - {shareSlug}</p>
                   </div>
                 </div>
-                <Badge variant={shareActive ? 'secondary' : 'destructive'}>
-                  {shareActive ? 'Share active' : 'Share disabled'}
-                </Badge>
               </div>
             </div>
-          )}
+          </Card>
+        )}
+        <Card className="border-slate-200">
           <CardContent className="space-y-5 p-6">
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <p className="mb-3 text-sm font-medium text-slate-900">Client sign-in</p>
@@ -765,14 +739,25 @@ export function AgencyPortalShell({
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="agency-login-password">Password</Label>
-                    <Input
-                      id="agency-login-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      autoComplete="current-password"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="agency-login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700 dark:hover:text-slate-200"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <Button type="submit" disabled={pending || !shareActive}>
                     Sign in
@@ -784,19 +769,15 @@ export function AgencyPortalShell({
             {(previewOnly || session.authenticated) && (
               <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <Tabs value={selectedModule} onValueChange={(value) => setSelectedModule(value as ModuleName)}>
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="tour" disabled={!modules.tour}>
-                      <Camera className="mr-1 h-4 w-4" /> Tour
-                    </TabsTrigger>
-                    <TabsTrigger value="settings" disabled={!modules.settings}>
-                      <Settings className="mr-1 h-4 w-4" /> Settings
-                    </TabsTrigger>
-                    <TabsTrigger value="customisation" disabled={!modules.customisation}>
-                      <FileJson className="mr-1 h-4 w-4" /> Customisation
-                    </TabsTrigger>
-                    <TabsTrigger value="analytics" disabled={!modules.analytics}>
-                      <LineChart className="mr-1 h-4 w-4" /> Analytics
-                    </TabsTrigger>
+                  <TabsList
+                    className="grid w-full"
+                    style={{ gridTemplateColumns: `repeat(${Math.max(visibleModules.length, 1)}, minmax(0, 1fr))` }}
+                  >
+                    {visibleModules.map(({ value, label, icon: Icon }) => (
+                      <TabsTrigger key={value} value={value}>
+                        <Icon className="mr-1 h-4 w-4" /> {label}
+                      </TabsTrigger>
+                    ))}
                   </TabsList>
 
                   <TabsContent value="tour" className="mt-3">
@@ -816,7 +797,7 @@ export function AgencyPortalShell({
                           />
                         </TabsContent>
                         <TabsContent value="menu" className="mt-4">
-                          <TourMenuBuilder tourId={resolvedTourId} layoutMode="stacked" />
+                          <TourMenuBuilder tourId={resolvedTourId} layoutMode="split" />
                         </TabsContent>
                       </Tabs>
                     )}
@@ -925,12 +906,17 @@ export function AgencyPortalShell({
                         ) : null}
                         <div className={previewOnly ? 'pointer-events-none select-none' : ''}>
                           <CustomisationForm
-                            customisation={customisationData}
+                            customisation={{
+                              ...customisationData,
+                              show_powered_by: false,
+                              mobile_show_powered_by: false,
+                            }}
                             onUpdate={saveCustomisation}
                             onReset={resetCustomisationToDefaults}
                             isLoading={customisationSaving}
                             customBrandingEnabled={true}
-                            layoutMode="stacked"
+                            hidePoweredByControl={true}
+                            layoutMode="split"
                           />
                         </div>
                       </>
@@ -944,7 +930,19 @@ export function AgencyPortalShell({
                       <p className="text-sm text-slate-600">Loading analytics...</p>
                     ) : (
                       <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+                          <Card>
+                            <CardContent className="p-3">
+                              <p className="text-xs text-slate-500">Tour views</p>
+                              <p className="text-xl font-semibold">{analyticsStats?.tourViews || 0}</p>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardContent className="p-3">
+                              <p className="text-xs text-slate-500">Tour moves</p>
+                              <p className="text-xl font-semibold">{analyticsStats?.tourMoves || 0}</p>
+                            </CardContent>
+                          </Card>
                           <Card>
                             <CardContent className="p-3">
                               <p className="text-xs text-slate-500">Conversations</p>
@@ -965,43 +963,11 @@ export function AgencyPortalShell({
                           </Card>
                         </div>
                         <Separator />
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">Recent sessions</p>
-                            <div className="max-h-64 space-y-2 overflow-auto">
-                              {analyticsSessions.map((row) => (
-                                <button
-                                  key={row.sessionId}
-                                  className={`w-full rounded border p-2 text-left text-sm ${
-                                    selectedSessionId === row.sessionId ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-white'
-                                  }`}
-                                  onClick={() => {
-                                    if (previewOnly) return;
-                                    void loadSessionMessages(row.sessionId);
-                                  }}
-                                >
-                                  <p className="font-medium">{row.sessionId.slice(0, 18)}...</p>
-                                  <p className="text-xs text-slate-500">{row.messageCount} messages</p>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">Session messages</p>
-                            <div className="max-h-64 space-y-2 overflow-auto rounded border border-slate-200 p-2">
-                              {sessionMessages.length === 0 ? (
-                                <p className="text-xs text-slate-500">Select a session.</p>
-                              ) : (
-                                sessionMessages.map((row) => (
-                                  <div key={row.id} className="rounded bg-slate-50 p-2 text-xs">
-                                    <p className="mb-1 font-semibold">{row.message_type === 'visitor' ? 'Visitor' : 'Assistant'}</p>
-                                    <p>{row.message_type === 'visitor' ? row.message : row.response}</p>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                        <TourTrendChart data={analyticsTrend} />
+                        <Separator />
+                        <EmbedStatistics stats={analyticsEmbedStats} />
+                        <Separator />
+                        <ConversationSessions conversations={analyticsConversations} typeLabel="tour" />
                       </div>
                     )}
                   </TabsContent>

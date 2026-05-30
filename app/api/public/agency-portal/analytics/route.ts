@@ -4,6 +4,9 @@ import {
   getScopedTourAnalyticsSessionMessages,
   getScopedTourAnalyticsSessions,
   getScopedTourAnalyticsStats,
+  getScopedTourAnalyticsTrend,
+  getScopedTourConversations,
+  getScopedTourEmbedStats,
 } from '@/lib/agency-portal-module-service';
 
 export async function GET(request: NextRequest) {
@@ -23,6 +26,15 @@ export async function GET(request: NextRequest) {
     if (view === 'sessions') {
       const sessions = await getScopedTourAnalyticsSessions(session.venueId, session.tourId, limit);
       return NextResponse.json({ sessions });
+    }
+
+    if (view === 'details') {
+      const [trend, embedStats, conversations] = await Promise.all([
+        getScopedTourAnalyticsTrend(session.venueId, session.tourId, 90),
+        getScopedTourEmbedStats(session.venueId, session.tourId),
+        getScopedTourConversations(session.venueId, session.tourId),
+      ]);
+      return NextResponse.json({ trend, embedStats, conversations });
     }
 
     if (view === 'messages') {

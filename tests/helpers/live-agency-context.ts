@@ -58,8 +58,8 @@ async function ensureAgencyPortalReady(baseUrl: string, idToken: string) {
   }
 
   const settingsPayload = await settingsResponse.json()
-  if (!settingsPayload?.entitlement?.addon_agency_portal) {
-    throw new Error('Agency portal live tests require addon_agency_portal to be active')
+  if (!settingsPayload?.entitlement?.entitled) {
+    throw new Error('Agency portal live tests require an active Agency plan')
   }
 
   const currentAllowedDomains = Array.isArray(settingsPayload?.settings?.allowed_domains)

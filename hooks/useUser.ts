@@ -18,6 +18,16 @@ let inFlightUserRequest:
   | Promise<{ user: UserWithVenue | null; error: string | null }>
   | null = null;
 
+/**
+ * Clears the in-memory user cache. Call after flows that materially change the
+ * signed-in user (e.g. registration just linked a venue) so the next read does
+ * not serve a stale, pre-change copy.
+ */
+export function clearUserCache(): void {
+  cachedUserState = null;
+  inFlightUserRequest = null;
+}
+
 async function fetchUserWithCache(
   uid: string,
   token: string,

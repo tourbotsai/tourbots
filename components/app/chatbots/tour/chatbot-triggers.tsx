@@ -291,7 +291,7 @@ export function ChatbotTriggers({
             <span>Chatbot Triggers</span>
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm mt-1">
-            Save your chatbot configuration first to manage triggers.
+            Create and save your chatbot in the Configuration section first to manage chatbot triggers.
           </CardDescription>
         </CardHeader>
       </Card>

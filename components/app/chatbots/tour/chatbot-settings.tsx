@@ -19,6 +19,7 @@ import { ChatbotInfoSections } from "./chatbot-info-sections";
 import { ChatbotTriggers } from "./chatbot-triggers";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
+import { NoTourEmptyState } from "../no-tour-empty-state";
 
 interface TourChatbotSettingsProps {
   selectedTourId?: string | null;
@@ -218,11 +219,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
   }
 
   if (!selectedTourId) {
-    return (
-      <div className="text-center p-6 sm:p-8">
-        <p className="text-slate-600 text-sm sm:text-base dark:text-slate-400">Select a tour to configure a chatbot.</p>
-      </div>
-    );
+    return <NoTourEmptyState />;
   }
 
   if (!hasAnyVisibleSection) {
@@ -420,6 +417,21 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
 
       {/* Training Documents */}
       {showDocumentsSection ? (
+      !tourConfig?.id ? (
+      <Card className="overflow-hidden border-slate-200/80 bg-white/95 shadow-sm dark:border-input dark:bg-background">
+        <CardHeader>
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
+              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+            </span>
+            <span>Training Documents</span>
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
+            Create and save your chatbot in the Configuration section first to manage training documents.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+      ) : (
       <Card className="overflow-hidden border-slate-200/80 bg-white/95 shadow-sm dark:border-input dark:bg-background">
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -528,6 +540,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
           )}
         </CardContent> : null}
       </Card>
+      )
       ) : null}
 
       {showTriggersSection ? <ChatbotTriggers chatbotConfigId={tourConfig?.id} /> : null}

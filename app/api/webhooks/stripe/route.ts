@@ -21,11 +21,20 @@ function getStripe() {
 }
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-const ADDON_CODES = new Set(['extra_space', 'message_block', 'white_label', 'agency_portal']);
+// Add-on subscription codes (capacity scaling). Agency is a plan tier, not an
+// add-on, so it is not listed here. Add-ons always cascade with the main plan.
+const ADDON_CODES = new Set([
+  'extra_space',
+  'message_block',
+  'white_label',
+  'agency_extra_space',
+  'agency_message_block',
+]);
 
 function mapStripePlanToBillingPlan(planName?: string | null): string {
   if (!planName) return 'pro';
   if (planName === 'essential' || planName === 'professional') return 'pro';
+  if (planName === 'agency') return 'agency';
   return planName;
 }
 
@@ -132,21 +141,30 @@ async function persistInvoiceRecord(invoicePayload: {
   console.error('Failed to upsert invoice record:', upsertError);
 }
 
-async function clearVenueAddonsForCancellation(venueId: string, stripeCustomerId?: string | null) {
+// Downgrade a venue to free and strip its add-ons when the main plan (pro or
+// agency) subscription ends. All add-ons are scoped to a paid plan, so they
+// cascade-cancel here; their own subscriptions are cancelled in parallel via
+// syncAddonSubscriptionCancellationForCustomer.
+async function clearVenueAddonsForCancellation(
+  venueId: string,
+  stripeCustomerId?: string | null
+) {
+  const update: Record<string, unknown> = {
+    plan_code: 'free',
+    billing_status: 'cancelled',
+    addon_extra_spaces: 0,
+    addon_message_blocks: 0,
+    addon_white_label: false,
+    addon_agency_portal: false,
+    effective_space_limit: null,
+    effective_message_limit: null,
+    stripe_customer_id: stripeCustomerId || null,
+    stripe_subscription_id: null,
+  };
+
   const { error: resetError } = await supabase
     .from('venue_billing_records')
-    .update({
-      plan_code: 'free',
-      billing_status: 'cancelled',
-      addon_extra_spaces: 0,
-      addon_message_blocks: 0,
-      addon_white_label: false,
-      addon_agency_portal: false,
-      effective_space_limit: null,
-      effective_message_limit: null,
-      stripe_customer_id: stripeCustomerId || null,
-      stripe_subscription_id: null,
-    })
+    .update(update)
     .eq('venue_id', venueId);
 
   if (resetError) {
@@ -154,10 +172,66 @@ async function clearVenueAddonsForCancellation(venueId: string, stripeCustomerId
   }
 }
 
+// Clear a single add-on from a venue's billing record when its own Stripe
+// subscription ends. Capacity add-ons are decremented by the cancelled
+// quantity; feature add-ons are switched off.
+async function applyAddonCancellation(venueId: string, addonCode: string, quantity: number) {
+  const safeQuantity = Math.max(1, quantity || 1);
+
+  const { error: cancelApplyError } = await supabase.rpc('apply_billing_addon_cancellation', {
+    p_venue_id: venueId,
+    p_addon_code: addonCode,
+    p_quantity: safeQuantity,
+  });
+
+  if (cancelApplyError) {
+    console.error('Failed to apply add-on cancellation:', addonCode, cancelApplyError);
+    return;
+  }
+
+  await supabase
+    .from('venue_billing_events')
+    .insert({
+      venue_id: venueId,
+      event_type: 'addon_cancellation_applied',
+      event_source: 'stripe_webhook',
+      event_payload: {
+        addon_code: addonCode,
+        quantity: safeQuantity,
+      },
+    });
+}
+
+async function resolveVenueIdByStripeCustomer(customerId?: string | null): Promise<string | null> {
+  if (!customerId) return null;
+  const { data } = await supabase
+    .from('venue_billing_records')
+    .select('venue_id')
+    .eq('stripe_customer_id', customerId)
+    .maybeSingle();
+  return data?.venue_id || null;
+}
+
+// Resolve a venue from the Stripe customer's metadata.venue_id (set at checkout).
+async function resolveVenueIdFromStripeCustomer(customerId?: string | null): Promise<string | null> {
+  if (!customerId) return null;
+  try {
+    const stripe = getStripe();
+    const customer = await stripe.customers.retrieve(customerId);
+    if (!customer || (customer as any).deleted) return null;
+    return (customer as any).metadata?.venue_id || null;
+  } catch (error) {
+    console.error('Failed to resolve venue from Stripe customer metadata:', error);
+    return null;
+  }
+}
+
 function isAddonCode(value?: string | null) {
   return Boolean(value && ADDON_CODES.has(value));
 }
 
+// Cascade the main plan's cancel-at-period-end scheduling onto every add-on
+// subscription for the customer, so add-ons end alongside the plan they extend.
 async function syncAddonSubscriptionCancellationForCustomer(
   customerId: string,
   shouldCancelAtPeriodEnd: boolean
@@ -493,13 +567,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
   // Create subscription directly using metadata info
   try {
-    // Handle next billing date safely
-    let nextBillingDate = null;
-    if ((subscription as any).current_period_end) {
+    // Handle next billing date safely. In newer Stripe API versions
+    // current_period_end moved from the subscription to the subscription item,
+    // so fall back to the item when the top-level field is absent.
+    const periodEndUnix =
+      (subscription as any).current_period_end ||
+      (subscription.items?.data?.[0] as any)?.current_period_end ||
+      null;
+    let nextBillingDate: string | null = null;
+    if (periodEndUnix) {
       try {
-        nextBillingDate = new Date((subscription as any).current_period_end * 1000).toISOString();
+        nextBillingDate = new Date(periodEndUnix * 1000).toISOString();
       } catch (dateError) {
-        console.error('Invalid current_period_end:', (subscription as any).current_period_end);
+        console.error('Invalid current_period_end:', periodEndUnix);
         // Calculate next billing date manually based on billing cycle
         const now = new Date();
         nextBillingDate = billingCycle === 'yearly' 
@@ -519,6 +599,34 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     });
 
     if (!isAddonSubscription) {
+      // Resolve the first invoice up front. A paid invoice is the reliable
+      // signal that the subscription is active, independent of the (possibly
+      // transient 'incomplete') status on the created event or event ordering.
+      let firstInvoice: Stripe.Invoice | null = null;
+      try {
+        if (subscription.latest_invoice) {
+          firstInvoice = typeof subscription.latest_invoice === 'string'
+            ? await stripe.invoices.retrieve(subscription.latest_invoice)
+            : subscription.latest_invoice;
+        }
+      } catch (invoiceLookupError) {
+        console.error('Could not retrieve latest invoice:', invoiceLookupError);
+      }
+      const invoicePaid = Boolean(
+        firstInvoice && (firstInvoice.status === 'paid' || (firstInvoice.amount_paid ?? 0) > 0)
+      );
+
+      const resolvedSubscriptionStatus = isTrial
+        ? 'trialing'
+        : invoicePaid
+          ? 'active'
+          : mapStripeStatusToSubscriptionStatus(subscription.status);
+      const resolvedBillingStatus = isTrial
+        ? 'trialing'
+        : invoicePaid
+          ? 'active'
+          : mapStripeStatusToBillingStatus(subscription.status);
+
       await supabase
         .from('subscriptions')
         .upsert({
@@ -526,7 +634,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
           stripe_customer_id: subscription.customer as string,
           stripe_subscription_id: subscription.id,
           plan_name: planName,
-          status: mapStripeStatusToSubscriptionStatus(subscription.status),
+          status: resolvedSubscriptionStatus,
           current_price: subscription.items.data[0].price.unit_amount! / 100,
           billing_cycle: subscription.items.data[0].price.recurring?.interval === 'year' ? 'yearly' : 'monthly',
           next_billing_date: nextBillingDate,
@@ -537,12 +645,11 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
           trial_period_days: trialPeriodDays,
           trial_end_date: trialEnd,
           trial_started_at: trialStart,
-        }, { onConflict: 'stripe_subscription_id' });
+        }, { onConflict: 'venue_id' });
 
       console.log('Successfully created subscription in Supabase for venue:', venueId);
 
       const mappedPlanCode = mapStripePlanToBillingPlan(planName);
-      const mappedBillingStatus = mapStripeStatusToBillingStatus(subscription.status);
 
       await supabase
         .from('venue_billing_records')
@@ -550,12 +657,67 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
           {
             venue_id: venueId,
             plan_code: mappedPlanCode,
-            billing_status: mappedBillingStatus,
+            billing_status: resolvedBillingStatus,
             stripe_customer_id: subscription.customer as string,
             stripe_subscription_id: subscription.id,
           },
           { onConflict: 'venue_id' }
         );
+
+      // Persist the first invoice straight away. The invoice.payment_succeeded
+      // event uses a newer API shape (no top-level invoice.subscription) and can
+      // also arrive before this row exists, so we record it here where the venue
+      // is already known. persistInvoiceRecord upserts, so this won't duplicate.
+      if (firstInvoice?.id && invoicePaid) {
+        try {
+          await persistInvoiceRecord({
+            venue_id: venueId,
+            stripe_invoice_id: firstInvoice.id,
+            amount_paid: (firstInvoice.amount_paid || 0) / 100,
+            currency: firstInvoice.currency || 'gbp',
+            status: 'paid',
+            invoice_pdf: firstInvoice.invoice_pdf,
+            billing_reason: firstInvoice.billing_reason,
+          });
+        } catch (invoiceError) {
+          console.error('Failed to persist initial subscription invoice:', invoiceError);
+        }
+      }
+    } else {
+      // Add-on subscriptions do not change the main plan, but we still need the
+      // Stripe customer recorded on the venue so invoices, add-on status, and
+      // add-on cancellation can be resolved (especially for free accounts that
+      // only hold a standalone feature add-on).
+      await supabase
+        .from('venue_billing_records')
+        .update({ stripe_customer_id: subscription.customer as string })
+        .eq('venue_id', venueId)
+        .is('stripe_customer_id', null);
+
+      // Persist the add-on's first invoice here too, where the venue is known.
+      // Add-on subscriptions are not tracked in the subscriptions table, so the
+      // invoice.payment_succeeded handler can otherwise struggle to resolve the
+      // venue (especially under event-ordering races). Upsert dedupes.
+      try {
+        if (subscription.latest_invoice) {
+          const addonInvoice = typeof subscription.latest_invoice === 'string'
+            ? await stripe.invoices.retrieve(subscription.latest_invoice)
+            : subscription.latest_invoice;
+          if (addonInvoice?.id && (addonInvoice.status === 'paid' || (addonInvoice.amount_paid ?? 0) > 0)) {
+            await persistInvoiceRecord({
+              venue_id: venueId,
+              stripe_invoice_id: addonInvoice.id,
+              amount_paid: (addonInvoice.amount_paid || 0) / 100,
+              currency: addonInvoice.currency || 'gbp',
+              status: 'paid',
+              invoice_pdf: addonInvoice.invoice_pdf,
+              billing_reason: addonInvoice.billing_reason,
+            });
+          }
+        }
+      } catch (addonInvoiceError) {
+        console.error('Failed to persist add-on invoice:', addonInvoiceError);
+      }
     }
 
     // Update payment link status to paid for checkout session created from app.
@@ -608,9 +770,14 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
     };
 
-    // Handle next billing date safely
-    if ((subscription as any).current_period_end) {
-      updateData.next_billing_date = new Date((subscription as any).current_period_end * 1000).toISOString();
+    // Handle next billing date safely. current_period_end moved to the
+    // subscription item in newer Stripe API versions; fall back to it.
+    const updatedPeriodEndUnix =
+      (subscription as any).current_period_end ||
+      (subscription.items?.data?.[0] as any)?.current_period_end ||
+      null;
+    if (updatedPeriodEndUnix) {
+      updateData.next_billing_date = new Date(updatedPeriodEndUnix * 1000).toISOString();
     }
 
     // Handle trial end date
@@ -640,12 +807,29 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       if (isCancelled) {
         await clearVenueAddonsForCancellation(venueSubscription.venue_id, subscription.customer as string);
       } else {
+        // Prefer the Stripe subscription metadata's plan_name (set atomically by
+        // checkout and the in-app plan switch) over the DB row, which can be
+        // momentarily stale during a pro<->agency switch. Ignore add-on codes.
+        const metadataPlanName = subscription.metadata?.plan_name;
+        const resolvedPlanName =
+          metadataPlanName && !isAddonCode(metadataPlanName)
+            ? metadataPlanName
+            : venueSubscription.plan_name;
+
+        // Keep the subscriptions row's plan_name in sync so future reads agree.
+        if (resolvedPlanName && resolvedPlanName !== venueSubscription.plan_name) {
+          await supabase
+            .from('subscriptions')
+            .update({ plan_name: resolvedPlanName, updated_at: new Date().toISOString() })
+            .eq('stripe_subscription_id', subscription.id);
+        }
+
         await supabase
           .from('venue_billing_records')
           .upsert(
             {
               venue_id: venueSubscription.venue_id,
-              plan_code: mapStripePlanToBillingPlan(venueSubscription.plan_name),
+              plan_code: mapStripePlanToBillingPlan(resolvedPlanName),
               billing_status: mapStripeStatusToBillingStatus(subscription.status),
               stripe_customer_id: subscription.customer as string,
               stripe_subscription_id: subscription.id,
@@ -669,10 +853,18 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log('Processing subscription deleted:', subscription.id);
-  
+
+  const metadata = subscription.metadata || {};
+  const billingAction = (metadata.billing_action || '').toLowerCase();
+  const isAddonSubscription = billingAction === 'buy_addon';
+  const addonCode = metadata.addon_code || metadata.plan_name || null;
+  const customerId = subscription.customer as string;
+
+  // Keep the main subscription row (if any) up to date. Add-on subscriptions are
+  // not tracked in the subscriptions table, so this is a no-op for them.
   await supabase
     .from('subscriptions')
-    .update({ 
+    .update({
       status: 'cancelled',
       cancel_at_period_end: false,
       cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
@@ -681,50 +873,114 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     })
     .eq('stripe_subscription_id', subscription.id);
 
-  const { data: venueSubscription } = await supabase
-    .from('subscriptions')
-    .select('venue_id')
-    .eq('stripe_subscription_id', subscription.id)
-    .single();
-
-  if (venueSubscription?.venue_id) {
-    await clearVenueAddonsForCancellation(venueSubscription.venue_id, subscription.customer as string);
+  // Resolve the venue: prefer subscription metadata, then the main subscription
+  // row, then the billing record mapped to the Stripe customer.
+  let venueId: string | null = metadata.venue_id || null;
+  if (!venueId) {
+    const { data: venueSubscription } = await supabase
+      .from('subscriptions')
+      .select('venue_id')
+      .eq('stripe_subscription_id', subscription.id)
+      .maybeSingle();
+    venueId = venueSubscription?.venue_id || null;
   }
+  if (!venueId) {
+    venueId = await resolveVenueIdByStripeCustomer(customerId);
+  }
+
+  if (!venueId) {
+    console.warn('Could not resolve venue for deleted subscription:', subscription.id);
+    return;
+  }
+
+  // An individual add-on subscription ended: clear only that add-on so other
+  // add-ons and the main plan are untouched.
+  if (isAddonSubscription && isAddonCode(addonCode)) {
+    const cancelledQuantity = parseInt(metadata.addon_quantity || '1', 10) || 1;
+    await applyAddonCancellation(venueId, addonCode as string, cancelledQuantity);
+    return;
+  }
+
+  // The main plan subscription (pro or agency) ended: downgrade to free and
+  // clear all add-ons. Add-on subscriptions are cancelled in parallel by the
+  // cancellation flow / cron reconcile, then their own deleted events decrement.
+  await clearVenueAddonsForCancellation(venueId, customerId);
 }
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   console.log('Processing invoice payment succeeded:', invoice.id);
-  
-  if (!(invoice as any).subscription) return;
+
   if (!invoice.id) return;
 
-  // Save invoice record
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('venue_id')
-    .eq('stripe_subscription_id', (invoice as any).subscription)
-    .single();
+  // The Stripe API version in use no longer exposes a top-level
+  // invoice.subscription; subscription invoices reference it under
+  // invoice.parent.subscription_details.subscription instead.
+  const invoiceSubscriptionId: string | null =
+    (invoice as any).subscription ||
+    (invoice as any).parent?.subscription_details?.subscription ||
+    null;
 
-  let venueId: string | null = subscription?.venue_id || null;
+  // Resolve the venue: subscription row, then billing record by customer, then
+  // Stripe customer metadata (covers standalone add-on invoices on any plan).
+  let venueId: string | null = null;
+  if (invoiceSubscriptionId) {
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('venue_id')
+      .eq('stripe_subscription_id', invoiceSubscriptionId)
+      .maybeSingle();
+    venueId = subscription?.venue_id || null;
+  }
   if (!venueId && invoice.customer) {
     const { data: billingRecord } = await supabase
       .from('venue_billing_records')
       .select('venue_id')
       .eq('stripe_customer_id', invoice.customer as string)
-      .single();
+      .maybeSingle();
     venueId = billingRecord?.venue_id || null;
   }
+  if (!venueId && invoice.customer) {
+    venueId = await resolveVenueIdFromStripeCustomer(invoice.customer as string);
+  }
 
-  if (venueId) {
-    await persistInvoiceRecord({
-        venue_id: venueId,
-        stripe_invoice_id: invoice.id,
-        amount_paid: invoice.amount_paid / 100,
-        currency: invoice.currency,
-        status: 'paid',
-        invoice_pdf: invoice.invoice_pdf,
-        billing_reason: invoice.billing_reason,
-      });
+  if (!venueId) {
+    console.warn('Could not resolve venue for paid invoice:', invoice.id);
+    return;
+  }
+
+  await persistInvoiceRecord({
+    venue_id: venueId,
+    stripe_invoice_id: invoice.id,
+    amount_paid: invoice.amount_paid / 100,
+    currency: invoice.currency,
+    status: 'paid',
+    invoice_pdf: invoice.invoice_pdf,
+    billing_reason: invoice.billing_reason,
+  });
+
+  // A paid invoice for the main subscription means it is active. This covers
+  // the incomplete -> active transition when no subscription.updated event
+  // arrives. Add-on subscriptions are not tracked in the subscriptions table,
+  // so this update is a no-op for them and won't touch billing_status.
+  if (invoiceSubscriptionId) {
+    const { data: mainSub } = await supabase
+      .from('subscriptions')
+      .select('venue_id, status')
+      .eq('stripe_subscription_id', invoiceSubscriptionId)
+      .maybeSingle();
+
+    if (mainSub?.venue_id && mainSub.status !== 'cancelled') {
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('stripe_subscription_id', invoiceSubscriptionId);
+
+      await supabase
+        .from('venue_billing_records')
+        .update({ billing_status: 'active' })
+        .eq('venue_id', mainSub.venue_id)
+        .neq('billing_status', 'cancelled');
+    }
   }
 }
 

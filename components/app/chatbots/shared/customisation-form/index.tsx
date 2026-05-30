@@ -48,6 +48,7 @@ interface CustomisationFormProps {
   isLoading?: boolean;
   className?: string;
   customBrandingEnabled?: boolean;
+  hidePoweredByControl?: boolean;
   layoutMode?: 'split' | 'stacked';
 }
 
@@ -67,6 +68,7 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
   isLoading = false,
   className,
   customBrandingEnabled = true,
+  hidePoweredByControl = false,
   layoutMode = 'split',
 }) => {
   const { toast } = useToast();
@@ -462,12 +464,14 @@ const CustomisationForm: FC<CustomisationFormProps> = ({
                           isLoading={isLoading}
                           onCustomImageChange={(imageUrl) => handleFieldChange('custom_logo_url', imageUrl)}
                           customBrandingEnabled={customBrandingEnabled}
+                          hidePoweredByControl={hidePoweredByControl}
                         />
                       ) : (
                         <MobileCustomisation
                           values={localCustomisation}
                           onChange={handleFieldChange}
                           customBrandingEnabled={customBrandingEnabled}
+                          hidePoweredByControl={hidePoweredByControl}
                         />
                       )
                     ) : null}

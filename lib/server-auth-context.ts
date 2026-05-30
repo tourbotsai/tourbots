@@ -155,6 +155,31 @@ export async function resolveCachedUserFromBearerToken(token: string): Promise<U
   return user;
 }
 
+/**
+ * Removes any cached user/user-with-venue entries for a single Firebase uid.
+ * Call after mutating a user record so the next auth-context read is fresh
+ * instead of serving the (up to TTL) stale cached copy.
+ */
+export function invalidateAuthContextCacheForUid(uid: string): void {
+  const stores = getStores();
+  stores.userByUid.delete(uid);
+  stores.userWithVenueByUid.delete(uid);
+}
+
+/**
+ * Removes cached user-with-venue entries for every user attached to a venue.
+ * Call after mutating a venue record so all team members pick up the change
+ * on their next auth-context read rather than waiting for the cache to expire.
+ */
+export function invalidateVenueAuthContextCache(venueId: string): void {
+  const stores = getStores();
+  stores.userWithVenueByUid.forEach((entry, key) => {
+    if (entry.userWithVenue?.venue?.id === venueId) {
+      stores.userWithVenueByUid.delete(key);
+    }
+  });
+}
+
 export async function resolveCachedUserWithVenueFromBearerToken(
   token: string
 ): Promise<UserWithVenue | null> {

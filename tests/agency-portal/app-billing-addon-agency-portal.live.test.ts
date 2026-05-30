@@ -7,8 +7,8 @@ beforeAll(async () => {
   ctx = await getLiveSettingsContext()
 }, 60_000)
 
-describe('live agency portal billing add-on smoke', () => {
-  it('creates a real checkout session for agency_portal add-on', async () => {
+describe('live agency plan billing smoke', () => {
+  it('creates a real checkout session for the agency plan upgrade', async () => {
     const response = await fetch(`${ctx.baseUrl}/api/app/billing/checkout`, {
       method: 'POST',
       headers: {
@@ -16,9 +16,8 @@ describe('live agency portal billing add-on smoke', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'buy_addon',
-        addonCode: 'agency_portal',
-        quantity: 1,
+        action: 'upgrade_plan',
+        planCode: 'agency',
       }),
     })
     const payload = await response.json()

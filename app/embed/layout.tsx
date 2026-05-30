@@ -22,15 +22,24 @@ export default function EmbedLayout({
           .notranslate {
             translate: no;
           }
-          html, body {
+          html {
             min-height: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow-x: hidden !important;
             overflow-y: auto !important;
           }
+          body {
+            min-height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            /* Keep body overflow visible so it is not a dead scroll container;
+               html is the single scroller. This is required for position: sticky to work. */
+            overflow: visible !important;
+          }
           #__next {
             min-height: 100% !important;
+            overflow: visible !important;
           }
         `
       }} />

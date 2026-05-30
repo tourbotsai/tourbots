@@ -50,6 +50,9 @@ function mapStripeStatusToSubscriptionStatus(
   }
 }
 
+// Cascade the main plan's cancel-at-period-end scheduling onto all add-on
+// subscriptions. Agency is a plan tier (not an add-on), so there is no add-on
+// to exclude here.
 async function syncAddonSubscriptionCancellationForCustomer(
   stripe: Stripe,
   customerId: string,
@@ -83,6 +86,7 @@ async function syncAddonSubscriptionCancellationForCustomer(
 }
 
 async function clearVenueAddonsForCancellation(venueId: string, stripeCustomerId?: string | null) {
+  // The main plan (pro or agency) ended: downgrade to free and clear all add-ons.
   await supabase
     .from('venue_billing_records')
     .update({

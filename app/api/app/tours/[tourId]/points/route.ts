@@ -129,6 +129,62 @@ export async function POST(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { tourId: string } }
+) {
+  try {
+    const { tourId } = params;
+    const { pointId, name } = await request.json();
+
+    if (!pointId) {
+      return NextResponse.json({ error: 'Point ID required' }, { status: 400 });
+    }
+
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    if (!trimmedName) {
+      return NextResponse.json({ error: 'Area name is required' }, { status: 400 });
+    }
+
+    const authResult = await resolveTourAccess(request, tourId, { requireCsrf: true });
+    if (authResult instanceof NextResponse) {
+      return authResult;
+    }
+    const { venueId } = authResult;
+
+    const { data: tour, error: tourError } = await supabase
+      .from('tours')
+      .select('venue_id')
+      .eq('id', tourId)
+      .eq('venue_id', venueId)
+      .single();
+
+    if (tourError || !tour) {
+      return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+    }
+
+    const { data, error } = await supabase
+      .from('tour_points')
+      .update({ name: trimmedName })
+      .eq('id', pointId)
+      .eq('tour_id', tourId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({ message: 'Tour point updated successfully', point: data });
+  } catch (error: any) {
+    console.error('Error updating tour point:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to update tour point' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { tourId: string } }

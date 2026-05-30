@@ -241,9 +241,10 @@ export function DashboardContent() {
   const chartTooltipStyle = isDarkMode
     ? { backgroundColor: "#0f172a", border: "1px solid #334155", color: "#E2E8F0" }
     : { backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" };
-  const chartPrimaryStroke = isDarkMode ? "#E2E8F0" : "#0F172A";
-  const chartSecondaryStroke = isDarkMode ? "#94A3B8" : "#475569";
-  const chartTertiaryStroke = isDarkMode ? "#34D399" : "#059669";
+  // Monochrome slate shades to match the app's mono UI — three distinct tiers per mode, no colour accents.
+  const chartPrimaryStroke = isDarkMode ? "#F1F5F9" : "#0F172A";   // Tour views – strongest
+  const chartTertiaryStroke = isDarkMode ? "#94A3B8" : "#475569";  // Tour moves – mid
+  const chartSecondaryStroke = isDarkMode ? "#64748B" : "#94A3B8"; // Chat messages – lightest
 
   return (
     <div className="space-y-6 dark:rounded-2xl dark:border dark:border-slate-800/70 dark:bg-[#12161f]/88 dark:p-4 dark:[--background:220_18%_8%] dark:[--card:220_15%_11%] dark:[--popover:220_15%_11%] dark:[--muted:220_10%_18%] dark:[--muted-foreground:220_8%_70%] dark:[--border:220_9%_24%] dark:[--input:220_9%_24%] dark:[--ring:220_10%_70%]">

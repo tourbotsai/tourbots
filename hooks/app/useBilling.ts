@@ -10,6 +10,33 @@ interface BillingLimits {
   totalMessages: number;
 }
 
+export interface AddonSubscriptionState {
+  active: boolean;
+  cancelAtPeriodEnd: boolean;
+  accessEndsAt: string | null;
+}
+
+export interface AddonSubscriptionDetail {
+  id: string;
+  code: string;
+  quantity: number;
+  amount: number;
+  status: 'active' | 'cancelling';
+  startedAt: string | null;
+  nextPayment: string | null;
+  cancelAtPeriodEnd: boolean;
+  accessEndsAt: string | null;
+}
+
+export type AddonCode =
+  | 'extra_space'
+  | 'message_block'
+  | 'white_label'
+  | 'agency_extra_space'
+  | 'agency_message_block';
+
+export type PaidPlanCode = 'pro' | 'agency';
+
 export function useBilling() {
   const auth = useAuth();
   const { toast } = useToast();
@@ -22,6 +49,8 @@ export function useBilling() {
   const [subscriptionDetails, setSubscriptionDetails] = useState<Subscription | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [limits, setLimits] = useState<BillingLimits | null>(null);
+  const [addonSubscriptions, setAddonSubscriptions] = useState<Record<string, AddonSubscriptionState>>({});
+  const [addonSubscriptionList, setAddonSubscriptionList] = useState<AddonSubscriptionDetail[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const getHeaders = useCallback(async () => {
@@ -53,6 +82,8 @@ export function useBilling() {
       setBillingRecord(data.billingRecord || null);
       setActivePlan(data.activePlan || null);
       setLimits(data.limits || null);
+      setAddonSubscriptions(data.addonSubscriptions || {});
+      setAddonSubscriptionList(data.addonSubscriptionList || []);
 
       if (subscriptionResponse.ok) {
         const subscriptionPayload = await subscriptionResponse.json();
@@ -112,7 +143,7 @@ export function useBilling() {
     }
   }, [fetchBilling, getHeaders, toast]);
 
-  const startPlanCheckout = useCallback(async (planCode: 'pro') => {
+  const startPlanCheckout = useCallback(async (planCode: PaidPlanCode) => {
     setIsLoading(true);
     try {
       const headers = await getHeaders();
@@ -143,7 +174,41 @@ export function useBilling() {
     }
   }, [getHeaders, toast]);
 
-  const purchaseAddon = useCallback(async (addonCode: 'extra_space' | 'message_block' | 'white_label' | 'agency_portal', quantity: number) => {
+  const switchPlan = useCallback(async (planCode: PaidPlanCode) => {
+    setIsLoading(true);
+    try {
+      const headers = await getHeaders();
+      const response = await fetch('/api/app/billing/switch-plan', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ planCode }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to switch plan');
+      }
+
+      toast({
+        title: 'Plan updated',
+        description: `Your plan is now ${planCode.toUpperCase()}. Any price difference is prorated.`,
+      });
+
+      await fetchBilling();
+      return data.billingRecord as VenueBillingRecord;
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to switch your plan.',
+        variant: 'destructive',
+      });
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchBilling, getHeaders, toast]);
+
+  const purchaseAddon = useCallback(async (addonCode: AddonCode, quantity: number) => {
     setIsLoading(true);
     try {
       const headers = await getHeaders();
@@ -174,6 +239,43 @@ export function useBilling() {
       setIsLoading(false);
     }
   }, [getHeaders, toast]);
+
+  const cancelAddon = useCallback(async (addonCode: AddonCode) => {
+    try {
+      const headers = await getHeaders();
+      const response = await fetch('/api/app/billing/cancel-addon', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ addonCode }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to cancel add-on');
+      }
+
+      const accessEndsAt = data.accessEndsAt
+        ? new Date(data.accessEndsAt).toLocaleDateString('en-GB')
+        : null;
+
+      toast({
+        title: 'Add-on cancellation scheduled',
+        description: accessEndsAt
+          ? `This add-on will remain active until ${accessEndsAt}.`
+          : 'This add-on will remain active until the end of the current billing period.',
+      });
+
+      await fetchBilling();
+      return true;
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to cancel add-on.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [fetchBilling, getHeaders, toast]);
 
   const startCustomerPortalSession = useCallback(async () => {
     try {
@@ -208,11 +310,15 @@ export function useBilling() {
     subscriptionDetails,
     subscriptionStatus,
     limits,
+    addonSubscriptions,
+    addonSubscriptionList,
     isLoading,
     fetchBilling,
     selectPlan,
     startPlanCheckout,
+    switchPlan,
     purchaseAddon,
+    cancelAddon,
     startCustomerPortalSession,
   };
 }

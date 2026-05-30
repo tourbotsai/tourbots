@@ -102,29 +102,6 @@ export function SavePositionModal({
               )}
             />
 
-            {/* Show current position data */}
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-input dark:bg-background">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Current Position:
-              </p>
-              {currentSweep && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Sweep ID:</p>
-                  <p className="break-all rounded border border-slate-200 bg-white p-2 font-mono text-xs text-slate-500 dark:border-input dark:bg-background dark:text-slate-300">
-                    {currentSweep.sid}
-                  </p>
-                </div>
-              )}
-              {currentPosition && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Position:</p>
-                  <p className="break-all rounded border border-slate-200 bg-white p-2 font-mono text-xs text-slate-500 dark:border-input dark:bg-background dark:text-slate-300">
-                    {JSON.stringify(currentPosition.position, null, 2)}
-                  </p>
-                </div>
-              )}
-            </div>
-
             <div className="flex items-center justify-end space-x-2 pt-4">
               <Button
                 type="button"

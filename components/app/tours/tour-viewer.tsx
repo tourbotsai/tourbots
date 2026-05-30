@@ -386,6 +386,38 @@ export function TourViewer({
     }
   };
 
+  // Rename a tour point
+  const handleRenamePoint = async (pointId: string, name: string) => {
+    if (!tour?.id) return;
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    const credentials = isAgencyPortal ? 'include' : undefined;
+    if (isAgencyPortal) {
+      headers['x-csrf-token'] = getCookieValue('tb_agency_csrf');
+    } else {
+      if (!authUser) return;
+      headers['Authorization'] = `Bearer ${await authUser.getIdToken()}`;
+    }
+
+    try {
+      const response = await fetch(`/api/app/tours/${tour.id}/points`, {
+        method: 'PATCH',
+        headers,
+        credentials,
+        body: JSON.stringify({ pointId, name }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to rename point');
+      }
+    } catch (error) {
+      console.error('Error renaming point:', error);
+      throw error;
+    }
+  };
+
   // Test navigation to a point
   const handleTestPoint = (point: any) => {
     const navigationEvent = new CustomEvent('matterport_navigate', {
@@ -570,8 +602,8 @@ export function TourViewer({
               Get your tour live with AI guidance
             </h3>
             <p className="mb-6 max-w-xl text-center text-slate-600 dark:text-slate-400">
-              Start by uploading your existing Matterport tour, then configure AI answers, navigation,
-              and lead capture for your visitors.
+              Start by uploading your Matterport tour, then configure your AI chatbot, ready to share
+              with your viewers.
             </p>
             <Button 
               variant="outline" 
@@ -771,6 +803,7 @@ export function TourViewer({
             tourId={tour.id}
             points={tourPoints}
             onDelete={handleDeletePoint}
+            onRename={handleRenamePoint}
             onTest={handleTestPoint}
             onRefresh={fetchTourPoints}
           />

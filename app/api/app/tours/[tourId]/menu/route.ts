@@ -176,6 +176,10 @@ export async function POST(
       return NextResponse.json({ error: 'Padding must be between 12-48px' }, { status: 400 });
     }
 
+    if (settings.padding_vertical !== undefined && (settings.padding_vertical < 0 || settings.padding_vertical > 48)) {
+      return NextResponse.json({ error: 'Vertical padding must be between 0-48px' }, { status: 400 });
+    }
+
     // Validate blocks if provided
     if (blocks && Array.isArray(blocks)) {
       for (const block of blocks) {
@@ -221,6 +225,7 @@ export async function POST(
         position: settings.position,
         max_width: settings.max_width,
         padding: settings.padding,
+        padding_vertical: settings.padding_vertical !== undefined ? settings.padding_vertical : 0,
         border_radius: settings.border_radius,
         menu_background_color: settings.menu_background_color,
         backdrop_blur: settings.backdrop_blur,
@@ -299,7 +304,7 @@ export async function PUT(
 
     // Update settings - only allow specific fields
     const allowedFields = [
-      'enabled', 'position', 'max_width', 'padding', 'border_radius',
+      'enabled', 'position', 'max_width', 'padding', 'padding_vertical', 'border_radius',
       'menu_background_color', 'backdrop_blur', 'entrance_animation',
       // Widget fields
       'show_reopen_widget', 'widget_position', 'widget_icon', 'widget_size',

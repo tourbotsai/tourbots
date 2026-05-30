@@ -7,6 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
 
 interface TextBlockEditorProps {
   block: any;
@@ -98,23 +99,11 @@ export function TextBlockEditor({ block, onUpdate }: TextBlockEditorProps) {
       </div>
 
       {/* Color */}
-      <div>
-        <Label className="text-sm mb-2 block">Text Colour</Label>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={block.content.color}
-            onChange={(e) => updateContent('color', e.target.value)}
-            className="w-12 h-10 rounded border cursor-pointer"
-          />
-          <Input
-            value={block.content.color}
-            onChange={(e) => updateContent('color', e.target.value)}
-            placeholder="#000000"
-            className="flex-1 text-xs font-mono uppercase"
-          />
-        </div>
-      </div>
+      <ColorPicker
+        label="Text Colour"
+        value={block.content.color}
+        onChange={(value) => updateContent('color', value)}
+      />
 
       {/* Alignment */}
       <div>

@@ -18,7 +18,7 @@ describe('live agency portal app shares smoke', () => {
     const payload = await response.json()
 
     expect(response.status).toBe(200)
-    expect(payload?.entitlement?.addon_agency_portal).toBe(true)
+    expect(payload?.entitlement?.entitled).toBe(true)
     expect(Array.isArray(payload?.shares)).toBe(true)
 
     const createdShare = payload.shares.find((share: any) => share.id === ctx.shareId)

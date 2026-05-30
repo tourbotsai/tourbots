@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   Home, 
   Video, 
@@ -12,18 +12,21 @@ import {
   LogOut,
   User,
   Shield,
+  Building2,
   HelpCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/useUser";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useBilling } from "@/hooks/app/useBilling";
+import { venueHasAgencyPortal } from "@/lib/billing-entitlements";
 import { useTheme } from "@/components/app/shared/theme-provider";
 import { Button } from "@/components/ui/button";
 import { signOut } from "firebase/auth";
 import { useAuth } from "reactfire";
 import Image from "next/image";
 
-const navigation = [
+const baseNavigation = [
   {
     name: "Dashboard",
     href: "/app/dashboard",
@@ -51,6 +54,12 @@ const navigation = [
   },
 ];
 
+const agencyNavItem = {
+  name: "Agency",
+  href: "/app/agency",
+  icon: Building2,
+};
+
 interface MobileSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -61,10 +70,22 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const router = useRouter();
   const { user } = useUser();
   const { hasAdminAccess } = useAdminAuth();
+  const { billingRecord, fetchBilling } = useBilling();
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
   const auth = useAuth();
   const [viewportHeight, setViewportHeight] = useState(0);
+
+  const isAgencyPlan = venueHasAgencyPortal(billingRecord);
+
+  const navigation = useMemo(() => {
+    if (!isAgencyPlan) return baseNavigation;
+    const items = [...baseNavigation];
+    const helpIndex = items.findIndex((item) => item.href === "/app/help");
+    const insertAt = helpIndex === -1 ? items.length : helpIndex;
+    items.splice(insertAt, 0, agencyNavItem);
+    return items;
+  }, [isAgencyPlan]);
   const brandLogo = "/tourbots/TourBotsWebsiteLogo.png";
   const navBaseClass = "group flex items-center rounded-xl px-3 py-2.5 transition-all duration-200";
 
@@ -87,6 +108,12 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
       window.removeEventListener('orientationchange', calculateViewportHeight);
     };
   }, []);
+
+  useEffect(() => {
+    if (user?.venue_id) {
+      void fetchBilling();
+    }
+  }, [user?.venue_id, fetchBilling]);
 
   const handleLogout = async () => {
     try {

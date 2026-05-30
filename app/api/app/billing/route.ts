@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { initAdmin } from '@/lib/firebase-admin';
@@ -7,6 +8,108 @@ import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 
 initAdmin();
 const auth = getAuth();
+
+const ACTIVE_STRIPE_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
+
+interface AddonSubscriptionState {
+  active: boolean;
+  cancelAtPeriodEnd: boolean;
+  accessEndsAt: string | null;
+}
+
+interface AddonSubscriptionDetail {
+  id: string;
+  code: string;
+  quantity: number;
+  amount: number;
+  status: 'active' | 'cancelling';
+  startedAt: string | null;
+  nextPayment: string | null;
+  cancelAtPeriodEnd: boolean;
+  accessEndsAt: string | null;
+}
+
+// Summarise the venue's add-on subscriptions straight from Stripe so the UI can
+// show an accurate per-add-on status (active vs cancelling) on any plan,
+// including free venues that only hold a standalone feature add-on. Returns both
+// an aggregated per-code state map and a per-subscription detail list (so the
+// same add-on bought on different days shows as separate rows).
+async function getAddonSubscriptionData(
+  stripeCustomerId?: string | null
+): Promise<{ states: Record<string, AddonSubscriptionState>; list: AddonSubscriptionDetail[] }> {
+  const states: Record<string, AddonSubscriptionState> = {};
+  const list: AddonSubscriptionDetail[] = [];
+  if (!stripeCustomerId) return { states, list };
+
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) return { states, list };
+
+  try {
+    const stripe = new Stripe(secretKey);
+    let hasMore = true;
+    let startingAfter: string | undefined;
+
+    while (hasMore) {
+      const page = await stripe.subscriptions.list({
+        customer: stripeCustomerId,
+        status: 'all',
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+
+      for (const sub of page.data) {
+        const billingAction = (sub.metadata?.billing_action || '').toLowerCase();
+        if (billingAction !== 'buy_addon') continue;
+        if (!ACTIVE_STRIPE_STATUSES.includes(sub.status)) continue;
+
+        const code = sub.metadata?.addon_code || sub.metadata?.plan_name || '';
+        if (!code) continue;
+
+        const item = sub.items?.data?.[0];
+        const periodEnd =
+          ((item as any)?.current_period_end as number | undefined) ||
+          ((sub as any).current_period_end as number | undefined);
+        const cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
+        const quantity = Number(item?.quantity ?? sub.metadata?.addon_quantity ?? 1) || 1;
+        const unitAmount = (item?.price?.unit_amount ?? 0) / 100;
+        const accessEndsAt =
+          cancelAtPeriodEnd && periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
+
+        list.push({
+          id: sub.id,
+          code,
+          quantity,
+          amount: unitAmount * quantity,
+          status: cancelAtPeriodEnd ? 'cancelling' : 'active',
+          startedAt: sub.start_date
+            ? new Date(sub.start_date * 1000).toISOString()
+            : new Date(sub.created * 1000).toISOString(),
+          nextPayment: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+          cancelAtPeriodEnd,
+          accessEndsAt,
+        });
+
+        const existing = states[code];
+        states[code] = {
+          active: true,
+          // If any subscription for this add-on is not cancelling, treat it as active.
+          cancelAtPeriodEnd: existing ? existing.cancelAtPeriodEnd && cancelAtPeriodEnd : cancelAtPeriodEnd,
+          accessEndsAt: accessEndsAt || existing?.accessEndsAt || null,
+        };
+      }
+
+      hasMore = page.has_more;
+      startingAfter = page.data.length > 0 ? page.data[page.data.length - 1].id : undefined;
+    }
+
+    // Stable, predictable order: oldest purchase first.
+    list.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+  } catch (error) {
+    console.error('Failed to load add-on subscription data from Stripe:', error);
+  }
+
+  return { states, list };
+}
 
 const updateBillingSchema = z.object({
   action: z.enum(['select_plan']),
@@ -114,6 +217,8 @@ export async function GET(request: NextRequest) {
       : record.plan_code;
     const activePlan = (plans || []).find((plan: any) => plan.code === activePlanCode) || null;
     const limits = deriveLimits(record, activePlan);
+    const { states: addonSubscriptions, list: addonSubscriptionList } =
+      await getAddonSubscriptionData(record?.stripe_customer_id);
 
     return NextResponse.json({
       plans: plans || [],
@@ -121,6 +226,8 @@ export async function GET(request: NextRequest) {
       billingRecord: record,
       activePlan,
       limits,
+      addonSubscriptions,
+      addonSubscriptionList,
     });
   } catch (error: any) {
     console.error('Error fetching app billing data:', error);

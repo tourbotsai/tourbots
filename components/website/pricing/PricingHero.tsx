@@ -21,7 +21,7 @@ export function PricingHero() {
             Start completely free, move to Pro for your first live space, then add more spaces as you grow.
           </span>
           <span className="mt-2 hidden sm:block">
-            Add-ons such as extra spaces, message, white-label, and agency portal are available.
+            Choose Free, Pro, or Agency, with add-ons such as extra spaces, message blocks, and white-label available.
           </span>
         </p>
 

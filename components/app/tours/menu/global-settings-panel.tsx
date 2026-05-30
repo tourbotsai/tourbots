@@ -15,9 +15,10 @@ import { Layout, Palette, LifeBuoy, ChevronDown, ChevronRight } from "lucide-rea
 interface GlobalSettingsPanelProps {
   settings: any;
   onSettingsChange: (settings: any) => void;
+  contentBlocksSlot?: React.ReactNode;
 }
 
-export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettingsPanelProps) {
+export function GlobalSettingsPanel({ settings, onSettingsChange, contentBlocksSlot }: GlobalSettingsPanelProps) {
   const updateSetting = (key: string, value: any) => {
     onSettingsChange({ ...settings, [key]: value });
   };
@@ -56,6 +57,8 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
           </div>
         </CardContent>
       </Card>
+
+      {contentBlocksSlot}
 
       {/* Layout Settings */}
       <Card className="overflow-hidden">
@@ -103,44 +106,57 @@ export function GlobalSettingsPanel({ settings, onSettingsChange }: GlobalSettin
             </Select>
           </div>
 
-          <div>
-            <Label className="text-sm dark:text-gray-200">Max Width: {settings.max_width}px</Label>
-            <Slider
-              value={[settings.max_width]}
-              onValueChange={([value]) => updateSetting('max_width', value)}
-              min={300}
-              max={1000}
-              step={50}
-              className="mt-2"
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label className="text-sm dark:text-gray-200">Max Width: {settings.max_width}px</Label>
+              <Slider
+                value={[settings.max_width]}
+                onValueChange={([value]) => updateSetting('max_width', value)}
+                min={300}
+                max={1000}
+                step={50}
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm dark:text-gray-200">Border Radius: {settings.border_radius}px</Label>
+              <Slider
+                value={[settings.border_radius]}
+                onValueChange={([value]) => updateSetting('border_radius', value)}
+                min={0}
+                max={32}
+                step={4}
+                className="mt-2"
+              />
+            </div>
           </div>
 
-          <div>
-            <Label className="text-sm dark:text-gray-200">Horizontal Padding: {settings.padding}px</Label>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Vertical spacing is controlled per content block.
-            </p>
-            <Slider
-              value={[settings.padding]}
-              onValueChange={([value]) => updateSetting('padding', value)}
-              min={12}
-              max={48}
-              step={4}
-              className="mt-2"
-            />
-          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label className="text-sm dark:text-gray-200">Vertical Padding: {settings.padding_vertical ?? 0}px</Label>
+              <Slider
+                value={[settings.padding_vertical ?? 0]}
+                onValueChange={([value]) => updateSetting('padding_vertical', value)}
+                min={0}
+                max={48}
+                step={4}
+                className="mt-2"
+              />
+            </div>
 
-              <div>
-                <Label className="text-sm dark:text-gray-200">Border Radius: {settings.border_radius}px</Label>
-                <Slider
-                  value={[settings.border_radius]}
-                  onValueChange={([value]) => updateSetting('border_radius', value)}
-                  min={0}
-                  max={32}
-                  step={4}
-                  className="mt-2"
-                />
-              </div>
+            <div>
+              <Label className="text-sm dark:text-gray-200">Horizontal Padding: {settings.padding}px</Label>
+              <Slider
+                value={[settings.padding]}
+                onValueChange={([value]) => updateSetting('padding', value)}
+                min={12}
+                max={48}
+                step={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
