@@ -43,7 +43,10 @@ interface TourViewerProps {
 
 function isAgencyPortalPath(): boolean {
   if (typeof window === "undefined") return false;
-  return window.location.pathname.startsWith("/embed/agency/");
+  return (
+    window.location.pathname.startsWith("/embed/agency/") ||
+    window.location.pathname.startsWith("/embed/agency-portal")
+  );
 }
 
 function getCookieValue(name: string): string {
