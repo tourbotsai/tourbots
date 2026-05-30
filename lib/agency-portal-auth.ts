@@ -13,10 +13,16 @@ function isProduction() {
 }
 
 function buildCookieConfig(httpOnly: boolean) {
+  const production = isProduction();
   return {
     httpOnly,
-    secure: isProduction(),
-    sameSite: (isProduction() ? 'none' : 'lax') as 'none' | 'lax',
+    secure: production,
+    sameSite: (production ? 'none' : 'lax') as 'none' | 'lax',
+    // Partitioned (CHIPS) lets the session cookie work inside a cross-site
+    // iframe (the agency portal embedded on a client's site) on browsers that
+    // block third-party cookies, e.g. Safari and Chrome with 3p cookies off.
+    // Requires Secure, so only set it in production where SameSite=None applies.
+    partitioned: production,
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   };

@@ -43,6 +43,10 @@ interface AgencyPortalShellProps {
     triggers?: boolean;
   };
   previewOnly?: boolean;
+  // When the shell is launched from the universal portal entry, the client has
+  // already authenticated, so we seed the session to avoid flashing a second
+  // login form while the background session check confirms and fetches CSRF.
+  initialSession?: SessionState | null;
   previewSettings?: PortalSettings | null;
   previewInformationSections?: InformationSection[];
   previewTriggers?: ChatbotTrigger[];
@@ -115,6 +119,7 @@ export function AgencyPortalShell({
   venueName,
   settingsBlocks,
   previewOnly = false,
+  initialSession = null,
   previewSettings = null,
   previewInformationSections = [],
   previewTriggers = [],
@@ -125,8 +130,8 @@ export function AgencyPortalShell({
   previewAnalyticsConversations = [],
 }: AgencyPortalShellProps) {
   const { user: appUser } = useUser();
-  const [session, setSession] = useState<SessionState>({ authenticated: false });
-  const [loadingSession, setLoadingSession] = useState(true);
+  const [session, setSession] = useState<SessionState>(initialSession ?? { authenticated: false });
+  const [loadingSession, setLoadingSession] = useState(!previewOnly && !initialSession);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -195,8 +200,8 @@ export function AgencyPortalShell({
     return { ...(base as Record<string, string>) };
   }
 
-  async function fetchSession() {
-    setLoadingSession(true);
+  async function fetchSession(background = false) {
+    if (!background) setLoadingSession(true);
     try {
       const res = await fetch(`/api/public/agency-portal/auth/session?shareSlug=${encodeURIComponent(shareSlug)}`, {
         credentials: 'include',
@@ -205,9 +210,11 @@ export function AgencyPortalShell({
       const data = await res.json();
       setSession(data?.authenticated ? data : { authenticated: false });
     } catch {
-      setSession({ authenticated: false });
+      // On a background refresh keep the optimistic seeded session rather than
+      // dropping the user back to the login form on a transient network error.
+      if (!background) setSession({ authenticated: false });
     } finally {
-      setLoadingSession(false);
+      if (!background) setLoadingSession(false);
     }
   }
 
@@ -216,7 +223,9 @@ export function AgencyPortalShell({
       setLoadingSession(false);
       return;
     }
-    fetchSession();
+    // If we were seeded with a session, confirm it in the background (and pull
+    // the CSRF token) without flashing the loading/login state.
+    fetchSession(Boolean(initialSession));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareSlug, previewOnly]);
 

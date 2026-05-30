@@ -26,6 +26,7 @@ interface ResolvedShare {
   tourId: string | null;
   tourTitle: string;
   enabledModules: EnabledModules;
+  user: { email: string; displayName?: string | null } | null;
 }
 
 interface AgencyPortalEntryProps {
@@ -68,6 +69,7 @@ export function AgencyPortalEntry({
             tourId: data.share.tourId ?? null,
             tourTitle: data.share.tourTitle || 'Tour',
             enabledModules: data.share.enabledModules || {},
+            user: data.user ? { email: data.user.email, displayName: data.user.displayName } : null,
           });
           setStatus('authed');
         } else {
@@ -103,6 +105,7 @@ export function AgencyPortalEntry({
         tourId: data.share.tourId ?? null,
         tourTitle: data.share.tourTitle || 'Tour',
         enabledModules: data.share.enabledModules || {},
+        user: data.user ? { email: data.user.email, displayName: data.user.displayName } : null,
       });
       setStatus('authed');
     } catch {
@@ -119,6 +122,10 @@ export function AgencyPortalEntry({
         shareSlug={share.shareSlug}
         tourId={share.tourId}
         shareActive
+        initialSession={{
+          authenticated: true,
+          user: share.user ? { email: share.user.email, displayName: share.user.displayName } : undefined,
+        }}
         agencyName={agencyName}
         agencyLogoUrl={agencyLogoUrl}
         tourTitle={share.tourTitle}
@@ -143,13 +150,13 @@ export function AgencyPortalEntry({
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="flex min-h-screen items-center justify-center bg-white px-4 py-8 sm:px-6 lg:px-8">
       <style jsx global>{`
         html, body, #__next {
           height: auto !important;
         }
       `}</style>
-      <div className="mx-auto w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-6">
         {showHeader && (
           <Card className="overflow-hidden border-slate-200">
             <div
