@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   Table, 
   TableBody, 
@@ -42,7 +41,6 @@ import {
   Calendar,
   Clock,
   Globe,
-  Target,
   RefreshCw,
   ArrowUpDown,
   ArrowUp,
@@ -136,34 +134,19 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
   });
 
   const getStatusBadge = (guide: Guide) => {
-    if (guide.is_published) {
-      return (
-        <Badge variant="default" className="bg-success-green text-white">
-          <Globe className="h-3 w-3 mr-1" />
-          Published
-        </Badge>
-      );
-    }
+    const isPublished = guide.is_published;
     return (
-      <Badge variant="secondary">
-        <Edit className="h-3 w-3 mr-1" />
-        Draft
-      </Badge>
-    );
-  };
-
-  const getDifficultyBadge = (difficulty: string) => {
-    const variants = {
-      beginner: "bg-green-100 text-green-800 border-green-200",
-      intermediate: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      advanced: "bg-red-100 text-red-800 border-red-200",
-    };
-
-    return (
-      <Badge variant="outline" className={variants[difficulty as keyof typeof variants]}>
-        <Target className="h-3 w-3 mr-1" />
-        {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-      </Badge>
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            isPublished ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+          )}
+        />
+        <span className="text-sm text-foreground">
+          {isPublished ? "Published" : "Draft"}
+        </span>
+      </div>
     );
   };
 
@@ -261,7 +244,7 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
           </div>
 
           {/* Search and Filters */}
-          <div className="space-y-4">
+          <div className="mt-1 space-y-4">
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -275,7 +258,6 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
               
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setShowFilters(!showFilters)}
                 className="shrink-0"
               >
@@ -286,7 +268,6 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
               {(filters.search || filters.tags?.length || filters.difficulty || filters.published !== undefined) && (
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={clearFilters}
                   className="shrink-0"
                 >
@@ -417,7 +398,7 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
                         }}
                       />
                     </TableHead>
-                    <TableHead className="w-[300px]">
+                    <TableHead className="w-[45%] min-w-[420px]">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -429,18 +410,6 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
                       </Button>
                     </TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleSort('difficulty_level')}
-                        className="h-auto p-0 font-medium"
-                      >
-                        Difficulty
-                        {getSortIcon('difficulty_level')}
-                      </Button>
-                    </TableHead>
-                    <TableHead>Tags</TableHead>
                     <TableHead>
                       <Button
                         variant="ghost"
@@ -489,7 +458,7 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
                       
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium line-clamp-2">
+                          <div className="font-medium line-clamp-1">
                             {guide.title}
                           </div>
                           {guide.excerpt && (
@@ -502,25 +471,6 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
                       
                       <TableCell>
                         {getStatusBadge(guide)}
-                      </TableCell>
-                      
-                      <TableCell>
-                        {getDifficultyBadge(guide.difficulty_level)}
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {guide.tags?.slice(0, 2).map(tag => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {guide.tags && guide.tags.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{guide.tags.length - 2}
-                            </Badge>
-                          )}
-                        </div>
                       </TableCell>
                       
                       <TableCell>
@@ -538,8 +488,8 @@ export function AdminGuidesTable({ className }: AdminGuidesTableProps) {
                       </TableCell>
                       
                       <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
+                        <div className="flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
+                          <Calendar className="h-3 w-3 shrink-0" />
                           <span>{formatDate(guide.created_at)}</span>
                         </div>
                       </TableCell>

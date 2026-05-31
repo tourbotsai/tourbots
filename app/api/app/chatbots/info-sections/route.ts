@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Chatbot configuration not found for venue' }, { status: 404 });
       }
     } else {
-      const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, authResult.venueId);
+      const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, authResult.venueId, authResult.role);
       if (!scopedConfig) {
         return NextResponse.json({ error: 'Chatbot configuration not found for venue' }, { status: 404 });
       }
@@ -195,7 +195,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Chatbot configuration not found for venue' }, { status: 404 });
       }
     } else {
-      const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, authResult.venueId);
+      const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, authResult.venueId, authResult.role);
       if (!scopedConfig) {
         return NextResponse.json({ error: 'Chatbot configuration not found for venue' }, { status: 404 });
       }

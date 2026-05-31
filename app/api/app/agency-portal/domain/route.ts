@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
-import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
+import { authenticateAndGetVenue, getScopedVenueId } from '@/lib/authenticated-venue';
 import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 import { normaliseDomain } from '@/lib/agency-portal-auth';
 import {
@@ -31,13 +31,17 @@ interface DomainState {
   tour_embed_dns_records: DnsRecord[] | null;
 }
 
-/** Ensures the caller owns an entitled (Agency-plan) venue. */
+/** Ensures the caller owns an entitled (Agency-plan) venue. Platform admins may
+ * target another venue by passing its id. */
 async function requireEntitledVenue(
-  request: NextRequest
+  request: NextRequest,
+  requestedVenueId?: string | null
 ): Promise<{ venueId: string } | NextResponse> {
   const authResult = await authenticateAndGetVenue(request);
   if (authResult instanceof NextResponse) return authResult;
-  const { venueId } = authResult;
+  const scopedVenueId = getScopedVenueId(authResult, requestedVenueId);
+  if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+  const venueId = scopedVenueId;
 
   const { data: billingRecord, error: billingError } = await supabase
     .from('venue_billing_records')
@@ -97,7 +101,8 @@ function stateResponse(state: DomainState | null) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireEntitledVenue(request);
+    const requestedVenueId = new URL(request.url).searchParams.get('venueId');
+    const auth = await requireEntitledVenue(request, requestedVenueId);
     if (auth instanceof NextResponse) return auth;
     const state = await loadState(auth.venueId);
     return stateResponse(state);
@@ -109,11 +114,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireEntitledVenue(request);
+    const body = await request.json();
+    const auth = await requireEntitledVenue(request, body?.venueId);
     if (auth instanceof NextResponse) return auth;
     const { venueId } = auth;
 
-    const body = await request.json();
     const parsed = actionSchema.safeParse(body);
     if (!parsed.success) {
       const messages = parsed.error.errors.map((entry) => entry.message).join(', ');

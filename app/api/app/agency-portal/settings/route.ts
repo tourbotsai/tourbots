@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
-import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
+import { authenticateAndGetVenue, getScopedVenueId } from '@/lib/authenticated-venue';
 import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 import { normaliseDomain } from '@/lib/agency-portal-auth';
 
@@ -46,7 +46,10 @@ export async function GET(request: NextRequest) {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId } = authResult;
+    const requestedVenueId = new URL(request.url).searchParams.get('venueId');
+    const scopedVenueId = getScopedVenueId(authResult, requestedVenueId);
+    if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+    const venueId = scopedVenueId;
     await ensureSettingsRow(venueId);
 
     const [{ data: settings, error: settingsError }, { data: billingRecord, error: billingError }] = await Promise.all([
@@ -107,8 +110,10 @@ export async function PUT(request: NextRequest) {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId } = authResult;
     const body = await request.json();
+    const scopedVenueId = getScopedVenueId(authResult, body?.venueId);
+    if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+    const venueId = scopedVenueId;
     const parsed = updateSettingsSchema.safeParse(body);
 
     if (!parsed.success) {

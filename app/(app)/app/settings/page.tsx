@@ -6,7 +6,10 @@ import { ProfileForm } from "@/components/app/settings/profile-form";
 import { VenueSettings } from "@/components/app/settings/venue-settings";
 import { Subscription } from "@/components/app/settings/subscription";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+
+const VALID_SETTINGS_TABS = ["profile", "venue", "billing"] as const;
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +23,12 @@ export default function SettingsPage() {
 
 function SettingsContent() {
   const mobileTabsScrollRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState("profile");
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const initialTab = VALID_SETTINGS_TABS.includes(requestedTab as any)
+    ? (requestedTab as string)
+    : "profile";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const goToBilling = () => {
     setActiveTab("billing");
     requestAnimationFrame(() => {

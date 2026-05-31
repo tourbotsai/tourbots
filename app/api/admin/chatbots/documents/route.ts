@@ -28,14 +28,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('venue_id', venueId);
     }
 
-    if (chatbotType) {
-      if (chatbotType !== 'tour') {
-        return NextResponse.json(
-          { error: 'chatbotType filter must be "tour" or omitted' },
-          { status: 400 }
-        );
-      }
-      query = query.eq('chatbot_type', 'tour');
+    // The platform is tour-only and chatbot_documents has no chatbot_type
+    // column, so we validate the param but do not filter on a missing column.
+    if (chatbotType && chatbotType !== 'tour') {
+      return NextResponse.json(
+        { error: 'chatbotType filter must be "tour" or omitted' },
+        { status: 400 }
+      );
     }
 
     const { data, error } = await query;

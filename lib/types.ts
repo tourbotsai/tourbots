@@ -1016,7 +1016,7 @@ export interface StripePrice {
 export interface PaymentLinkRequest {
   venueId: string;
   customerEmail: string;
-  planName: 'free' | 'pro' | 'essential' | 'professional';
+  planName: 'free' | 'pro' | 'agency' | 'essential' | 'professional';
   customPrice?: number;
   billingCycle?: 'monthly' | 'yearly';
   trialPeriodDays?: number; // NEW: 0 for no trial, 30/60/90 for trial
@@ -1097,6 +1097,7 @@ export interface PlatformMetrics {
   totalConversations: number;
   monthlyRevenue: number;
   totalTourViews: number;
+  totalTourMoves: number;
   activeSubscriptions: number;
   
   // Growth indicators
@@ -1167,12 +1168,20 @@ export interface PlatformActivity {
   metadata?: any;
 }
 
+export interface PlatformTrendPoint {
+  date: string;
+  tourViews: number;
+  tourMoves: number;
+  chatMessages: number;
+}
+
 export interface AdminDashboardData {
   metrics: PlatformMetrics;
   health: PlatformHealth;
   revenue: RevenueAnalytics;
   engagement: CustomerEngagement;
   recentActivity: PlatformActivity[];
+  dailyTrend: PlatformTrendPoint[];
 }
 
 // Subscription plan type

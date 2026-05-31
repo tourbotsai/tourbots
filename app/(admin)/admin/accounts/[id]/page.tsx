@@ -19,11 +19,14 @@ import {
 } from "@/components/ui/collapsible";
 import { TourMenuBuilder } from "@/components/app/tours/menu/tour-menu-builder";
 import { TourViewer } from "@/components/app/tours/tour-viewer";
+import { TourAnalytics } from "@/components/app/tours/tour-analytics";
 import { ChatbotSettings } from "@/components/admin/chatbots/chatbot-settings";
 import { ChatbotCustomisation } from "@/components/admin/chatbots/chatbot-customisation";
 import { ChatbotTrainingDocuments } from "@/components/admin/chatbots/chatbot-training-documents";
 import { ChatbotInfoSections } from "@/components/app/chatbots/tour/chatbot-info-sections";
 import { ChatbotTriggers } from "@/components/app/chatbots/tour/chatbot-triggers";
+import { BillingOverviewPanel, type BillingOverviewData } from "@/components/billing/billing-overview-panel";
+import { AgencySettings } from "@/components/app/settings/agency-settings";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowLeft,
@@ -37,8 +40,7 @@ import {
   Bot,
   Palette,
   Copy,
-  Eye,
-  BarChart3,
+  Layers,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +64,24 @@ interface VenueDetailsResponse {
   embedStats?: any[];
   conversations?: any[];
   users: any[];
+  agencyPortal?: {
+    settings: any | null;
+    shares: Array<{
+      id: string;
+      tour_id: string | null;
+      share_slug: string;
+      is_active: boolean;
+      tourTitle: string | null;
+      clientCount: number;
+    }>;
+    users: Array<{
+      id: string;
+      share_id: string;
+      email: string;
+      display_name: string | null;
+      is_active: boolean;
+    }>;
+  };
 }
 
 interface ShareOptions {
@@ -91,6 +111,10 @@ export default function AdminAccountDetailPage() {
 
   const [accountInfoOpen, setAccountInfoOpen] = useState(true);
   const [billingOpen, setBillingOpen] = useState(false);
+  const [billingData, setBillingData] = useState<BillingOverviewData | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [agencyPortalOpen, setAgencyPortalOpen] = useState(false);
   const [toursOpen, setToursOpen] = useState(false);
   const [chatbotSetupOpen, setChatbotSetupOpen] = useState(false);
   const [chatbotInformationOpen, setChatbotInformationOpen] = useState(false);
@@ -133,6 +157,40 @@ export default function AdminAccountDetailPage() {
       tourWorkspaceTabsScrollRef.current?.scrollTo({ left: 0, behavior: "auto" });
     }
   }, [selectedTourId]);
+
+  // Billing is loaded lazily the first time the Billing section is opened, since
+  // it makes live Stripe calls. It reuses the same Stripe-aligned overview the
+  // user billing page consumes, scoped to this account.
+  useEffect(() => {
+    if (!billingOpen || !accountId) return;
+    if (billingData || billingLoading) return;
+
+    let cancelled = false;
+    setBillingLoading(true);
+    setBillingError(null);
+    (async () => {
+      try {
+        const response = await fetch(`/api/admin/venues/${accountId}/billing`);
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to load billing data");
+        }
+        if (!cancelled) setBillingData(result);
+      } catch (error: any) {
+        if (!cancelled) setBillingError(error.message || "Failed to load billing data");
+      } finally {
+        if (!cancelled) setBillingLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally excludes billingData/billingLoading: including them would
+    // re-run this effect the moment we flip billingLoading, cancelling the
+    // in-flight request before its result is stored.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingOpen, accountId]);
 
   const handleSaveVenue = async () => {
     if (!editedVenue) return;
@@ -182,10 +240,106 @@ export default function AdminAccountDetailPage() {
     return details.users[0];
   }, [details?.users]);
 
+  const accountType = useMemo(() => {
+    const isPlatformAdmin = (details?.users || []).some((user: any) => user.role === "platform_admin");
+    if (isPlatformAdmin) return "platform_admin";
+    const record = details?.billing?.record;
+    const effective =
+      record?.billing_override_enabled && record?.override_plan_code
+        ? record.override_plan_code
+        : record?.plan_code || "free";
+    return effective;
+  }, [details?.users, details?.billing?.record]);
+
+  const isAgencyAccount = accountType === "agency";
+
+  const accountTypeLabel = useMemo(() => {
+    const labels: Record<string, string> = {
+      free: "Free",
+      pro: "Pro",
+      agency: "Agency",
+      platform_admin: "Platform admin",
+    };
+    return labels[accountType] || (accountType ? accountType.toUpperCase() : "Free");
+  }, [accountType]);
+
   const selectedTour = useMemo(() => {
     if (!details?.tours?.length || !selectedTourId) return null;
     return details.tours.find((tour: any) => tour.id === selectedTourId) || null;
   }, [details?.tours, selectedTourId]);
+
+  // A "location" is a primary tour (its own space, chatbot and embed). Each
+  // location can contain multiple secondary "models" (parent_tour_id points at
+  // the location) which share that location's chatbot/embed and which the AI
+  // switches between. Legacy secondary rows without a parent are attached to the
+  // sole location when there is only one.
+  const locationTours = useMemo(() => {
+    const rows = details?.tours || [];
+    return rows.filter((tour: any) => tour.tour_type === "primary" || !tour.tour_type);
+  }, [details?.tours]);
+
+  const modelsByLocation = useMemo(() => {
+    const rows = details?.tours || [];
+    const singleLocation = locationTours.length <= 1;
+    const map = new Map<string, any[]>();
+    for (const location of locationTours) {
+      const models = rows.filter((tour: any) => {
+        if (tour.id === location.id) return true;
+        if (tour.tour_type !== "secondary") return false;
+        if (tour.parent_tour_id) return tour.parent_tour_id === location.id;
+        return singleLocation;
+      });
+      // Show the main (primary) model first, then the secondary models.
+      models.sort((a: any, b: any) => {
+        const aIsPrimary = a.id === location.id ? 0 : 1;
+        const bIsPrimary = b.id === location.id ? 0 : 1;
+        return aIsPrimary - bIsPrimary;
+      });
+      map.set(location.id, models);
+    }
+    return map;
+  }, [details?.tours, locationTours]);
+
+  // For agency accounts, map each tour (location) to its agency-portal client
+  // label so the Tours selector can show "Agency clients" with the client name
+  // (display name / email) or share slug, rather than the raw tour title.
+  const clientLabelByTourId = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!isAgencyAccount) return map;
+    const usersByShare = new Map<string, any[]>();
+    for (const client of details?.agencyPortal?.users || []) {
+      const list = usersByShare.get(client.share_id) || [];
+      list.push(client);
+      usersByShare.set(client.share_id, list);
+    }
+    for (const share of details?.agencyPortal?.shares || []) {
+      if (!share.tour_id) continue;
+      const clients = usersByShare.get(share.id) || [];
+      const primaryClient = clients[0];
+      const label =
+        primaryClient?.display_name?.trim() ||
+        primaryClient?.email ||
+        share.share_slug ||
+        share.tourTitle ||
+        null;
+      if (label) map.set(share.tour_id, label);
+    }
+    return map;
+  }, [isAgencyAccount, details?.agencyPortal?.shares, details?.agencyPortal?.users]);
+
+  const activeLocationId = useMemo(() => {
+    if (!selectedTour) return null;
+    if (selectedTour.tour_type === "secondary") {
+      if (selectedTour.parent_tour_id) return selectedTour.parent_tour_id;
+      return locationTours.length === 1 ? locationTours[0].id : null;
+    }
+    return selectedTour.id;
+  }, [selectedTour, locationTours]);
+
+  const activeLocationModels = useMemo(() => {
+    if (!activeLocationId) return [];
+    return modelsByLocation.get(activeLocationId) || [];
+  }, [activeLocationId, modelsByLocation]);
 
   const tourChatbotConfigId = useMemo(() => {
     if (!details?.chatbots?.length) return null;
@@ -221,48 +375,6 @@ export default function AdminAccountDetailPage() {
     ? `<iframe src="${typeof window !== "undefined" ? window.location.origin : ""}/embed/tour/${accountId}?tourId=${selectedTour.id}&showTitle=${shareOptions.showTitle}&showChat=${shareOptions.showChat}" width="${shareOptions.width}" height="${shareOptions.height}" frameborder="0" allowfullscreen></iframe>`
     : "";
 
-  const conversationRows = useMemo(() => {
-    if (!selectedTourId || !details?.conversations?.length) return [];
-    return details.conversations
-      .filter((conversation: any) => conversation.chatbot_type === "tour")
-      .slice(0, 12);
-  }, [details?.conversations, selectedTourId]);
-
-  const deviceSplitRows = useMemo(() => {
-    const rows = details?.embedStats || [];
-    if (!rows.length) return [];
-
-    const counts = rows
-      .filter((row: any) => row.embed_type === "tour")
-      .reduce((accumulator: Record<string, number>, row: any) => {
-        const userAgent = String(row.user_agent || "").toLowerCase();
-        const key = /mobile|android|iphone|ipod/i.test(userAgent)
-          ? "Mobile"
-          : /ipad|tablet|playbook|silk/i.test(userAgent)
-            ? "Tablet"
-            : "Desktop";
-        accumulator[key] = (accumulator[key] || 0) + Number(row.views_count || 0);
-        return accumulator;
-      }, {});
-
-    const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
-    return Object.entries(counts)
-      .map(([device, views]) => ({
-        device,
-        views,
-        percentage: total > 0 ? Math.round((views / total) * 100) : 0,
-      }))
-      .sort((a, b) => b.views - a.views);
-  }, [details?.embedStats]);
-
-  const formatGbp = (value: number) =>
-    new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: "GBP",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Number(value || 0));
-
   if (isLoading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
@@ -292,7 +404,14 @@ export default function AdminAccountDetailPage() {
   return (
     <div className="space-y-6">
       <AppTitle
-        title={editedVenue.name || "Account"}
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            {editedVenue.name || "Account"}
+            <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
+              {accountTypeLabel}
+            </Badge>
+          </span>
+        }
         description="Account-level controls, tours, chatbot configuration, customisation, and testing."
         action={
           <div className="flex items-center gap-2">
@@ -403,146 +522,47 @@ export default function AdminAccountDetailPage() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-5 pt-5">
-              {details.billing?.record ? (
-                <>
-                  {(() => {
-                    const addonsCatalog = details.billing?.addons || [];
-                    const extraSpacePrice = Number(
-                      addonsCatalog.find((addon: any) => addon.code === "extra_space")?.monthly_price_gbp || 0
-                    );
-                    const messageBlockPrice = Number(
-                      addonsCatalog.find((addon: any) => addon.code === "message_block")?.monthly_price_gbp || 0
-                    );
-                    const whiteLabelPrice = Number(
-                      addonsCatalog.find((addon: any) => addon.code === "white_label")?.monthly_price_gbp || 0
-                    );
-
-                    const extraSpaceQty = Number(details.billing.record.addon_extra_spaces || 0);
-                    const messageBlockQty = Number(details.billing.record.addon_message_blocks || 0);
-                    const whiteLabelQty = details.billing.record.addon_white_label ? 1 : 0;
-
-                    const planMonthly = Number(details.billing.activePlan?.monthly_price_gbp || 0);
-                    const baseSpaces = Number(details.billing.activePlan?.included_spaces || 0);
-                    const baseMessages = Number(details.billing.activePlan?.included_messages || 0);
-                    const extraSpaceTotal = extraSpacePrice * extraSpaceQty;
-                    const messageBlockTotal = messageBlockPrice * messageBlockQty;
-                    const whiteLabelTotal = whiteLabelPrice * whiteLabelQty;
-                    const addonsMonthlyTotal = extraSpaceTotal + messageBlockTotal + whiteLabelTotal;
-                    const accountMonthlyTotal = planMonthly + addonsMonthlyTotal;
-                    const messageCreditsLimit = Number(
-                      details.billing.record.effective_message_limit ??
-                        (baseMessages + (extraSpaceQty * 1000) + (messageBlockQty * 1000))
-                    );
-                    const messageCreditsUsed = Number(
-                      details.billing?.usage?.messageCreditsUsed ?? details.chatbotStats?.totalMessages ?? 0
-                    );
-                    const displayMessageLimit = Math.max(messageCreditsLimit, messageCreditsUsed);
-                    const activeSpacesUsed = details.tours.filter(
-                      (tour: any) => tour.tour_type === "primary" || !tour.tour_type
-                    ).length;
-                    const spacesLimit = Number(
-                      details.billing.record.effective_space_limit ?? (baseSpaces + extraSpaceQty)
-                    );
-                    const displaySpacesLimit = Math.max(spacesLimit, activeSpacesUsed);
-
-                    return (
-                      <>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-xs text-slate-500">Total monthly revenue</p>
-                      <p className="text-sm font-semibold text-slate-900">{formatGbp(accountMonthlyTotal)}</p>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-xs text-slate-500">Message usage</p>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {messageCreditsUsed.toLocaleString("en-GB")}/{displayMessageLimit.toLocaleString("en-GB")}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-xs text-slate-500">Active spaces</p>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {activeSpacesUsed.toLocaleString("en-GB")}/{displaySpacesLimit.toLocaleString("en-GB")}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Subscription plan</Label>
-                      <div className="flex h-10 items-center justify-between rounded-md border border-slate-200 px-3">
-                        <p className="text-sm text-slate-700">
-                          {(details.billing.activePlan?.name || details.billing.record.plan_code || "Free")} - Monthly {formatGbp(planMonthly)}
-                        </p>
-                        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
-                          {(details.billing.activePlan?.code || details.billing.record.plan_code || "free").toUpperCase()}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Billing status</Label>
-                      <div className="flex h-10 items-center rounded-md border border-slate-200 px-3">
-                        <p className="text-sm text-slate-700 capitalize">
-                          {details.billing.record.billing_status || "free"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Plan override</Label>
-                      <div className="flex h-10 items-center rounded-md border border-slate-200 px-3">
-                        <p className="text-sm text-slate-700">
-                          {details.billing.record.billing_override_enabled
-                            ? `Enabled (${details.billing.record.override_plan_code || "custom"})`
-                            : "Disabled"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>White-label add-on</Label>
-                      <div className="flex h-10 items-center rounded-md border border-slate-200 px-3">
-                        <p className="text-sm text-slate-700">
-                          {details.billing.record.addon_white_label ? "Purchased" : "Not purchased"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
-                    <p className="mb-3 text-sm font-medium text-slate-900">Purchased add-ons</p>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                      <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
-                        <p className="text-xs text-slate-500">Additional spaces</p>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {extraSpaceQty.toLocaleString("en-GB")} x {formatGbp(extraSpacePrice)} = {formatGbp(extraSpaceTotal)}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
-                        <p className="text-xs text-slate-500">Message blocks</p>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {messageBlockQty.toLocaleString("en-GB")} x {formatGbp(messageBlockPrice)} = {formatGbp(messageBlockTotal)}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
-                        <p className="text-xs text-slate-500">White-label</p>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {whiteLabelQty} x {formatGbp(whiteLabelPrice)} = {formatGbp(whiteLabelTotal)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                      </>
-                    );
-                  })()}
-                </>
+              {billingLoading && !billingData ? (
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading live billing data from Stripe...
+                </div>
+              ) : billingError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  {billingError}
+                </div>
+              ) : billingData ? (
+                <BillingOverviewPanel data={billingData} />
               ) : (
                 <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
-                  No billing record found for this account yet.
+                  No billing data available for this account yet.
                 </div>
               )}
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {isAgencyAccount && (
+        <Collapsible open={agencyPortalOpen} onOpenChange={setAgencyPortalOpen}>
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  <h2 className="text-sm font-semibold text-slate-900">Agency portal</h2>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${agencyPortalOpen ? "rotate-180" : ""}`} />
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-5">
+                {agencyPortalOpen && <AgencySettings forcedVenueId={accountId} />}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
 
       <Collapsible open={toursOpen} onOpenChange={setToursOpen}>
         <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -558,47 +578,136 @@ export default function AdminAccountDetailPage() {
           <CollapsibleContent>
             <CardContent className="space-y-4 pt-5">
               {selectedTour ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-700">
-                  Viewing detail blocks for: <span className="font-medium text-slate-900">{selectedTour.title || "Untitled tour"}</span>
+                <div className="space-y-2">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-700">
+                    Viewing detail blocks for: <span className="font-medium text-slate-900">{selectedTour.title || "Untitled tour"}</span>
+                  </div>
+                  {isAgencyAccount && activeLocationId && clientLabelByTourId.get(activeLocationId) && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-600">
+                      Client of <span className="font-medium text-slate-900">{editedVenue?.name || "this agency"}</span>. Billing is
+                      handled by the agency:{" "}
+                      <span className="font-medium text-slate-900">{editedVenue?.name || "this agency"}</span>.
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-3 text-sm text-slate-600">
-                  Select a tour below to load the full tour workspace.
+                  Select a {isAgencyAccount ? "client" : "tour"} below to load the full tour workspace.
                 </div>
               )}
 
-              {details.tours.length > 0 ? (
-                <div className="space-y-3">
-                  {details.tours.map((tour: any) => (
-                    <div key={tour.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">{tour.title || "Untitled tour"}</p>
-                          <p className="text-xs text-slate-500">{tour.matterport_tour_id || "No Matterport ID"}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
-                            {tour.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant={selectedTourId === tour.id ? "default" : "outline"}
-                            className={
-                              selectedTourId === tour.id
-                                ? "bg-slate-900 text-white hover:bg-slate-800"
-                                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                            }
-                            onClick={() => {
-                              setSelectedTourId(tour.id);
-                              setTourWorkspaceTab("setup");
-                            }}
+              {locationTours.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      {isAgencyAccount ? "Agency clients" : "Locations"} ({locationTours.length})
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {locationTours.map((location: any) => {
+                        const models = modelsByLocation.get(location.id) || [];
+                        const isActiveLocation = activeLocationId === location.id;
+                        const clientLabel = clientLabelByTourId.get(location.id);
+                        return (
+                          <div
+                            key={location.id}
+                            className="flex min-w-[220px] flex-1 basis-[calc(25%-0.5625rem)] flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3"
                           >
-                            {selectedTourId === tour.id ? "Viewing" : "View tour"}
-                          </Button>
-                        </div>
+                            <div className="min-w-0">
+                              {isAgencyAccount && clientLabel ? (
+                                <>
+                                  <p className="truncate text-sm font-medium text-slate-900">{clientLabel}</p>
+                                  <p className="truncate text-xs text-slate-500">{location.title || "Untitled location"}</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="truncate text-sm font-medium text-slate-900">{location.title || "Untitled location"}</p>
+                                  <p className="truncate text-xs text-slate-500">{location.matterport_tour_id || "No Matterport ID"}</p>
+                                </>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
+                                  {location.is_active ? "Active" : "Inactive"}
+                                </Badge>
+                                <Badge variant="outline" className="flex items-center gap-1 border-slate-300 bg-slate-50 text-slate-600">
+                                  <Layers className="h-3 w-3" />
+                                  {models.length} {models.length === 1 ? "model" : "models"}
+                                </Badge>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant={isActiveLocation ? "default" : "outline"}
+                                className={
+                                  isActiveLocation
+                                    ? "bg-slate-900 text-white hover:bg-slate-800"
+                                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                                }
+                                onClick={() => {
+                                  setSelectedTourId(location.id);
+                                  setTourWorkspaceTab("setup");
+                                }}
+                              >
+                                {isActiveLocation ? "Viewing" : "View tour"}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {activeLocationId && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Models in this location ({activeLocationModels.length})
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        {activeLocationModels.map((model: any) => {
+                          const isSelected = selectedTourId === model.id;
+                          const isPrimary = model.tour_type === "primary" || !model.tour_type;
+                          return (
+                            <div
+                              key={model.id}
+                              className="flex min-w-[220px] flex-1 basis-[calc(25%-0.5625rem)] flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="truncate text-sm font-medium text-slate-900">{model.title || "Untitled model"}</p>
+                                  {isPrimary && (
+                                    <Badge variant="outline" className="border-slate-300 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                                      Main
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="truncate text-xs text-slate-500">{model.matterport_tour_id || "No Matterport ID"}</p>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
+                                  {model.is_active ? "Active" : "Inactive"}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant={isSelected ? "default" : "outline"}
+                                  className={
+                                    isSelected
+                                      ? "bg-slate-900 text-white hover:bg-slate-800"
+                                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                                  }
+                                  onClick={() => {
+                                    setSelectedTourId(model.id);
+                                    setTourWorkspaceTab("setup");
+                                  }}
+                                >
+                                  {isSelected ? "Viewing" : "View model"}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               ) : (
                 <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
@@ -720,86 +829,12 @@ export default function AdminAccountDetailPage() {
                         </div>
                       </TabsContent>
 
-                      <TabsContent value="analytics" className="mt-4 space-y-4">
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-600">
-                              <Eye className="h-3.5 w-3.5 text-slate-400" />
-                              View count
-                            </div>
-                            <p className="text-2xl font-semibold text-slate-900">{Number(selectedTour.view_count || 0).toLocaleString("en-GB")}</p>
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-600">
-                              <BarChart3 className="h-3.5 w-3.5 text-slate-400" />
-                              Status
-                            </div>
-                            <p className="text-sm font-medium text-slate-900">{selectedTour.is_active ? "Active" : "Inactive"}</p>
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-600">
-                              <Bot className="h-3.5 w-3.5 text-slate-400" />
-                              Tour conversations
-                            </div>
-                            <p className="text-2xl font-semibold text-slate-900">{conversationRows.length.toLocaleString("en-GB")}</p>
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-600">
-                              <Globe className="h-3.5 w-3.5 text-slate-400" />
-                              Tour ID
-                            </div>
-                            <p className="truncate text-sm font-medium text-slate-900">{selectedTour.id}</p>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                          <div className="rounded-lg border border-slate-200 bg-white p-3">
-                            <h4 className="mb-2 text-sm font-semibold text-slate-900">Live device split</h4>
-                            {deviceSplitRows.length > 0 ? (
-                              <div className="space-y-2">
-                                {deviceSplitRows.map((row) => (
-                                  <div key={row.device} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
-                                    <p className="text-sm font-medium text-slate-900">{row.device}</p>
-                                    <p className="text-xs text-slate-600">
-                                      {row.views.toLocaleString("en-GB")} views ({row.percentage}%)
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="rounded-md border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-600">
-                                No device split data available yet.
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="rounded-lg border border-slate-200 bg-white p-3">
-                            <h4 className="mb-2 text-sm font-semibold text-slate-900">Recent conversations</h4>
-                            {conversationRows.length > 0 ? (
-                              <div className="space-y-2">
-                                {conversationRows.map((conversation: any) => (
-                                  <div key={conversation.id} className="rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
-                                    <div className="mb-1 flex items-center justify-between gap-2">
-                                      <p className="truncate text-xs font-medium text-slate-900">
-                                        {conversation.visitor_email || conversation.visitor_id || "Anonymous visitor"}
-                                      </p>
-                                      <Badge variant="outline" className="border-slate-300 bg-white text-slate-600">
-                                        {conversation.message_count || 0} messages
-                                      </Badge>
-                                    </div>
-                                    <p className="line-clamp-2 text-xs text-slate-600">
-                                      {conversation.last_message || "No message preview"}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="rounded-md border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-600">
-                                No conversation data available yet.
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                      <TabsContent value="analytics" className="mt-4">
+                        <TourAnalytics
+                          forcedVenueId={accountId}
+                          selectedTourId={selectedTour.id}
+                          onSwitchToViewer={() => setTourWorkspaceTab("setup")}
+                        />
                       </TabsContent>
                     </Tabs>
                   </CardContent>

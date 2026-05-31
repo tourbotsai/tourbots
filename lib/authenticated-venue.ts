@@ -11,6 +11,25 @@ export interface AuthenticatedVenueContext {
   role: string;
 }
 
+/**
+ * Resolve the venue a request should operate on. Platform admins may target any
+ * venue by passing a `venueId`; everyone else is locked to their own venue (and
+ * a mismatched request is rejected). Returns a NextResponse on denial.
+ */
+export function getScopedVenueId(
+  authContext: AuthenticatedVenueContext,
+  requestedVenueId?: string | null
+): string | NextResponse {
+  if (!requestedVenueId) return authContext.venueId;
+
+  const isPlatformAdmin = authContext.role === 'platform_admin';
+  if (requestedVenueId !== authContext.venueId && !isPlatformAdmin) {
+    return NextResponse.json({ error: 'Forbidden: venue access denied' }, { status: 403 });
+  }
+
+  return requestedVenueId;
+}
+
 export async function authenticateAndGetVenue(
   request: NextRequest
 ): Promise<AuthenticatedVenueContext | NextResponse> {

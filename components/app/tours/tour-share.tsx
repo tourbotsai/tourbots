@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Code, ExternalLink, Camera, ArrowLeft } from "lucide-react";
+import { Copy, Code, ExternalLink, Camera, ArrowLeft, Lock } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
+import { useBilling } from "@/hooks/app/useBilling";
 import { useToast } from "@/components/ui/use-toast";
 import { generateTourEmbed, TourEmbedOptions } from "@/lib/embed-generator";
 import { Tour } from "@/lib/types";
@@ -22,9 +23,11 @@ interface TourShareProps {
 export function TourShare({ selectedTourId, onSwitchToViewer }: TourShareProps) {
   const { user } = useUser();
   const { getAuthHeaders } = useAuthHeaders();
+  const { billingRecord, fetchBilling, isLoading: billingLoading } = useBilling();
   const { toast } = useToast();
   const [tour, setTour] = useState<Tour | null>(null);
   const [loading, setLoading] = useState(true);
+  const [billingReady, setBillingReady] = useState(false);
   const [options, setOptions] = useState<TourEmbedOptions>({
     width: '100%',
     height: '600px',
@@ -65,10 +68,29 @@ export function TourShare({ selectedTourId, onSwitchToViewer }: TourShareProps) 
   }, [selectedTourId, getAuthHeaders]);
 
   useEffect(() => {
+    if (!user?.venue_id) return;
+    let cancelled = false;
+    (async () => {
+      await fetchBilling();
+      if (!cancelled) setBillingReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.venue_id, fetchBilling]);
+
+  useEffect(() => {
     if (tour && user?.venue?.id) {
       generateCodes();
     }
   }, [options, tour, user?.venue?.id]);
+
+  const currentPlan = billingRecord?.plan_code || "free";
+  const effectivePlan =
+    billingRecord?.billing_override_enabled && billingRecord?.override_plan_code
+      ? billingRecord.override_plan_code
+      : currentPlan;
+  const isFreePlan = effectivePlan === "free";
 
   const generateCodes = () => {
     if (!user?.venue?.id || !tour) return;
@@ -134,7 +156,7 @@ export function TourShare({ selectedTourId, onSwitchToViewer }: TourShareProps) 
     }
   };
 
-  if (loading) {
+  if (loading || (!billingReady && billingLoading)) {
     return (
       <div className="flex items-center justify-center py-12 sm:py-16">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-900 border-t-transparent sm:h-8 sm:w-8" />
@@ -175,6 +197,45 @@ export function TourShare({ selectedTourId, onSwitchToViewer }: TourShareProps) 
   const previewUrl = embedCodes
     ? `/embed/tour/${user?.venue?.id}?id=${embedCodes.embedId}&tourId=${tour?.id}&showTitle=${options.showTitle}&showChat=${options.showChat}`
     : "#";
+
+  if (isFreePlan) {
+    return (
+      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-6 rounded-full bg-slate-100 p-6 dark:border dark:border-input dark:bg-background">
+            <Lock className="h-10 w-10 text-slate-500" />
+          </div>
+          <h3 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
+            Publishing to your website is a Pro feature
+          </h3>
+          <p className="mb-6 max-w-md text-sm text-slate-600 dark:text-slate-400">
+            The Free plan is for building and previewing your tour. To generate embed code
+            and publish your tour on your live website, upgrade to Pro.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              asChild
+              className="bg-slate-900 text-white hover:bg-slate-800 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+            >
+              <a href="/app/settings?tab=billing">Upgrade to Pro</a>
+            </Button>
+            {embedCodes && (
+              <Button
+                variant="outline"
+                asChild
+                className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+              >
+                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Preview Tour
+                </a>
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">

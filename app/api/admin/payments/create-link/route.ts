@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate plan name
-    if (!['pro', 'essential', 'professional'].includes(planName)) {
+    if (!['pro', 'agency', 'essential', 'professional'].includes(planName)) {
       return NextResponse.json(
         { error: 'Invalid plan name' },
         { status: 400 }

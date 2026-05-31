@@ -5,7 +5,7 @@ import {
   getVenueChatbotCustomisations,
   deleteChatbotCustomisation,
 } from '@/lib/server/chatbot-customisation-db';
-import { authenticateChatbotRoute, ensureTourScope, ensureVenueScope, logChatbotAudit } from '@/lib/chatbot-route-auth';
+import { authenticateChatbotRoute, ensureTourScope, ensureVenueScope, getScopedVenueId, logChatbotAudit } from '@/lib/chatbot-route-auth';
 
 const DEFAULT_PUBLIC_DEMO_VENUE_ID = 'b1afe3a3-303f-463c-bbd3-6673be4833b6';
 const DEFAULT_PUBLIC_DEMO_TOUR_ID = 'd0ceaccc-e3f4-427f-b798-19d4c5f1d85e';
@@ -40,6 +40,9 @@ export async function GET(request: NextRequest) {
     }
 
     const allowPublicDemoRead = isAllowedPublicDemoRead(venueId, chatbotType, tourId);
+    // Scope to the requested venue. Platform admins may read any venue; everyone
+    // else is constrained to their own (resolved via getScopedVenueId).
+    let scopedVenueId = venueId;
     if (!allowPublicDemoRead) {
       const authResult = await authenticateChatbotRoute(request);
       if (authResult instanceof NextResponse) return authResult;
@@ -47,8 +50,10 @@ export async function GET(request: NextRequest) {
       const venueScopeError = ensureVenueScope(authResult, venueId);
       if (venueScopeError) return venueScopeError;
 
+      scopedVenueId = getScopedVenueId(authResult, venueId);
+
       if (chatbotType === 'tour' && tourId) {
-        const tourScopeError = await ensureTourScope(authResult.venueId, tourId);
+        const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
         if (tourScopeError) return tourScopeError;
       }
     }
@@ -66,11 +71,11 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const customisation = await getChatbotCustomisation(venueId, 'tour', tourId);
+      const customisation = await getChatbotCustomisation(scopedVenueId, 'tour', tourId);
       return NextResponse.json(customisation);
     } else {
       // Get all customisations for venue
-      const customisations = await getVenueChatbotCustomisations(venueId);
+      const customisations = await getVenueChatbotCustomisations(scopedVenueId);
       return NextResponse.json(customisations);
     }
   } catch (error: any) {
@@ -90,7 +95,8 @@ export async function PUT(request: NextRequest) {
     const { venueId, tourId, chatbotType, customisation } = await request.json();
     const venueScopeError = ensureVenueScope(authResult, venueId);
     if (venueScopeError) return venueScopeError;
-    const tourScopeError = await ensureTourScope(authResult.venueId, tourId);
+    const scopedVenueId = getScopedVenueId(authResult, venueId);
+    const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
     if (tourScopeError) return tourScopeError;
 
     if (!venueId || !tourId || !chatbotType) {
@@ -108,7 +114,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const updatedCustomisation = await upsertChatbotCustomisation(
-      authResult.venueId,
+      scopedVenueId,
       'tour',
       tourId,
       customisation
@@ -133,7 +139,8 @@ export async function POST(request: NextRequest) {
     const { venueId, tourId, chatbotType, customisation } = await request.json();
     const venueScopeError = ensureVenueScope(authResult, venueId);
     if (venueScopeError) return venueScopeError;
-    const tourScopeError = await ensureTourScope(authResult.venueId, tourId);
+    const scopedVenueId = getScopedVenueId(authResult, venueId);
+    const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
     if (tourScopeError) return tourScopeError;
 
     if (!venueId || !tourId || !chatbotType) {
@@ -151,7 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     const newCustomisation = await upsertChatbotCustomisation(
-      authResult.venueId,
+      scopedVenueId,
       'tour',
       tourId,
       customisation
@@ -176,7 +183,8 @@ export async function DELETE(request: NextRequest) {
     const { venueId, tourId, chatbotType } = await request.json();
     const venueScopeError = ensureVenueScope(authResult, venueId);
     if (venueScopeError) return venueScopeError;
-    const tourScopeError = await ensureTourScope(authResult.venueId, tourId);
+    const scopedVenueId = getScopedVenueId(authResult, venueId);
+    const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
     if (tourScopeError) return tourScopeError;
 
     if (!venueId || !tourId || !chatbotType) {
@@ -193,7 +201,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await deleteChatbotCustomisation(authResult.venueId, 'tour', tourId);
+    await deleteChatbotCustomisation(scopedVenueId, 'tour', tourId);
 
     logChatbotAudit('chatbot_customisation_deleted', authResult, { tour_id: tourId });
     return NextResponse.json({ success: true });

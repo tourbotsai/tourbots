@@ -95,14 +95,21 @@ export async function ensureTourScope(
 
 export async function getScopedChatbotConfig(
   configId: string,
-  venueId: string
+  venueId: string,
+  role?: string
 ): Promise<{ id: string; venue_id: string; tour_id?: string | null; openai_vector_store_id?: string | null } | null> {
-  const { data } = await supabase
+  let query = supabase
     .from('chatbot_configs')
     .select('id, venue_id, tour_id, openai_vector_store_id')
-    .eq('id', configId)
-    .eq('venue_id', venueId)
-    .maybeSingle();
+    .eq('id', configId);
+
+  // Platform admins may resolve any account's config; everyone else is scoped
+  // to their own venue.
+  if (role !== 'platform_admin') {
+    query = query.eq('venue_id', venueId);
+  }
+
+  const { data } = await query.maybeSingle();
 
   return data || null;
 }

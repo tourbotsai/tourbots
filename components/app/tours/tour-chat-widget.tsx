@@ -99,7 +99,7 @@ export function TourChatWidget({
   initialConfig
 }: TourChatWidgetProps) {
   const { user } = useUser();
-  const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(scopeTourId || tour?.id);
+  const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(scopeTourId || tour?.id, venueId);
   // Seed from SSR config when provided so the button renders fully on first paint.
   const [publicConfig, setPublicConfig] = useState<any>(initialConfig ?? null);
   const [isPublicConfigLoading, setIsPublicConfigLoading] = useState(false);

@@ -23,7 +23,7 @@ export function ChatbotTrainingDocuments({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const visibleDocuments = useMemo(
-    () => documents.filter((doc) => !forcedVenueId || doc.venue_id === forcedVenueId).filter((doc) => doc.chatbot_type === "tour"),
+    () => documents.filter((doc) => !forcedVenueId || doc.venue_id === forcedVenueId),
     [documents, forcedVenueId],
   );
 

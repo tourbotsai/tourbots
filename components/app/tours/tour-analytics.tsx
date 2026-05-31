@@ -37,11 +37,15 @@ interface AnalyticsSummary {
 interface TourAnalyticsProps {
   selectedTourId?: string | null;
   onSwitchToViewer?: () => void;
+  /** When set (e.g. a platform admin viewing another account), analytics are
+   * scoped to this venue instead of the signed-in user's own. */
+  forcedVenueId?: string | null;
 }
 
-export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalyticsProps) {
+export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId }: TourAnalyticsProps) {
   const { user } = useUser();
   const { data: authUser } = useFirebaseUser();
+  const effectiveVenueId = forcedVenueId || user?.venue_id;
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
   const tooltipContentStyle = {
@@ -64,11 +68,11 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
     uniqueDomains: 0
   });
   const [loading, setLoading] = useState(true);
-  const { conversations } = useTourChatbotAnalytics(selectedTourId);
+  const { conversations } = useTourChatbotAnalytics(selectedTourId, forcedVenueId);
 
   useEffect(() => {
     async function fetchTourAndAnalytics() {
-      if (!user?.venue_id || !selectedTourId) {
+      if (!effectiveVenueId || !selectedTourId) {
         setTour(null);
         setStats([]);
         setMoves([]);
@@ -117,7 +121,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
         }
 
         const response = await fetch(
-          `/api/app/tours/analytics?venueId=${encodeURIComponent(user.venue_id)}&tourId=${encodeURIComponent(selectedTourId)}`,
+          `/api/app/tours/analytics?venueId=${encodeURIComponent(effectiveVenueId)}&tourId=${encodeURIComponent(selectedTourId)}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -148,7 +152,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer }: TourAnalytic
     }
 
     fetchTourAndAnalytics();
-  }, [user?.venue_id, selectedTourId, authUser]);
+  }, [effectiveVenueId, selectedTourId, authUser]);
 
   // Prepare data for tour views per day chart (last 7 days)
   const tourViewsPerDay = stats

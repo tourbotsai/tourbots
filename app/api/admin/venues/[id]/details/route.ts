@@ -33,6 +33,9 @@ export async function GET(
       usersResult,
       embedStatsResult,
       conversationsResult,
+      agencyPortalSettingsResult,
+      agencyPortalSharesResult,
+      agencyPortalUsersResult,
     ] = await Promise.all([
       // 1. Basic venue row
       supabase
@@ -121,6 +124,27 @@ export async function GET(
         .eq('venue_id', venueId)
         .order('created_at', { ascending: false })
         .limit(100),
+
+      // 11. Agency portal settings (branding/domain/enablement)
+      supabase
+        .from('agency_portal_settings')
+        .select('*')
+        .eq('venue_id', venueId)
+        .maybeSingle(),
+
+      // 12. Agency portal shares (one per tour location surfaced to a client)
+      supabase
+        .from('agency_portal_shares')
+        .select('id, venue_id, tour_id, share_slug, is_active, enabled_modules, created_at')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false }),
+
+      // 13. Agency portal client users
+      supabase
+        .from('agency_portal_users')
+        .select('id, share_id, venue_id, email, display_name, is_active, last_login_at, created_at')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false }),
     ]);
 
     if (venueRowResult.error || !venueRowResult.data) {
@@ -233,8 +257,29 @@ export async function GET(
       ? billingPlans.find((plan: any) => plan.code === activePlanCode) || null
       : null;
 
+    // Build agency portal payload. Each share maps to a tour location surfaced
+    // to a client; enrich shares with their tour title and client count so the
+    // admin UI can label locations by client.
+    const toursById = new Map<string, any>((toursResult.data || []).map((tour: any) => [tour.id, tour]));
+    const agencyPortalUsers = agencyPortalUsersResult.data || [];
+    const clientCountByShare = new Map<string, number>();
+    for (const client of agencyPortalUsers) {
+      clientCountByShare.set(client.share_id, (clientCountByShare.get(client.share_id) || 0) + 1);
+    }
+    const agencyPortalShares = (agencyPortalSharesResult.data || []).map((share: any) => ({
+      ...share,
+      tourTitle: toursById.get(share.tour_id)?.title || null,
+      clientCount: clientCountByShare.get(share.id) || 0,
+    }));
+    const agencyPortal = {
+      settings: agencyPortalSettingsResult.data || null,
+      shares: agencyPortalShares,
+      users: agencyPortalUsers,
+    };
+
     const response = {
       venue: venueRowResult.data,
+      agencyPortal,
       subscription: subscriptionResult.data || null,
       billing: {
         record: billingRecord,

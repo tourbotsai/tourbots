@@ -30,13 +30,19 @@ function sanitiseResponseMode(input?: string): ChatbotTriggerResponseMode {
   return input === 'exact' ? 'exact' : 'natural';
 }
 
-async function resolveConfig(chatbotConfigId: string, venueId: string) {
-  const { data, error } = await supabase
+async function resolveConfig(chatbotConfigId: string, venueId: string, role?: string) {
+  let query = supabase
     .from('chatbot_configs')
     .select('id, venue_id, tour_id')
-    .eq('id', chatbotConfigId)
-    .eq('venue_id', venueId)
-    .maybeSingle();
+    .eq('id', chatbotConfigId);
+
+  // Platform admins may resolve any account's config; everyone else is scoped
+  // to their own venue.
+  if (role !== 'platform_admin') {
+    query = query.eq('venue_id', venueId);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error || !data) {
     throw new Error('Chatbot configuration not found');
@@ -116,7 +122,7 @@ export async function GET(request: NextRequest) {
       }
       config = portalScopedConfig;
     } else {
-      config = await resolveConfig(chatbotConfigId, authResult.venueId);
+      config = await resolveConfig(chatbotConfigId, authResult.venueId, authResult.role);
     }
 
     const [triggersResult, pointsResult, toursResult] = await Promise.all([
@@ -192,7 +198,7 @@ export async function PUT(request: NextRequest) {
       }
       config = portalScopedConfig;
     } else {
-      config = await resolveConfig(chatbotConfigId, authResult.venueId);
+      config = await resolveConfig(chatbotConfigId, authResult.venueId, authResult.role);
     }
     const safeTriggers = (triggers || []).map((trigger, index) => {
       const conditionType = sanitiseConditionType(trigger.condition_type);

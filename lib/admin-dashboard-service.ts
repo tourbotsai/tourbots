@@ -1,12 +1,26 @@
 import { supabaseServiceRole as supabase } from './supabase-service-role';
+import { getStripeRecurringMonthlyRevenueGbp } from './stripe-admin';
 import { 
   PlatformMetrics, 
   PlatformHealth, 
   RevenueAnalytics, 
   CustomerEngagement, 
   PlatformActivity,
+  PlatformTrendPoint,
   AdminDashboardData 
 } from './types';
+
+// Recurring monthly revenue (MRR). Prefer Stripe-actual figures (real prices,
+// real cancellation state — full parity with the Stripe dashboard) and fall
+// back to the locally derived list-price estimate if Stripe is unavailable.
+async function getRecurringMonthlyRevenueGbp(): Promise<number> {
+  try {
+    return await getStripeRecurringMonthlyRevenueGbp();
+  } catch (error) {
+    console.error('Stripe MRR fetch failed; falling back to derived estimate:', error);
+    return getPlatformRecurringMonthlyRevenueGbp();
+  }
+}
 
 async function getPlatformRecurringMonthlyRevenueGbp(): Promise<number> {
   const [{ data: activeVenues }, { data: billingRecords }, { data: billingPlans }, { data: billingAddons }] =
@@ -128,8 +142,8 @@ export async function getPlatformMetrics(): Promise<PlatformMetrics> {
       .select('*', { count: 'exact', head: true })
       .gte('created_at', today.toISOString());
 
-    // Monthly revenue (recurring): sum active venue plan + add-ons
-    const monthlyRevenue = await getPlatformRecurringMonthlyRevenueGbp();
+    // Monthly revenue (recurring): Stripe-actual MRR with derived fallback
+    const monthlyRevenue = await getRecurringMonthlyRevenueGbp();
 
     // Last month revenue for growth calculation
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -155,6 +169,11 @@ export async function getPlatformMetrics(): Promise<PlatformMetrics> {
 
     const totalTourViews = embedStats?.reduce((sum, stat) => sum + stat.views_count, 0) || 0;
 
+    // Total tour moves (platform-wide): each row in embed_tour_moves is one move
+    const { count: totalTourMoves } = await supabase
+      .from('embed_tour_moves')
+      .select('*', { count: 'exact', head: true });
+
     // Active subscriptions
     const { count: activeSubscriptions } = await supabase
       .from('subscriptions')
@@ -168,6 +187,7 @@ export async function getPlatformMetrics(): Promise<PlatformMetrics> {
       totalConversations: totalConversations || 0,
       monthlyRevenue: monthlyRevenue * 100, // Convert to pence for consistency
       totalTourViews,
+      totalTourMoves: totalTourMoves || 0,
       activeSubscriptions: activeSubscriptions || 0,
       venuesGrowth: newVenuesThisWeek || 0,
       usersGrowth: newUsersThisWeek || 0,
@@ -211,8 +231,8 @@ export async function getPlatformHealth(): Promise<PlatformHealth> {
 
     const activeVenuesThisMonthCount = new Set(activeVenuesData?.map(c => c.venue_id).filter(Boolean)).size;
 
-    // 3. Platform revenue this month (recurring): sum active venue plan + add-ons
-    const monthlyRevenue = await getPlatformRecurringMonthlyRevenueGbp();
+    // 3. Platform revenue this month (recurring): Stripe-actual MRR with fallback
+    const monthlyRevenue = await getRecurringMonthlyRevenueGbp();
 
     // Check system health by testing database connectivity
     let systemStatus: 'operational' | 'degraded' | 'down' = 'operational';
@@ -450,6 +470,118 @@ export async function getCustomerEngagement(): Promise<CustomerEngagement> {
   }
 }
 
+// Platform-wide daily activity trend (last 7 days). Mirrors the user dashboard
+// "Views, moves, and messages trend" chart, aggregated across every venue.
+export async function getPlatformDailyTrend(): Promise<PlatformTrendPoint[]> {
+  try {
+    const dailyTrend: PlatformTrendPoint[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+
+      const [{ count: dayTourViews }, { count: dayTourMoves }, { count: dayChatMessages }] =
+        await Promise.all([
+          supabase
+            .from('embed_stats')
+            .select('*', { count: 'exact', head: true })
+            .eq('embed_type', 'tour')
+            .gte('created_at', dayStart.toISOString())
+            .lt('created_at', dayEnd.toISOString()),
+          supabase
+            .from('embed_tour_moves')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', dayStart.toISOString())
+            .lt('created_at', dayEnd.toISOString()),
+          supabase
+            .from('conversations')
+            .select('*', { count: 'exact', head: true })
+            .eq('message_type', 'visitor')
+            .gte('created_at', dayStart.toISOString())
+            .lt('created_at', dayEnd.toISOString()),
+        ]);
+
+      dailyTrend.push({
+        date: date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
+        tourViews: dayTourViews || 0,
+        tourMoves: dayTourMoves || 0,
+        chatMessages: dayChatMessages || 0,
+      });
+    }
+
+    return dailyTrend;
+  } catch (error) {
+    console.error('Error fetching platform daily trend:', error);
+    throw new Error('Failed to fetch platform daily trend');
+  }
+}
+
+// Turn a raw venue_billing_events row into a human-readable activity entry.
+function describeBillingEvent(event: any): { title: string; description: string } | null {
+  const venueName = event?.venues?.name || 'A venue';
+  const payload = event?.event_payload || {};
+
+  const addonLabels: Record<string, string> = {
+    extra_space: 'Extra space',
+    message_block: 'Message block',
+    white_label: 'White-label',
+  };
+  const addonLabel = (code: string) => addonLabels[code] || code || 'add-on';
+
+  const planLabels: Record<string, string> = {
+    free: 'Free',
+    pro: 'Pro',
+    agency: 'Agency',
+  };
+  const planLabel = (code: string) =>
+    planLabels[code] || (code ? code.charAt(0).toUpperCase() + code.slice(1) : 'plan');
+
+  switch (event.event_type) {
+    case 'plan_switched_by_user': {
+      const cancelled = Number(payload.cancelled_addon_count || 0);
+      const cancelledNote = cancelled
+        ? ` (${cancelled} add-on${cancelled === 1 ? '' : 's'} cancelled)`
+        : '';
+      return {
+        title: 'Plan switched',
+        description: `${venueName} switched from ${planLabel(payload.from_plan)} to ${planLabel(payload.to_plan)}${cancelledNote}`,
+      };
+    }
+    case 'plan_changed_by_user':
+      return {
+        title: 'Plan changed',
+        description: `${venueName} moved to the ${planLabel(payload.plan_code)} plan`,
+      };
+    case 'addon_purchase_applied': {
+      const qty = Number(payload.quantity || 0);
+      const qtyNote = qty > 1 ? ` ×${qty}` : '';
+      return {
+        title: 'Add-on purchased',
+        description: `${venueName} added ${addonLabel(payload.addon_code)}${qtyNote}`,
+      };
+    }
+    case 'addon_cancellation_scheduled':
+      return {
+        title: 'Add-on cancellation scheduled',
+        description: `${venueName} scheduled ${addonLabel(payload.addon_code)} to cancel`,
+      };
+    case 'addon_cancellation_applied':
+      return {
+        title: 'Add-on ended',
+        description: `${venueName}'s ${addonLabel(payload.addon_code)} add-on ended`,
+      };
+    case 'admin_billing_update':
+      return {
+        title: 'Billing updated by admin',
+        description: `${venueName}'s billing was adjusted by a platform admin`,
+      };
+    default:
+      return null;
+  }
+}
+
 // Get recent platform activity
 export async function getRecentPlatformActivity(): Promise<PlatformActivity[]> {
   try {
@@ -553,10 +685,40 @@ export async function getRecentPlatformActivity(): Promise<PlatformActivity[]> {
       });
     });
 
-    // Sort all activities by timestamp and return top 10
+    // Recent billing events (plan switches, plan changes, add-on purchases /
+    // cancellations, admin adjustments) — the granular, intent-driven actions
+    // that the subscriptions table alone does not surface.
+    const { data: recentBillingEvents } = await supabase
+      .from('venue_billing_events')
+      .select(`
+        id,
+        event_type,
+        event_payload,
+        created_at,
+        venues (name)
+      `)
+      .gte('created_at', oneWeekAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    recentBillingEvents?.forEach((event: any) => {
+      const described = describeBillingEvent(event);
+      if (!described) return;
+      activities.push({
+        id: `billing-${event.id}`,
+        type: 'subscription_change',
+        title: described.title,
+        description: described.description,
+        venueName: event.venues?.name,
+        timestamp: event.created_at,
+        metadata: { eventType: event.event_type, ...(event.event_payload || {}) },
+      });
+    });
+
+    // Sort all activities by timestamp (newest first) and cap the feed.
     return activities
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 10);
+      .slice(0, 24);
 
   } catch (error) {
     console.error('Error fetching recent platform activity:', error);
@@ -567,12 +729,13 @@ export async function getRecentPlatformActivity(): Promise<PlatformActivity[]> {
 // Get all dashboard data in one call
 export async function getAdminDashboardData(): Promise<AdminDashboardData> {
   try {
-    const [metrics, health, revenue, engagement, recentActivity] = await Promise.all([
+    const [metrics, health, revenue, engagement, recentActivity, dailyTrend] = await Promise.all([
       getPlatformMetrics(),
       getPlatformHealth(),
       getRevenueAnalytics(),
       getCustomerEngagement(),
       getRecentPlatformActivity(),
+      getPlatformDailyTrend(),
     ]);
 
     return {
@@ -581,6 +744,7 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
       revenue,
       engagement,
       recentActivity,
+      dailyTrend,
     };
   } catch (error) {
     console.error('Error fetching admin dashboard data:', error);

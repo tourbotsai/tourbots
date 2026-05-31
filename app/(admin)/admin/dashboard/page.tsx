@@ -11,9 +11,12 @@ import {
   PoundSterling,
   RefreshCw, 
   AlertTriangle,
-  Clock3
+  Clock3,
+  Eye,
+  Navigation
 } from "lucide-react";
 import { useAdminDashboard } from "@/hooks/admin/useAdminDashboard";
+import { PlatformTrendChart } from "@/components/admin/dashboard/PlatformTrendChart";
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +41,8 @@ export default function AdminDashboardPage() {
     }).format((value || 0) / 100);
 
   const metrics = data?.metrics;
-  const recentActivity = data?.recentActivity?.slice(0, 5) || [];
+  const recentActivity = data?.recentActivity || [];
+  const dailyTrend = data?.dailyTrend || [];
 
   const kpis = [
     {
@@ -55,6 +59,16 @@ export default function AdminDashboardPage() {
       label: "Total conversations",
       value: formatNumber(metrics?.totalConversations || 0),
       icon: Users,
+    },
+    {
+      label: "Total tour views",
+      value: formatNumber(metrics?.totalTourViews || 0),
+      icon: Eye,
+    },
+    {
+      label: "Total tour moves",
+      value: formatNumber(metrics?.totalTourMoves || 0),
+      icon: Navigation,
     },
     {
       label: "Monthly revenue",
@@ -123,7 +137,7 @@ export default function AdminDashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {kpis.map((item) => (
               <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                 <div className="mb-2 flex items-center justify-between">
@@ -141,36 +155,47 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
 
+      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <CardContent className="pt-6">
+          <PlatformTrendChart data={dailyTrend} isLoading={isLoading} />
+        </CardContent>
+      </Card>
+
       <section>
         <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-slate-900">Recent activity</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
             {isLoading ? (
-              <>
-                <div className="h-14 animate-pulse rounded-lg bg-slate-100" />
-                <div className="h-14 animate-pulse rounded-lg bg-slate-100" />
-                <div className="h-14 animate-pulse rounded-lg bg-slate-100" />
-              </>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="h-[88px] animate-pulse rounded-lg bg-slate-100" />
+                <div className="h-[88px] animate-pulse rounded-lg bg-slate-100" />
+                <div className="h-[88px] animate-pulse rounded-lg bg-slate-100" />
+                <div className="h-[88px] animate-pulse rounded-lg bg-slate-100" />
+              </div>
             ) : recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
-                <div key={activity.id} className="rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5">
-                  <p className="text-sm font-medium text-slate-900">{activity.title}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{activity.description}</p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    {new Date(activity.timestamp).toLocaleString("en-GB", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                    })}
-                  </div>
+              <div className="max-h-[200px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {recentActivity.map((activity) => (
+                    <div key={activity.id} className="rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5">
+                      <p className="text-sm font-medium text-slate-900">{activity.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{activity.description}</p>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {new Date(activity.timestamp).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))
+              </div>
             ) : (
               <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-600">
                 No recent platform activity is available yet.

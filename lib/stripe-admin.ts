@@ -18,6 +18,286 @@ function normalizePlanCode(planName: string): string {
   return planName;
 }
 
+// Normalise a recurring price to a monthly pence amount.
+function normaliseRecurringToMonthlyPence(
+  unitAmount: number,
+  quantity: number,
+  interval: Stripe.Price.Recurring.Interval,
+  intervalCount: number
+): number {
+  const base = unitAmount * quantity;
+  const count = intervalCount || 1;
+  switch (interval) {
+    case 'year':
+      return base / (12 * count);
+    case 'month':
+      return base / count;
+    case 'week':
+      return (base * 52) / 12 / count;
+    case 'day':
+      return (base * 365) / 12 / count;
+    default:
+      return base;
+  }
+}
+
+/**
+ * True recurring monthly revenue (MRR) pulled straight from Stripe, for full
+ * parity with the Stripe dashboard. Sums the monthly-normalised recurring
+ * amount of every live subscription (plans AND add-ons, since add-ons are their
+ * own subscriptions). Cancelled subscriptions drop out automatically because we
+ * only list `active` status. GBP only. Returns pounds.
+ */
+export async function getStripeRecurringMonthlyRevenueGbp(): Promise<number> {
+  const stripe = getStripe();
+  let totalPence = 0;
+  let startingAfter: string | undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const page = await stripe.subscriptions.list({
+      status: 'active',
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    for (const sub of page.data) {
+      // Stripe excludes subscriptions scheduled to cancel from MRR (they are
+      // treated as already churning), so exclude them here for full parity.
+      if (sub.cancel_at_period_end) continue;
+
+      // Discounts (coupons) reduce MRR; capture a percent-off factor if present.
+      const percentOff = (sub as any).discount?.coupon?.percent_off as number | undefined;
+      const discountFactor = percentOff ? 1 - percentOff / 100 : 1;
+
+      for (const item of sub.items.data) {
+        const price = item.price;
+        if (!price?.recurring) continue;
+        if (price.currency && price.currency.toLowerCase() !== 'gbp') continue;
+
+        const monthly = normaliseRecurringToMonthlyPence(
+          price.unit_amount ?? 0,
+          item.quantity ?? 1,
+          price.recurring.interval,
+          price.recurring.interval_count || 1
+        );
+        totalPence += monthly * discountFactor;
+      }
+    }
+
+    hasMore = page.has_more;
+    startingAfter = page.data.length > 0 ? page.data[page.data.length - 1].id : undefined;
+  }
+
+  return totalPence / 100;
+}
+
+const ADMIN_ACTIVE_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
+
+export interface AdminPaymentsAddon {
+  code: string;
+  name: string;
+  quantity: number;
+  amount: number; // monthly GBP
+  status: 'active' | 'cancelling';
+  nextPayment: string | null;
+  accessEndsAt: string | null;
+}
+
+export interface AdminPaymentsAccount {
+  venueId: string;
+  name: string;
+  email: string | null;
+  slug: string | null;
+  planCode: string;
+  planAmount: number; // monthly GBP
+  planStatus: string; // active | cancelling | past_due | trialing | free
+  nextBilling: string | null;
+  accessEndsAt: string | null;
+  addons: AdminPaymentsAddon[];
+  monthlyTotal: number; // monthly GBP, recurring (excludes cancelling)
+  hasStripeSubscription: boolean;
+}
+
+export interface AdminPaymentsOverview {
+  mrrGbp: number;
+  kpis: {
+    payingAccounts: number;
+    proAccounts: number;
+    agencyAccounts: number;
+    totalAccounts: number;
+  };
+  accounts: AdminPaymentsAccount[];
+}
+
+/**
+ * Per-account payments overview with real Stripe figures. Lists every Stripe
+ * subscription once, groups them by customer, and maps customers to venues via
+ * venue_billing_records. Each account row exposes the plan, its add-ons, the
+ * true recurring monthly total, billing dates and cancel status — so the admin
+ * payments overview matches Stripe exactly (including accounts whose add-ons or
+ * plans are scheduled to cancel).
+ */
+export async function getAdminPaymentsOverview(): Promise<AdminPaymentsOverview> {
+  const stripe = getStripe();
+
+  const [{ data: billingRecords }, { data: addonCatalog }] = await Promise.all([
+    supabase
+      .from('venue_billing_records')
+      .select(`
+        venue_id,
+        plan_code,
+        override_plan_code,
+        billing_override_enabled,
+        billing_status,
+        stripe_customer_id,
+        venues ( id, name, email, slug )
+      `),
+    supabase.from('billing_addons').select('code, name'),
+  ]);
+
+  const addonNameByCode = new Map<string, string>(
+    (addonCatalog || []).map((addon: any) => [addon.code, addon.name])
+  );
+
+  // Group Stripe subscriptions by customer in a single paginated pass.
+  interface CustomerBucket {
+    plan?: { amount: number; status: string; cancelAtPeriodEnd: boolean; periodEnd: number | null; code: string | null };
+    addons: AdminPaymentsAddon[];
+  }
+  const buckets = new Map<string, CustomerBucket>();
+
+  let startingAfter: string | undefined;
+  let hasMore = true;
+  while (hasMore) {
+    const page = await stripe.subscriptions.list({
+      status: 'all',
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    for (const sub of page.data) {
+      if (!ADMIN_ACTIVE_STATUSES.includes(sub.status)) continue;
+      const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
+      if (!customerId) continue;
+
+      const cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
+      const item = sub.items?.data?.[0];
+      const periodEnd =
+        ((item as any)?.current_period_end as number | undefined) ??
+        ((sub as any).current_period_end as number | undefined) ??
+        null;
+
+      // Monthly-normalised GBP amount across the subscription's recurring items.
+      let monthlyPence = 0;
+      for (const lineItem of sub.items.data) {
+        const price = lineItem.price;
+        if (!price?.recurring) continue;
+        if (price.currency && price.currency.toLowerCase() !== 'gbp') continue;
+        monthlyPence += normaliseRecurringToMonthlyPence(
+          price.unit_amount ?? 0,
+          lineItem.quantity ?? 1,
+          price.recurring.interval,
+          price.recurring.interval_count || 1
+        );
+      }
+      const monthly = monthlyPence / 100;
+
+      const bucket = buckets.get(customerId) || { addons: [] };
+      const billingAction = (sub.metadata?.billing_action || '').toLowerCase();
+
+      if (billingAction === 'buy_addon') {
+        const code = sub.metadata?.addon_code || sub.metadata?.plan_name || 'addon';
+        bucket.addons.push({
+          code,
+          name: addonNameByCode.get(code) || code,
+          quantity: Number(item?.quantity ?? sub.metadata?.addon_quantity ?? 1) || 1,
+          amount: monthly,
+          status: cancelAtPeriodEnd ? 'cancelling' : 'active',
+          nextPayment: !cancelAtPeriodEnd && periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+          accessEndsAt: cancelAtPeriodEnd && periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        });
+      } else {
+        // Plan subscription. If a customer somehow has more than one, keep the
+        // higher-value (most recent paid) one.
+        if (!bucket.plan || monthly > bucket.plan.amount) {
+          bucket.plan = {
+            amount: monthly,
+            status: cancelAtPeriodEnd ? 'cancelling' : sub.status,
+            cancelAtPeriodEnd,
+            periodEnd,
+            code: sub.metadata?.plan_name || null,
+          };
+        }
+      }
+
+      buckets.set(customerId, bucket);
+    }
+
+    hasMore = page.has_more;
+    startingAfter = page.data.length > 0 ? page.data[page.data.length - 1].id : undefined;
+  }
+
+  const accounts: AdminPaymentsAccount[] = (billingRecords || [])
+    .filter((record: any) => record.venues?.id)
+    .map((record: any) => {
+      const planCode = record.billing_override_enabled && record.override_plan_code
+        ? record.override_plan_code
+        : record.plan_code || 'free';
+      const bucket = record.stripe_customer_id ? buckets.get(record.stripe_customer_id) : undefined;
+      const plan = bucket?.plan;
+      const addons = bucket?.addons || [];
+
+      const planAmount = plan?.amount || 0;
+      const planNextBilling = plan && !plan.cancelAtPeriodEnd && plan.periodEnd
+        ? new Date(plan.periodEnd * 1000).toISOString()
+        : null;
+      const planAccessEndsAt = plan && plan.cancelAtPeriodEnd && plan.periodEnd
+        ? new Date(plan.periodEnd * 1000).toISOString()
+        : null;
+
+      // Recurring monthly total excludes anything scheduled to cancel.
+      const planRecurring = plan && !plan.cancelAtPeriodEnd ? planAmount : 0;
+      const addonRecurring = addons
+        .filter((addon) => addon.status !== 'cancelling')
+        .reduce((sum, addon) => sum + addon.amount, 0);
+
+      return {
+        venueId: record.venues.id,
+        name: record.venues.name || 'Unnamed account',
+        email: record.venues.email || null,
+        slug: record.venues.slug || null,
+        planCode,
+        planAmount,
+        planStatus: plan?.status || (planCode === 'free' ? 'free' : record.billing_status || 'free'),
+        nextBilling: planNextBilling,
+        accessEndsAt: planAccessEndsAt,
+        addons,
+        monthlyTotal: planRecurring + addonRecurring,
+        hasStripeSubscription: Boolean(plan) || addons.length > 0,
+      };
+    });
+
+  const paying = accounts.filter((account) => account.planCode !== 'free' && account.monthlyTotal > 0);
+  const proAccounts = accounts.filter((account) => account.planCode === 'pro').length;
+  const agencyAccounts = accounts.filter((account) => account.planCode === 'agency').length;
+
+  // Headline MRR is the sum of every account's recurring monthly total — i.e.
+  // the same live Stripe figure, grouped, so it reconciles with the rows below.
+  const mrrGbp = accounts.reduce((sum, account) => sum + account.monthlyTotal, 0);
+
+  return {
+    mrrGbp,
+    kpis: {
+      payingAccounts: paying.length,
+      proAccounts,
+      agencyAccounts,
+      totalAccounts: accounts.length,
+    },
+    accounts,
+  };
+}
+
 function isMissingTableError(error: any, tableName: string): boolean {
   if (!error) return false;
   return error.code === 'PGRST205' && String(error.message || '').includes(`public.${tableName}`);
