@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { initAdmin } from '@/lib/firebase-admin';
 import { getUserWithVenue } from '@/lib/user-service';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
+import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
 
 initAdmin();
 const auth = getAuth();
@@ -220,6 +221,18 @@ export async function GET(request: NextRequest) {
     const { states: addonSubscriptions, list: addonSubscriptionList } =
       await getAddonSubscriptionData(record?.stripe_customer_id);
 
+    // Monthly message-credit usage: tour visitor messages since the start of the
+    // current calendar month, matching the billing enforcement service.
+    const { periodStart: messageCreditPeriodStart, resetAt: messageCreditsResetAt } =
+      getCurrentMessageCreditPeriod();
+    const { count: messageCreditsUsedCount } = await supabase
+      .from('conversations')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('chatbot_type', 'tour')
+      .eq('message_type', 'visitor')
+      .gte('created_at', messageCreditPeriodStart);
+
     return NextResponse.json({
       plans: plans || [],
       addons: addons || [],
@@ -228,6 +241,11 @@ export async function GET(request: NextRequest) {
       limits,
       addonSubscriptions,
       addonSubscriptionList,
+      messageUsage: {
+        used: Number(messageCreditsUsedCount || 0),
+        limit: limits.totalMessages,
+        resetAt: messageCreditsResetAt,
+      },
     });
   } catch (error: any) {
     console.error('Error fetching app billing data:', error);

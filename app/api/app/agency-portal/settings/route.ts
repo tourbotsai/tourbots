@@ -12,6 +12,7 @@ const updateSettingsSchema = z.object({
   secondary_colour: z.string().trim().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).nullable().optional(),
   portal_background_colour: z.string().trim().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).nullable().optional(),
   allowed_domains: z.array(z.string().trim().min(1).max(255)).max(100).optional(),
+  client_usage_mode: z.enum(['shared', 'allocated']).optional(),
 });
 
 async function ensureSettingsRow(venueId: string) {

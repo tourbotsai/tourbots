@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
 import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
+import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
 
 const enabledModulesSchema = z.object({
   tour: z.boolean().optional(),
@@ -51,10 +52,23 @@ const createCredentialSchema = z.object({
   password: z.string().min(8).max(200).optional(),
 });
 
+const saveAllocationsSchema = z.object({
+  action: z.literal('save_allocations'),
+  allocations: z
+    .array(
+      z.object({
+        shareId: z.string().uuid(),
+        allocation: z.number().int().min(0).max(10_000_000),
+      })
+    )
+    .max(500),
+});
+
 const actionSchema = z.discriminatedUnion('action', [
   upsertShareSchema,
   toggleShareSchema,
   createCredentialSchema,
+  saveAllocationsSchema,
 ]);
 
 function normaliseSlug(input: string): string {
@@ -89,6 +103,63 @@ async function getEntitlement(venueId: string): Promise<boolean> {
     .eq('venue_id', venueId)
     .maybeSingle();
   return venueHasAgencyPortal(data as any);
+}
+
+/**
+ * Resolves the agency's monthly message pool: the venue-wide limit (plan
+ * included_messages + add-ons, or an override) and the messages used so far in
+ * the current calendar month. This is the budget that per-client allocations
+ * must fit within.
+ */
+async function getAgencyPool(venueId: string): Promise<{ used: number; limit: number; resetAt: string }> {
+  const { periodStart, resetAt } = getCurrentMessageCreditPeriod();
+
+  const { data: billingRecord } = await supabase
+    .from('venue_billing_records')
+    .select('plan_code, billing_override_enabled, override_plan_code, addon_extra_spaces, addon_message_blocks, effective_message_limit')
+    .eq('venue_id', venueId)
+    .maybeSingle();
+
+  const planCode = billingRecord?.billing_override_enabled && billingRecord?.override_plan_code
+    ? billingRecord.override_plan_code
+    : (billingRecord?.plan_code || 'free');
+
+  const { data: planRow } = await supabase
+    .from('billing_plans')
+    .select('included_messages')
+    .eq('code', planCode)
+    .maybeSingle();
+
+  const baseMessages = Number(planRow?.included_messages || 0);
+  const extraSpaces = Number(billingRecord?.addon_extra_spaces || 0);
+  const messageBlocks = Number(billingRecord?.addon_message_blocks || 0);
+  const limit = Number(
+    billingRecord?.effective_message_limit ??
+    (baseMessages + extraSpaces * 1000 + messageBlocks * 1000)
+  );
+
+  const { count } = await supabase
+    .from('conversations')
+    .select('*', { count: 'exact', head: true })
+    .eq('venue_id', venueId)
+    .eq('chatbot_type', 'tour')
+    .eq('message_type', 'visitor')
+    .gte('created_at', periodStart);
+
+  return { used: Number(count || 0), limit, resetAt };
+}
+
+/** Counts a single client tour's visitor messages in the current month. */
+async function getTourMessagesThisMonth(venueId: string, tourId: string, periodStart: string): Promise<number> {
+  const { count } = await supabase
+    .from('conversations')
+    .select('*', { count: 'exact', head: true })
+    .eq('venue_id', venueId)
+    .eq('tour_id', tourId)
+    .eq('chatbot_type', 'tour')
+    .eq('message_type', 'visitor')
+    .gte('created_at', periodStart);
+  return Number(count || 0);
 }
 
 async function assertTourInVenue(venueId: string, tourId: string) {
@@ -249,12 +320,27 @@ export async function GET(request: NextRequest) {
       }, {} as Record<string, Array<{ id: string; email: string; display_name: string | null; is_active: boolean; last_login_at: string | null }>>);
     }
 
+    const pool = await getAgencyPool(venueId);
+    const { periodStart } = getCurrentMessageCreditPeriod();
+
+    // Per-client usage this month, keyed by share, for the allocation table.
+    const usageByShareId: Record<string, number> = {};
+    await Promise.all(
+      (shares || []).map(async (share) => {
+        usageByShareId[share.id] = share.tour_id
+          ? await getTourMessagesThisMonth(venueId, share.tour_id, periodStart)
+          : 0;
+      })
+    );
+
     return NextResponse.json({
       entitlement: { entitled: entitlementEnabled },
       tours: tours || [],
+      pool,
       shares: (shares || []).map((share) => ({
         ...share,
         users: usersByShareId[share.id] || [],
+        messages_used_this_month: usageByShareId[share.id] || 0,
       })),
     });
   } catch (error: any) {
@@ -304,6 +390,50 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({ share: updated });
+    }
+
+    if (payload.action === 'save_allocations') {
+      // Validate every share belongs to this venue.
+      const shareIds = payload.allocations.map((entry) => entry.shareId);
+      const { data: ownedShares, error: ownedError } = await supabase
+        .from('agency_portal_shares')
+        .select('id')
+        .eq('venue_id', venueId)
+        .in('id', shareIds);
+
+      if (ownedError) {
+        return NextResponse.json({ error: ownedError.message }, { status: 500 });
+      }
+
+      const ownedIds = new Set((ownedShares || []).map((row) => row.id));
+      const unknown = shareIds.filter((id) => !ownedIds.has(id));
+      if (unknown.length > 0) {
+        return NextResponse.json({ error: 'One or more shares do not belong to this venue.' }, { status: 403 });
+      }
+
+      // Total allocations must not exceed the agency's monthly pool limit.
+      const pool = await getAgencyPool(venueId);
+      const totalAllocated = payload.allocations.reduce((sum, entry) => sum + Number(entry.allocation || 0), 0);
+      if (totalAllocated > pool.limit) {
+        return NextResponse.json(
+          {
+            error: `Total allocations (${totalAllocated.toLocaleString('en-GB')}) exceed your monthly message limit (${pool.limit.toLocaleString('en-GB')}).`,
+          },
+          { status: 400 }
+        );
+      }
+
+      await Promise.all(
+        payload.allocations.map((entry) =>
+          supabase
+            .from('agency_portal_shares')
+            .update({ message_credit_allocation: entry.allocation })
+            .eq('id', entry.shareId)
+            .eq('venue_id', venueId)
+        )
+      );
+
+      return NextResponse.json({ success: true, pool, totalAllocated });
     }
 
     if (payload.action === 'regenerate_credentials') {

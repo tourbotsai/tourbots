@@ -10,6 +10,13 @@ interface BillingLimits {
   totalMessages: number;
 }
 
+export interface MessageUsage {
+  used: number;
+  limit: number;
+  /** ISO timestamp for when the monthly message-credit allowance next refreshes. */
+  resetAt: string;
+}
+
 export interface AddonSubscriptionState {
   active: boolean;
   cancelAtPeriodEnd: boolean;
@@ -49,6 +56,7 @@ export function useBilling() {
   const [subscriptionDetails, setSubscriptionDetails] = useState<Subscription | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [limits, setLimits] = useState<BillingLimits | null>(null);
+  const [messageUsage, setMessageUsage] = useState<MessageUsage | null>(null);
   const [addonSubscriptions, setAddonSubscriptions] = useState<Record<string, AddonSubscriptionState>>({});
   const [addonSubscriptionList, setAddonSubscriptionList] = useState<AddonSubscriptionDetail[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,6 +90,7 @@ export function useBilling() {
       setBillingRecord(data.billingRecord || null);
       setActivePlan(data.activePlan || null);
       setLimits(data.limits || null);
+      setMessageUsage(data.messageUsage || null);
       setAddonSubscriptions(data.addonSubscriptions || {});
       setAddonSubscriptionList(data.addonSubscriptionList || []);
 
@@ -310,6 +319,7 @@ export function useBilling() {
     subscriptionDetails,
     subscriptionStatus,
     limits,
+    messageUsage,
     addonSubscriptions,
     addonSubscriptionList,
     isLoading,

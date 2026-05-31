@@ -10,6 +10,7 @@ import {
 } from '@/lib/chatbot-route-auth';
 
 const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+const MAX_DOCUMENTS_PER_CHATBOT = 10;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set(['pdf', 'txt', 'doc', 'docx']);
 const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
   'application/pdf',
@@ -130,6 +131,18 @@ export async function POST(request: NextRequest) {
     const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, venueId);
     if (!scopedConfig) {
       return NextResponse.json({ error: 'Chatbot configuration not found for venue' }, { status: 404 });
+    }
+
+    // Soft limit: cap the number of training documents per chatbot.
+    const { count: existingDocumentCount } = await supabase
+      .from('chatbot_documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('chatbot_config_id', chatbotConfigId);
+    if ((existingDocumentCount || 0) >= MAX_DOCUMENTS_PER_CHATBOT) {
+      return NextResponse.json(
+        { error: `Document limit reached. You can upload up to ${MAX_DOCUMENTS_PER_CHATBOT} documents per chatbot. Delete one to add another.` },
+        { status: 400 }
+      );
     }
 
     // Upload file to Supabase Storage with chatbot type in path

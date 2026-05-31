@@ -194,6 +194,20 @@ export function DashboardContent() {
 
   const formatNumber = (value: number) => new Intl.NumberFormat("en-GB").format(value || 0);
 
+  const formatResetDate = (iso?: string | null) => {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  };
+
+  const messageCreditsResetDate = formatResetDate(quickStats?.messageCreditsResetAt);
+
   const kpis = [
     {
       label: "Tour views",
@@ -224,6 +238,7 @@ export function DashboardContent() {
       label: "Message credits",
       value: `${formatNumber(quickStats?.messageCreditsUsed || 0)}/${formatNumber(quickStats?.messageCreditsLimit || 0)}`,
       icon: CreditCard,
+      sublabel: messageCreditsResetDate ? `Resets ${messageCreditsResetDate}` : "Resets monthly",
     },
     {
       label: "Available spaces",
@@ -283,6 +298,9 @@ export function DashboardContent() {
                   <item.icon className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                 </div>
                 <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{item.value}</p>
+                {"sublabel" in item && item.sublabel ? (
+                  <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{item.sublabel}</p>
+                ) : null}
               </div>
             ))}
           </div>

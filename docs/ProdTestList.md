@@ -85,7 +85,9 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 - [X] Publish/redeploy.
 - [X] Confirm agency embed loads.
 - [X] Confirm login works inside embed.
-- [ ] Confirm allowed actions work from embed context.
+- [X] Confirm allowed actions work from embed context.
+- [ ] Confirm allocated message allowance works
+- [ ] Confirm white labelled embed code works
 
 ## J) Billing Flow
 
