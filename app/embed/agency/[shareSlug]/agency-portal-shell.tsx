@@ -450,7 +450,32 @@ export function AgencyPortalShell({
         return;
       }
       const nextCustomisation = data?.customisation || null;
-      setCustomisationData(nextCustomisation);
+      if (nextCustomisation) {
+        setCustomisationData(nextCustomisation);
+        return;
+      }
+
+      // No record yet: seed the first customisation with sensible defaults so the
+      // form opens fully populated (mirrors the main app, which lazily creates the
+      // default row the first time the customisation page is opened).
+      const seedRes = await fetch('/api/public/agency-portal/customisation', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: getPortalHeaders({
+          'Content-Type': 'application/json',
+          'x-csrf-token': session.csrfToken || '',
+        }),
+        body: JSON.stringify({
+          shareSlug,
+          customisation: getAdvancedDefaultCustomisation('tour'),
+        }),
+      });
+      const seedData = await seedRes.json().catch(() => null);
+      if (!seedRes.ok) {
+        setMessage(seedData?.error || 'Unable to load customisation.');
+        return;
+      }
+      setCustomisationData(seedData?.customisation || null);
     } catch {
       setMessage('Unable to load customisation right now.');
     } finally {
