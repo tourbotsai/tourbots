@@ -198,27 +198,32 @@ export async function POST(request: NextRequest) {
     const verifyRes = await verifyProjectDomain(host);
     const config = await getDomainConfig(host);
 
-    let status: DomainState['tour_embed_domain_status'] = 'verifying';
-    let verifiedAt: string | null = current?.tour_embed_domain_verified_at || null;
-    let dnsRecords: DnsRecord[] = (current?.tour_embed_dns_records as DnsRecord[]) || buildDnsRecords(host);
+    // A check should never *downgrade* a connected domain to "failed": while the
+    // agency is still adding DNS, Vercel returns not-verified / not-ok from the
+    // verify endpoint, which is expected. We only promote to "verified" when both
+    // ownership is proven AND DNS is configured; otherwise we stay "verifying".
+    const ownershipOk = verifyRes.ok && verifyRes.verified;
+    const dnsOk = config.ok && !config.misconfigured;
 
-    if (!verifyRes.ok || !config.ok) {
-      status = 'failed';
-    } else if (!verifyRes.verified) {
-      // Ownership not yet proven — refresh the TXT challenge for the UI.
-      status = 'verifying';
+    let status: DomainState['tour_embed_domain_status'];
+    let verifiedAt: string | null = null;
+    // Keep the existing records; only refresh if the verify call returned a new
+    // ownership challenge, so the agency never loses the records to copy.
+    let dnsRecords: DnsRecord[] = (current?.tour_embed_dns_records as DnsRecord[]) || buildDnsRecords(host);
+    if (verifyRes.verification && verifyRes.verification.length > 0) {
       dnsRecords = buildDnsRecords(host, verifyRes.verification);
-    } else if (config.misconfigured) {
-      // Ownership ok, DNS not propagated yet.
-      status = 'verifying';
-    } else {
+    }
+
+    if (ownershipOk && dnsOk) {
       status = 'verified';
       verifiedAt = new Date().toISOString();
+    } else {
+      status = 'verifying';
     }
 
     const state = await persistState(venueId, {
       tour_embed_domain_status: status,
-      tour_embed_domain_verified_at: status === 'verified' ? verifiedAt : null,
+      tour_embed_domain_verified_at: verifiedAt,
       tour_embed_dns_records: dnsRecords,
     });
     return stateResponse(state);
