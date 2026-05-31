@@ -79,6 +79,11 @@ interface TourChatWidgetProps {
   // SSR-provided config (name / welcome / active) so the widget can render immediately
   // without waiting on its own client config fetch.
   initialConfig?: { chatbot_name?: string; welcome_message?: string; is_active?: boolean } | null;
+  // Force the public/demo code path (public config endpoint, no message storage as
+  // the logged-in user). Needed on the marketing site, which shares a domain with
+  // the app: without this, a logged-in app session would make the public hero hit
+  // the authenticated config route for a venue it doesn't own (403 → shows offline).
+  forcePublic?: boolean;
 }
 
 export function TourChatWidget({ 
@@ -96,10 +101,14 @@ export function TourChatWidget({
   onExternalPromptConsumed,
   embedId,
   embedToken,
-  initialConfig
+  initialConfig,
+  forcePublic = false
 }: TourChatWidgetProps) {
   const { user } = useUser();
-  const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(scopeTourId || tour?.id, venueId);
+  // In forced-public mode (marketing site) skip the authenticated config hook
+  // entirely by passing a null tourId, so it never hits /api/app/chatbots/config
+  // for a venue the signed-in user doesn't own (which 403s).
+  const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(forcePublic ? null : (scopeTourId || tour?.id), venueId);
   // Seed from SSR config when provided so the button renders fully on first paint.
   const [publicConfig, setPublicConfig] = useState<any>(initialConfig ?? null);
   const [isPublicConfigLoading, setIsPublicConfigLoading] = useState(false);
@@ -119,8 +128,9 @@ export function TourChatWidget({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Determine if this is a public/demo usage (no logged-in user)
-  const isPublicDemo = !user;
+  // Determine if this is a public/demo usage (no logged-in user, or explicitly
+  // forced for the marketing site which shares a domain with the app).
+  const isPublicDemo = forcePublic || !user;
 
   // Load config for public demos WITHOUT storing messages.
   // Skipped entirely when SSR already provided the config (embed fast path).

@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Rocket } from "lucide-react";
 import { useTourFullscreen } from "@/lib/contexts/TourFullscreenContext";
 
-// Demo configuration
-const DEMO_VENUE_ID = "b1afe3a3-303f-463c-bbd3-6673be4833b6";
-const DEMO_TOUR_ID = "d0ceaccc-e3f4-427f-b798-19d4c5f1d85e";
+// Demo configuration — the website@tourbots.ai showcase account (PHX).
+// The Matterport model id is fixed here so the hero is deterministic in every
+// environment and does not depend on a NEXT_PUBLIC_TEST_MODEL_ID env var.
+const DEMO_VENUE_ID = "aed89398-bb6d-44e7-8ff6-de45ffcbfcd0";
+const DEMO_TOUR_ID = "77a2da98-8688-42c9-b702-8a24ba298092";
+const DEMO_MODEL_ID = "kHMSzJkuDFP";
 const DEMO_VENUE_NAME = "Tour Bots";
 
 /** When set with MARKETING_SITE_MOVE_TRACKING_* server env, Hero tour moves are stored like customer embeds. */
@@ -19,8 +22,7 @@ export function Hero() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const { isFullscreen: isCustomFullscreen, setIsFullscreen: setIsCustomFullscreen } = useTourFullscreen();
-  const defaultModelId = process.env.NEXT_PUBLIC_TEST_MODEL_ID || process.env.NEXT_PUBLIC_MATTERPORT_MODEL_ID;
-  const [activeModelId, setActiveModelId] = useState(defaultModelId);
+  const [activeModelId, setActiveModelId] = useState(DEMO_MODEL_ID);
 
   const toggleCustomFullscreen = () => {
     setIsCustomFullscreen(!isCustomFullscreen);

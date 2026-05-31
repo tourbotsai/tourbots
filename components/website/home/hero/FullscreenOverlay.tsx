@@ -281,6 +281,7 @@ export function FullscreenOverlay({
             isExpanded={isChatOpen}
             onToggle={onChatToggle}
             isFullscreen={true}
+            forcePublic
           />
         )}
 

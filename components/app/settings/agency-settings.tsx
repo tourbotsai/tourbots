@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
@@ -242,6 +243,9 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedTour, setSelectedTour] = useState<TourRow | null>(null);
   const [selectedShare, setSelectedShare] = useState<ShareRow | null>(null);
+  // Holds the single client targeted for deletion. Keeping the exact tour + share
+  // here (rather than an id list) guarantees a delete only ever touches that one client.
+  const [clientToDelete, setClientToDelete] = useState<{ tour: TourRow; share: ShareRow } | null>(null);
   const [shareSlug, setShareSlug] = useState("");
   const [shareActive, setShareActive] = useState(true);
   const [enabledModules, setEnabledModules] = useState(defaultModules);
@@ -1092,6 +1096,44 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
         variant: "destructive",
       });
     }
+  };
+
+  // Permanently deletes a single client: the tour and everything tied to it
+  // (portal share, client login, sessions). Scoped server-side to (shareId,
+  // venueId) so only the targeted client is ever removed. Throws on failure so
+  // the ConfirmDialog stays open.
+  const deleteClient = async (share: ShareRow) => {
+    const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+    const response = await fetch("/api/app/agency-portal/shares", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(withVenueBody({
+        action: "delete_client",
+        shareId: share.id,
+      })),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      toast({
+        title: "Could not delete client",
+        description: data.error || "Failed to delete this client. Please try again.",
+        variant: "destructive",
+      });
+      throw new Error(data.error || "Failed to delete client");
+    }
+
+    // If the deleted client's tour was open in the manage modal, close it.
+    if (selectedTour?.id === share.tour_id) {
+      setIsShareModalOpen(false);
+    }
+
+    toast({
+      title: "Client deleted",
+      description: "The client, their portal access and tour have been removed.",
+    });
+
+    await fetchData();
+    await fetchBilling();
   };
 
   const regenerateCredentials = async () => {
@@ -1958,6 +2000,19 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                           <span className="sm:hidden">Manage</span>
                           <span className="hidden sm:inline">Manage client</span>
                         </Button>
+                        {share ? (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setClientToDelete({ tour, share })}
+                            disabled={!entitled}
+                            aria-label={`Delete client ${tour.title}`}
+                            title="Delete client"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -2008,6 +2063,39 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(clientToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setClientToDelete(null);
+        }}
+        title={clientToDelete ? `Delete ${clientToDelete.tour.title}?` : "Delete client?"}
+        destructive
+        confirmText="Delete client"
+        cancelText="Cancel"
+        description={
+          <span className="space-y-2 block">
+            <span className="block">
+              This permanently deletes this client and everything belonging to them:
+            </span>
+            <span className="block">
+              • their tour and its points, menu and chatbot settings
+              <br />
+              • the client&apos;s portal login and any active sessions
+              <br />
+              • the shared portal link for this client
+            </span>
+            <span className="block font-medium text-foreground">
+              Only this client is affected — your other clients, tours and models stay exactly as they are. This cannot be undone.
+            </span>
+          </span>
+        }
+        onConfirm={async () => {
+          if (clientToDelete) {
+            await deleteClient(clientToDelete.share);
+          }
+        }}
+      />
 
       <Dialog open={isAddClientOpen} onOpenChange={handleAddClientOpenChange}>
         <DialogContent className="sm:max-w-[40rem] max-h-[90vh] overflow-y-auto">

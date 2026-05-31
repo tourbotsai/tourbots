@@ -65,11 +65,17 @@ const saveAllocationsSchema = z.object({
     .max(500),
 });
 
+const deleteClientSchema = z.object({
+  action: z.literal('delete_client'),
+  shareId: z.string().uuid(),
+});
+
 const actionSchema = z.discriminatedUnion('action', [
   upsertShareSchema,
   toggleShareSchema,
   createCredentialSchema,
   saveAllocationsSchema,
+  deleteClientSchema,
 ]);
 
 function normaliseSlug(input: string): string {
@@ -398,6 +404,60 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({ share: updated });
+    }
+
+    if (payload.action === 'delete_client') {
+      // Deleting a client removes EVERYTHING tied to that one client: the tour
+      // itself plus, via ON DELETE CASCADE, its agency_portal_share, the client
+      // login user(s) and their portal sessions, as well as the tour's points,
+      // menu, per-tour chatbot config and hard-limit rows. Analytics rows
+      // (conversations / embed stats) are detached via ON DELETE SET NULL so the
+      // agency's historical usage is preserved at the venue level.
+      //
+      // We scope every lookup and delete to (shareId, venueId) and the tour to
+      // (tourId, venueId) so a delete can ONLY ever touch the targeted client —
+      // never another client, tour or model on the same account.
+      const { data: share, error: shareLookupError } = await supabase
+        .from('agency_portal_shares')
+        .select('id, tour_id')
+        .eq('id', payload.shareId)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+
+      if (shareLookupError) {
+        return NextResponse.json({ error: shareLookupError.message }, { status: 500 });
+      }
+      if (!share) {
+        return NextResponse.json({ error: 'Client not found for this account.' }, { status: 404 });
+      }
+
+      if (share.tour_id) {
+        // Delete the tour, scoped to this venue. The share/users/sessions cascade
+        // away with it. We never delete tours that do not belong to this venue.
+        const { error: tourDeleteError } = await supabase
+          .from('tours')
+          .delete()
+          .eq('id', share.tour_id)
+          .eq('venue_id', venueId);
+
+        if (tourDeleteError) {
+          return NextResponse.json({ error: tourDeleteError.message }, { status: 500 });
+        }
+      } else {
+        // Defensive fallback: a share with no tour can't cascade, so remove the
+        // share row directly (its users/sessions still cascade off the share).
+        const { error: shareDeleteError } = await supabase
+          .from('agency_portal_shares')
+          .delete()
+          .eq('id', payload.shareId)
+          .eq('venue_id', venueId);
+
+        if (shareDeleteError) {
+          return NextResponse.json({ error: shareDeleteError.message }, { status: 500 });
+        }
+      }
+
+      return NextResponse.json({ success: true });
     }
 
     if (payload.action === 'save_allocations') {
