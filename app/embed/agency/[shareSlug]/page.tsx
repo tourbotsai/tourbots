@@ -33,7 +33,7 @@ async function getAgencyPreviewData(shareSlug: string) {
 
   const { data: settings } = await supabase
     .from('agency_portal_settings')
-    .select('agency_name, logo_url, primary_colour, secondary_colour, portal_background_colour, is_enabled, allowed_domains')
+    .select('agency_name, logo_url, primary_colour, secondary_colour, portal_background_colour, is_enabled, allowed_domains, tour_embed_domain, tour_embed_domain_status')
     .eq('venue_id', share.venue_id)
     .maybeSingle();
 
@@ -84,6 +84,7 @@ export default async function AgencyEmbedPreviewPage({
     settings: share.enabled_modules?.settings !== false,
     customisation: share.enabled_modules?.customisation !== false,
     analytics: share.enabled_modules?.analytics !== false,
+    share: share.enabled_modules?.share !== false,
   };
   const tourBlocks = {
     setup: share.enabled_modules?.tour_blocks?.setup !== false,
@@ -116,6 +117,8 @@ export default async function AgencyEmbedPreviewPage({
       modules={modules}
       venueId={share.venue_id}
       venueName={venue?.name || null}
+      tourEmbedDomain={settings?.tour_embed_domain || null}
+      tourEmbedDomainStatus={settings?.tour_embed_domain_status || 'unconfigured'}
       tourBlocks={tourBlocks}
       settingsBlocks={settingsBlocks}
     />

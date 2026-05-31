@@ -171,6 +171,7 @@ export interface AgencyPortalSessionContext {
     settings?: boolean;
     customisation?: boolean;
     analytics?: boolean;
+    share?: boolean;
     tour_blocks?: {
       setup?: boolean;
       menu?: boolean;
@@ -252,7 +253,7 @@ export async function requireAgencyPortalSession(
   request: NextRequest,
   options?: {
     shareSlug?: string;
-    requiredModule?: 'tour' | 'settings' | 'customisation' | 'analytics';
+    requiredModule?: 'tour' | 'settings' | 'customisation' | 'analytics' | 'share';
     requireCsrf?: boolean;
   }
 ): Promise<AgencyPortalSessionContext | NextResponse> {
