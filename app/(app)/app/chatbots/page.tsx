@@ -87,10 +87,10 @@ function ChatbotsContent() {
         title={
           <>
             <span className="sm:hidden">Chatbot</span>
-            <span className="hidden sm:inline">Virtual Tour AI Chatbot</span>
+            <span className="hidden sm:inline">AI Chatbot</span>
           </>
         }
-        description="Configure and manage your tour-specific AI assistant"
+        description="Configure and manage your tour's AI assistant"
         action={
           <div className="flex items-center gap-2">
             <span className="hidden whitespace-nowrap text-sm font-medium text-slate-600 dark:text-slate-300 sm:inline">

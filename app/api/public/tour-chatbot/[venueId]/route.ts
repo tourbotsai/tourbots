@@ -1047,11 +1047,26 @@ You also have a file search tool covering the venue's uploaded documents. If the
             let suppressNextRoundText = false;
 
             while (continuationDepth < 3) {
-              const { responseId, functionCalls } = await streamAndCollect(
-                nextArgs,
-                continuationDepth > 0,
-                suppressNextRoundText
-              );
+              let responseId: string | null;
+              let functionCalls: Array<{ name: string; arguments: string; call_id?: string }>;
+              try {
+                ({ responseId, functionCalls } = await streamAndCollect(
+                  nextArgs,
+                  continuationDepth > 0,
+                  suppressNextRoundText
+                ));
+              } catch (roundError) {
+                // A continuation round only exists to close out a tool call / let the
+                // model speak again. If it fails after we've already streamed a visible
+                // reply, finish gracefully with what we have rather than aborting the
+                // whole stream (which would wipe the user's answer). Only the first round
+                // failing with no content is a genuine error.
+                if (continuationDepth > 0 && fullResponse.trim().length > 0) {
+                  console.error('Continuation round failed; closing with existing reply:', roundError);
+                  break;
+                }
+                throw roundError;
+              }
               if (!functionCalls.length) break;
 
               console.log('✅ Stream complete, processing function calls:', functionCalls);

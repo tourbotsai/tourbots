@@ -246,11 +246,11 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
                     <Globe className="h-4 w-4 sm:h-5 sm:w-5" />
                   </span>
-                  <span className="text-base sm:text-lg">Virtual Tour Chatbot Configuration</span>
+                  <span className="text-base sm:text-lg">Chatbot Configuration</span>
                 </div>
               </CardTitle>
               <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
-                Configure your tour-specific AI assistant&apos;s personality and behaviour
+                Configure your AI assistant&apos;s personality and behaviour
               </CardDescription>
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">

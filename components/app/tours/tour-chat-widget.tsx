@@ -667,6 +667,33 @@ export function TourChatWidget({
       );
     } catch (error) {
       console.error('Error sending message:', error);
+
+      // If we've already streamed a visible reply, a late failure (e.g. a blip on
+      // the trigger's continuation round) must NOT wipe out the answer the user can
+      // see. Preserve the streamed reply (appending the trigger URL if any) instead
+      // of replacing it with a generic error.
+      if (accumulatedContent.trim().length > 0) {
+        let preserved = accumulatedContent;
+        if (triggeredUrl && !preserved.includes(triggeredUrl)) {
+          preserved = `${preserved}\n\n${triggeredUrl}`;
+        }
+        setMessages(prev =>
+          prev.some(msg => msg.id === assistantMessageId)
+            ? prev.map(msg =>
+                msg.id === assistantMessageId
+                  ? { ...msg, content: preserved }
+                  : msg
+              )
+            : [...prev, {
+                id: assistantMessageId,
+                role: 'assistant',
+                content: preserved,
+                timestamp: new Date().toISOString(),
+              }]
+        );
+        return;
+      }
+
       const message =
         error instanceof Error && error.message
           ? error.message
