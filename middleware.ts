@@ -348,7 +348,12 @@ export function middleware(request: NextRequest): NextResponse {
     return applyPublicCorsHeaders(response, origin, allowedOrigins, publicCorsRule);
   }
 
-  if (shouldApplyPublicOriginValidation(pathname, method)) {
+  // Wildcard-origin embed APIs (e.g. tour-chatbot, embed/track, chatbot-config)
+  // are designed to be called cross-site from any host — including agencies'
+  // verified white-label tour embed domains — and are authenticated by signed
+  // embed tokens at the route handler, not by the origin allowlist. Only enforce
+  // the strict origin allowlist for non-wildcard public write routes.
+  if (shouldApplyPublicOriginValidation(pathname, method) && !publicCorsRule?.allowWildcardOrigin) {
     if (!origin) {
       return withJsonError(requestId, 403, 'Origin header required');
     }
