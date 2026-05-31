@@ -183,6 +183,13 @@ export function AgencySettings() {
   // Auto-polling only starts after the agency has clicked "Check status" once —
   // nobody adds a DNS record within the first few seconds of connecting.
   const [domainCheckStarted, setDomainCheckStarted] = useState(false);
+  // Auto-poll gives up after ~1 minute (DNS can take far longer to propagate);
+  // we then show a "check back later" note rather than spinning forever.
+  const [domainPollExpired, setDomainPollExpired] = useState(false);
+  const domainPollStartRef = useRef<number | null>(null);
+  // Guards against overlapping check requests (manual click landing on top of an
+  // in-flight auto-poll), which otherwise surface as a raw "Failed to fetch".
+  const isCheckingDomainRef = useRef(false);
 
   const [generalOpen, setGeneralOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -714,6 +721,8 @@ export function AgencySettings() {
       applyDomainState(data);
       // Fresh connect: wait for the agency to add DNS + click Check before polling.
       setDomainCheckStarted(false);
+      setDomainPollExpired(false);
+      domainPollStartRef.current = null;
       toast({ title: "Domain connected", description: "Add the DNS record shown below, then click Check status." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to connect domain.", variant: "destructive" });
@@ -723,8 +732,21 @@ export function AgencySettings() {
   };
 
   const checkDomain = async (silent = false) => {
-    // A manual check (re)enables auto-polling for the rest of this session.
-    if (!silent) setDomainCheckStarted(true);
+    // Skip if a check (manual or auto-poll) is already in flight — overlapping
+    // requests are what produced the raw "Failed to fetch" error.
+    if (isCheckingDomainRef.current) {
+      if (!silent) {
+        toast({ title: "Already checking", description: "We're checking your domain - just a moment." });
+      }
+      return;
+    }
+    // A manual check (re)enables auto-polling and restarts the ~1 min window.
+    if (!silent) {
+      setDomainCheckStarted(true);
+      setDomainPollExpired(false);
+      domainPollStartRef.current = Date.now();
+    }
+    isCheckingDomainRef.current = true;
     setIsCheckingDomain(true);
     try {
       const headers = await getAuthHeaders({ "Content-Type": "application/json" });
@@ -746,8 +768,15 @@ export function AgencySettings() {
         }
       }
     } catch (error: any) {
-      if (!silent) toast({ title: "Error", description: error.message || "Failed to check domain.", variant: "destructive" });
+      if (!silent) {
+        const friendly =
+          error?.message === "Failed to fetch"
+            ? "We couldn't reach the server just now. Please try Check status again in a moment."
+            : error?.message || "Please try Check status again in a moment.";
+        toast({ title: "Couldn't check domain", description: friendly, variant: "destructive" });
+      }
     } finally {
+      isCheckingDomainRef.current = false;
       setIsCheckingDomain(false);
     }
   };
@@ -765,6 +794,8 @@ export function AgencySettings() {
       if (!res.ok) throw new Error(data.error || "Failed to disconnect domain");
       applyDomainState(data);
       setDomainCheckStarted(false);
+      setDomainPollExpired(false);
+      domainPollStartRef.current = null;
       toast({ title: "Domain disconnected", description: "Your embed code will use tourbots.ai again." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to disconnect domain.", variant: "destructive" });
@@ -804,13 +835,20 @@ export function AgencySettings() {
   useEffect(() => {
     if (!generalOpen) return;
     if (!domainCheckStarted) return;
+    if (domainPollExpired) return;
     if (settings?.tour_embed_domain_status !== "verifying") return;
+    if (domainPollStartRef.current === null) domainPollStartRef.current = Date.now();
     const interval = setInterval(() => {
+      // Give up auto-polling after ~1 minute; DNS propagation can take far longer.
+      if (domainPollStartRef.current !== null && Date.now() - domainPollStartRef.current > 60000) {
+        setDomainPollExpired(true);
+        return;
+      }
       void checkDomain(true);
     }, 12000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generalOpen, domainCheckStarted, settings?.tour_embed_domain_status]);
+  }, [generalOpen, domainCheckStarted, domainPollExpired, settings?.tour_embed_domain_status]);
 
   const saveUsageLimits = async () => {
     if (!settings) return;
@@ -1326,32 +1364,52 @@ export function AgencySettings() {
                             <th className="py-1 pr-3 font-medium">Type</th>
                             <th className="py-1 pr-3 font-medium">Name</th>
                             <th className="py-1 pr-3 font-medium">Value</th>
-                            <th className="py-1" />
                           </tr>
                         </thead>
                         <tbody>
                           {tourEmbedDnsRecords.map((record, recordIndex) => (
                             <tr key={`${record.type}-${record.name}-${recordIndex}`} className="border-t border-slate-200 dark:border-input">
                               <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200">{record.type}</td>
-                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200">{record.name}</td>
-                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200 break-all">{record.value}</td>
-                              <td className="py-1.5">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => copyDnsValue(record.value, `${recordIndex}`)}
-                                  aria-label="Copy value"
-                                >
-                                  {copiedDnsKey === `${recordIndex}` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                                </Button>
+                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="break-all">{record.name}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0"
+                                    onClick={() => copyDnsValue(record.name, `name-${recordIndex}`)}
+                                    aria-label="Copy name"
+                                  >
+                                    {copiedDnsKey === `name-${recordIndex}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                  </Button>
+                                </span>
+                              </td>
+                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="break-all">{record.value}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0"
+                                    onClick={() => copyDnsValue(record.value, `value-${recordIndex}`)}
+                                    aria-label="Copy value"
+                                  >
+                                    {copiedDnsKey === `value-${recordIndex}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                  </Button>
+                                </span>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+                    {domainPollExpired && (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Not verified yet. DNS changes can take a while to propagate - often a few minutes, but sometimes 1-2 hours (occasionally longer). You can leave this page and come back later, then click Check status again.
+                      </p>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
