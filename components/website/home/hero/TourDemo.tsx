@@ -233,6 +233,7 @@ export function TourDemo({
               isExpanded={isChatOpen}
               onToggle={onChatToggle}
               isFullscreen={false}
+              forcePublic
             />
           )}
 

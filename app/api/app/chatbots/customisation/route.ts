@@ -7,8 +7,11 @@ import {
 } from '@/lib/server/chatbot-customisation-db';
 import { authenticateChatbotRoute, ensureTourScope, ensureVenueScope, getScopedVenueId, logChatbotAudit } from '@/lib/chatbot-route-auth';
 
-const DEFAULT_PUBLIC_DEMO_VENUE_ID = 'b1afe3a3-303f-463c-bbd3-6673be4833b6';
-const DEFAULT_PUBLIC_DEMO_TOUR_ID = 'd0ceaccc-e3f4-427f-b798-19d4c5f1d85e';
+// Public marketing hero (website@tourbots.ai showcase) — must match the demo
+// IDs hard-coded in components/website/home/Hero.tsx so the unauthenticated hero
+// can read this tour's chatbot customisation.
+const DEFAULT_PUBLIC_DEMO_VENUE_ID = 'aed89398-bb6d-44e7-8ff6-de45ffcbfcd0';
+const DEFAULT_PUBLIC_DEMO_TOUR_ID = '77a2da98-8688-42c9-b702-8a24ba298092';
 const PUBLIC_DEMO_VENUE_ID = process.env.NEXT_PUBLIC_DEMO_VENUE_ID || DEFAULT_PUBLIC_DEMO_VENUE_ID;
 const PUBLIC_DEMO_TOUR_ID = process.env.NEXT_PUBLIC_DEMO_TOUR_ID || DEFAULT_PUBLIC_DEMO_TOUR_ID;
 
