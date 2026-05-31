@@ -2,6 +2,9 @@
 const { withSentryConfig } = require('@sentry/nextjs');
 const firebaseAuthHost = process.env.FIREBASE_AUTH_HOST || 'tourbots-ai.firebaseapp.com';
 const isProduction = process.env.NODE_ENV === 'production';
+// Canonical embed origin nested by white-label custom-domain tour shells.
+// Must be allowed in the embed frame-src so the shell can frame it.
+const canonicalEmbedOrigin = (process.env.NEXT_PUBLIC_CANONICAL_EMBED_ORIGIN || 'https://tourbots.ai').replace(/\/+$/, '');
 
 function buildCsp({ embed = false } = {}) {
   const scriptSrc = isProduction
@@ -17,7 +20,7 @@ function buildCsp({ embed = false } = {}) {
     "base-uri 'self'",
     "object-src 'none'",
     "form-action 'self'",
-    "frame-src 'self' https://my.matterport.com https://api.matterport.com https://js.stripe.com",
+    `frame-src 'self' ${canonicalEmbedOrigin} https://my.matterport.com https://api.matterport.com https://js.stripe.com`,
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
