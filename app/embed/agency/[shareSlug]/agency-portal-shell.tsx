@@ -91,6 +91,13 @@ interface PortalAnalyticsStats {
   tourMoves: number;
 }
 
+interface PortalAllocation {
+  used: number;
+  allocation: number;
+  remaining: number;
+  resetAt: string;
+}
+
 interface InformationField {
   id?: string;
   field_key: string;
@@ -169,6 +176,7 @@ export function AgencyPortalShell({
   const [customisationSaving, setCustomisationSaving] = useState(false);
 
   const [analyticsStats, setAnalyticsStats] = useState<PortalAnalyticsStats | null>(previewAnalyticsStats);
+  const [analyticsAllocation, setAnalyticsAllocation] = useState<PortalAllocation | null>(null);
   const [analyticsTrend, setAnalyticsTrend] = useState<TourTrendPoint[]>(previewAnalyticsTrend);
   const [analyticsEmbedStats, setAnalyticsEmbedStats] = useState<EmbedStat[]>(previewAnalyticsEmbedStats);
   const [analyticsConversations, setAnalyticsConversations] = useState<Conversation[]>(previewAnalyticsConversations);
@@ -524,6 +532,7 @@ export function AgencyPortalShell({
       }
 
       setAnalyticsStats(statsJson?.stats || null);
+      setAnalyticsAllocation(statsJson?.allocation || null);
       setAnalyticsTrend(detailsJson?.trend || []);
       setAnalyticsEmbedStats(detailsJson?.embedStats || []);
       setAnalyticsConversations(detailsJson?.conversations || []);
@@ -995,6 +1004,25 @@ export function AgencyPortalShell({
                       <p className="text-sm text-slate-600">Loading analytics...</p>
                     ) : (
                       <div className="space-y-3">
+                        {analyticsAllocation && (
+                          <Card>
+                            <CardContent className="p-3">
+                              <div className="flex items-end justify-between gap-3">
+                                <div>
+                                  <p className="text-xs text-slate-500">Message credits (this month)</p>
+                                  <p className="text-xl font-semibold">
+                                    {(analyticsAllocation.used || 0).toLocaleString('en-GB')} / {(analyticsAllocation.allocation || 0).toLocaleString('en-GB')}
+                                  </p>
+                                </div>
+                                {analyticsAllocation.resetAt && (
+                                  <p className="text-xs text-slate-500">
+                                    Resets {new Date(analyticsAllocation.resetAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })}
+                                  </p>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
                         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
                           <Card>
                             <CardContent className="p-3">

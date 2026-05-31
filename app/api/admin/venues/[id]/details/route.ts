@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { requirePlatformAdmin } from '@/lib/api/require-platform-admin';
+import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,14 +142,17 @@ export async function GET(
       .eq('venue_id', venueId)
       .eq('lead_status', 'converted');
 
-    // Billing message usage should match app/dashboard logic:
-    // only visitor messages sent to the tour chatbot.
+    // Billing message usage should match app/dashboard logic: only visitor
+    // messages sent to the tour chatbot since the start of the current calendar
+    // month (message credits are a monthly allowance that refreshes each month).
+    const { periodStart: messageCreditPeriodStart } = getCurrentMessageCreditPeriod();
     const { count: tourVisitorMessagesUsed } = await supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('venue_id', venueId)
       .eq('chatbot_type', 'tour')
-      .eq('message_type', 'visitor');
+      .eq('message_type', 'visitor')
+      .gte('created_at', messageCreditPeriodStart);
 
     // Get chatbots from configs only (don't duplicate with customisations)
     const chatbots = chatbotConfigsResult.data || [];

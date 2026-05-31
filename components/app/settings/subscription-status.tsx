@@ -37,6 +37,7 @@ export function SubscriptionStatus() {
     subscriptionDetails,
     subscriptionStatus,
     limits,
+    messageUsage,
     addonSubscriptions,
     addonSubscriptionList,
     isLoading,
@@ -495,32 +496,42 @@ export function SubscriptionStatus() {
           </div>
 
           {limits && (
-            <div className={cn(
-              "grid grid-cols-1 gap-4 rounded-lg border bg-muted/30 dark:border-input dark:bg-background p-4 sm:grid-cols-2",
-              isAgencyPlanActive ? "lg:grid-cols-5" : "md:grid-cols-4"
-            )}>
-              <div>
-                <p className="text-sm text-muted-foreground">Base spaces</p>
-                <p className="text-lg font-semibold">{limits.baseSpaces}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Base messages</p>
-                <p className="text-lg font-semibold">{limits.baseMessages.toLocaleString("en-GB")}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total spaces</p>
-                <p className="text-lg font-semibold">{limits.totalSpaces}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total messages</p>
-                <p className="text-lg font-semibold">{limits.totalMessages.toLocaleString("en-GB")}</p>
-              </div>
-              {isAgencyPlanActive && (
+            <div className="space-y-2">
+              <div className={cn(
+                "grid grid-cols-1 gap-4 rounded-lg border bg-muted/30 dark:border-input dark:bg-background p-4 sm:grid-cols-2",
+                isAgencyPlanActive ? "lg:grid-cols-5" : "md:grid-cols-4"
+              )}>
                 <div>
-                  <p className="text-sm text-muted-foreground">Agency portal</p>
-                  <p className="text-lg font-semibold">Enabled</p>
+                  <p className="text-sm text-muted-foreground">Base spaces</p>
+                  <p className="text-lg font-semibold">{limits.baseSpaces}</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Base messages</p>
+                  <p className="text-lg font-semibold">{limits.baseMessages.toLocaleString("en-GB")}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total spaces</p>
+                  <p className="text-lg font-semibold">{limits.totalSpaces}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Message credits (this month)</p>
+                  <p className="text-lg font-semibold">
+                    {messageUsage
+                      ? `${messageUsage.used.toLocaleString("en-GB")} / ${limits.totalMessages.toLocaleString("en-GB")}`
+                      : limits.totalMessages.toLocaleString("en-GB")}
+                  </p>
+                </div>
+                {isAgencyPlanActive && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Agency portal</p>
+                    <p className="text-lg font-semibold">Enabled</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Message credits refresh on the 1st of each month
+                {messageUsage?.resetAt ? ` — next reset ${formatDate(messageUsage.resetAt)}` : ""}.
+              </p>
             </div>
           )}
 

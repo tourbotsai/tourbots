@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ChatbotCustomisation } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -12,7 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Smartphone, Palette, Type, Layout, Sparkles, Zap, Users, MessageCircle, Mouse, Award, Monitor } from 'lucide-react';
+import { ChevronDown, ChevronRight, Smartphone, Palette, Type, Layout, SlidersHorizontal, Zap, Users, MessageCircle, Mouse, Award, Monitor } from 'lucide-react';
 import { ColorPicker } from '../color-picker';
 import { IconSelector } from '../icon-selector';
 import { ImageUpload } from '../image-upload';
@@ -62,23 +62,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
     <div className="space-y-4">
       {/* 1. Chat Button */}
       <Collapsible open={openSections.chatButton} onOpenChange={() => toggleSection('chatButton')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <MessageCircle className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <MessageCircle className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">1. Chat Button</CardTitle>
-                    <CardDescription>Mobile chat button styling and positioning</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">1. Chat Button</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Mobile chat button styling and positioning</p>
                   </div>
                 </div>
-                {openSections.chatButton ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.chatButton ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <ColorPicker
                   label="Button Colour"
@@ -260,23 +263,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
       {/* 2. Chat Window */}
       <Collapsible open={openSections.chatWindow} onOpenChange={() => toggleSection('chatWindow')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Monitor className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <Monitor className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">2. Chat Window</CardTitle>
-                    <CardDescription>Mobile chat window layout and dimensions</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">2. Chat Window</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Mobile chat window layout and dimensions</p>
                   </div>
                 </div>
-                {openSections.chatWindow ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.chatWindow ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Window Title</Label>
@@ -425,23 +431,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
       {/* 3. Colours & Branding */}
       <Collapsible open={openSections.colorsAndBranding} onOpenChange={() => toggleSection('colorsAndBranding')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Palette className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <Palette className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">3. Colours & Branding</CardTitle>
-                    <CardDescription>Mobile colour scheme and branding elements</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">3. Colours & Branding</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Mobile colour scheme and branding elements</p>
                   </div>
                 </div>
-                {openSections.colorsAndBranding ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.colorsAndBranding ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <ColorPicker
                   label="Header Background Colour"
@@ -546,23 +555,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
       {/* 4. Typography */}
       <Collapsible open={openSections.typography} onOpenChange={() => toggleSection('typography')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Type className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <Type className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">4. Typography</CardTitle>
-                    <CardDescription>Mobile font settings and text styling</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">4. Typography</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Mobile font settings and text styling</p>
                   </div>
                 </div>
-                {openSections.typography ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.typography ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
                 <Label>Font Family</Label>
                 <Select value={values.mobile_font_family || ''} onValueChange={(value) => onChange('mobile_font_family', value)}>
@@ -675,23 +687,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
       {/* 5. Messages & Avatars */}
       <Collapsible open={openSections.messagesAndAvatars} onOpenChange={() => toggleSection('messagesAndAvatars')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Users className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <Users className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">5. Messages & Avatars</CardTitle>
-                    <CardDescription>Message styling and avatar configuration</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">5. Messages & Avatars</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Message styling and avatar configuration</p>
                   </div>
                 </div>
-                {openSections.messagesAndAvatars ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.messagesAndAvatars ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Message Border Radius (px)</Label>
@@ -885,23 +900,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
       {/* 6. Input & Send Button */}
       <Collapsible open={openSections.inputAndSendButton} onOpenChange={() => toggleSection('inputAndSendButton')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <MessageCircle className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <MessageCircle className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">6. Input & Send Button</CardTitle>
-                    <CardDescription>Input field and send button configuration</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">6. Input & Send Button</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Input field and send button configuration</p>
                   </div>
                 </div>
-                {openSections.inputAndSendButton ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.inputAndSendButton ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
                 <Label>Input Placeholder Text</Label>
                 <Input
@@ -1031,23 +1049,26 @@ const MobileCustomisation: React.FC<MobileCustomisationProps> = ({ values, onCha
 
       {/* 7. Advanced Settings */}
       <Collapsible open={openSections.advancedSettings} onOpenChange={() => toggleSection('advancedSettings')}>
-        <Card className="dark:border-input dark:bg-background">
+        <Card className="overflow-hidden dark:border-input dark:bg-background">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pb-4">
+            <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Sparkles className="w-4 h-4 text-slate-500" />
+                  <div className="text-gray-600 dark:text-gray-400">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
                   <div>
-                    <CardTitle className="text-base">7. Advanced Settings</CardTitle>
-                    <CardDescription>Loading states and advanced options</CardDescription>
+                    <h3 className="font-medium text-sm dark:text-white">7. Advanced Settings</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Loading states and advanced options</p>
                   </div>
                 </div>
-                {openSections.advancedSettings ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {openSections.advancedSettings ? <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
-            </CardHeader>
+            </CardContent>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Loading Animation</Label>

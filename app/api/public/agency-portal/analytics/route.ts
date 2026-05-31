@@ -8,6 +8,7 @@ import {
   getScopedTourConversations,
   getScopedTourEmbedStats,
 } from '@/lib/agency-portal-module-service';
+import { checkClientAllocationUsage } from '@/lib/services/agency-allocation-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,8 +50,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ messages });
     }
 
-    const stats = await getScopedTourAnalyticsStats(session.venueId, session.tourId);
-    return NextResponse.json({ stats });
+    const [stats, allocationResult] = await Promise.all([
+      getScopedTourAnalyticsStats(session.venueId, session.tourId),
+      checkClientAllocationUsage(session.venueId, session.tourId),
+    ]);
+
+    // Only surface allocation to the client when the agency runs in allocated mode.
+    const allocation = allocationResult.enforced
+      ? {
+          used: allocationResult.used,
+          allocation: allocationResult.allocation,
+          remaining: allocationResult.remaining,
+          resetAt: allocationResult.resetAt,
+        }
+      : null;
+
+    return NextResponse.json({ stats, allocation });
   } catch (error: any) {
     console.error('Agency portal analytics GET error:', error);
     return NextResponse.json(

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getVenueInformationCompleteness } from './venue-information-service';
+import { getCurrentMessageCreditPeriod } from './billing-period';
 import { 
   Subscription, 
   Invoice, 
@@ -24,6 +25,8 @@ export interface QuickStats {
   tourChatMessages: number;
   messageCreditsUsed: number;
   messageCreditsLimit: number;
+  /** ISO timestamp for when the monthly message-credit allowance next refreshes. */
+  messageCreditsResetAt?: string;
   spacesUsed: number;
   spacesLimit: number;
   uniqueDomains: number;
@@ -293,8 +296,18 @@ export async function getQuickStats(venueId: string): Promise<QuickStats> {
       (baseMessages + (addonExtraSpaces * 1000) + (addonMessageBlocks * 1000))
     );
 
-    // Usage values
-    const messageCreditsUsed = Number(tourChatMessages || 0);
+    // Usage values — message credits are a monthly allowance, so only count
+    // tour visitor messages since the start of the current calendar month.
+    const { periodStart: messageCreditPeriodStart, resetAt: messageCreditsResetAt } =
+      getCurrentMessageCreditPeriod();
+    const { count: messageCreditsUsedCount } = await supabase
+      .from('conversations')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('chatbot_type', 'tour')
+      .eq('message_type', 'visitor')
+      .gte('created_at', messageCreditPeriodStart);
+    const messageCreditsUsed = Number(messageCreditsUsedCount || 0);
     const { count: spacesUsedCount } = await supabase
       .from('tours')
       .select('*', { count: 'exact', head: true })
@@ -332,6 +345,7 @@ export async function getQuickStats(venueId: string): Promise<QuickStats> {
       tourChatMessages: tourChatMessages || 0,
       messageCreditsUsed,
       messageCreditsLimit,
+      messageCreditsResetAt,
       spacesUsed,
       spacesLimit,
       uniqueDomains,

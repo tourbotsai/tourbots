@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,7 @@ import { useUser } from "@/hooks/useUser";
 import { useBilling } from "@/hooks/app/useBilling";
 import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
 import { generateAgencyPortalEmbed, generateUniversalAgencyPortalEmbed } from "@/lib/embed-generator";
-import { Building2, Code, Copy, ExternalLink, Info, KeyRound, Loader2, Lock, Plus, Save, Share2, Trash2, UserPlus, X } from "lucide-react";
+import { Building2, ChevronDown, ChevronUp, Code, Copy, ExternalLink, Gauge, Info, KeyRound, Loader2, Lock, Palette, Plus, Share2, SlidersHorizontal, Trash2, UserPlus, X } from "lucide-react";
 
 function extractMatterportId(url: string): string {
   const trimmed = url.trim();
@@ -58,6 +58,13 @@ interface AgencyPortalSettings {
   secondary_colour: string | null;
   portal_background_colour: string | null;
   allowed_domains: string[];
+  client_usage_mode?: "shared" | "allocated";
+}
+
+interface AgencyPool {
+  used: number;
+  limit: number;
+  resetAt: string;
 }
 
 interface TourRow {
@@ -98,6 +105,8 @@ interface ShareRow {
     };
   };
   users: ShareUser[];
+  message_credit_allocation?: number | null;
+  messages_used_this_month?: number;
 }
 
 const defaultModules = {
@@ -145,6 +154,16 @@ export function AgencySettings() {
 
   const [domains, setDomains] = useState<string[]>([]);
   const [domainInput, setDomainInput] = useState("");
+
+  const [pool, setPool] = useState<AgencyPool | null>(null);
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
+  const [isSavingDomains, setIsSavingDomains] = useState(false);
+  const [isSavingUsage, setIsSavingUsage] = useState(false);
+
+  const [generalOpen, setGeneralOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
 
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
   const [addClientStep, setAddClientStep] = useState<"form" | "success">("form");
@@ -284,6 +303,13 @@ export function AgencySettings() {
       setDomains(settingsJson.settings?.allowed_domains || []);
       setTours(sharesJson.tours || []);
       setShares(sharesJson.shares || []);
+      setPool(sharesJson.pool || null);
+      setAllocations(
+        (sharesJson.shares || []).reduce((acc: Record<string, number>, share: ShareRow) => {
+          acc[share.id] = Number(share.message_credit_allocation || 0);
+          return acc;
+        }, {})
+      );
     } catch (error: any) {
       toast({
         title: "Error",
@@ -496,6 +522,7 @@ export function AgencySettings() {
           secondary_colour: settings.secondary_colour || null,
           portal_background_colour: settings.portal_background_colour || null,
           allowed_domains: parsedDomains,
+          client_usage_mode: settings.client_usage_mode || "shared",
         }),
       });
       const data = await response.json();
@@ -519,6 +546,118 @@ export function AgencySettings() {
       });
     } finally {
       setIsSavingSettings(false);
+    }
+  };
+
+  const usageMode = settings?.client_usage_mode || "shared";
+  const totalAllocated = useMemo(
+    () => shares.reduce((sum, share) => sum + Number(allocations[share.id] || 0), 0),
+    [shares, allocations]
+  );
+  const poolLimit = pool?.limit ?? 0;
+  const overAllocated = usageMode === "allocated" && totalAllocated > poolLimit;
+  const formatResetDate = (iso?: string | null) => {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+  };
+
+  const persistSettings = async (headers: HeadersInit) => {
+    if (!settings) return null;
+    const pendingDomains = parseDomainTokens(domainInput);
+    const parsedDomains = Array.from(
+      new Set([...domains, ...pendingDomains].map((entry) => entry.trim().toLowerCase()).filter(Boolean))
+    );
+
+    const settingsResponse = await fetch("/api/app/agency-portal/settings", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        is_enabled: settings.is_enabled,
+        agency_name: settings.agency_name || null,
+        logo_url: settings.logo_url || null,
+        primary_colour: settings.primary_colour || null,
+        secondary_colour: settings.secondary_colour || null,
+        portal_background_colour: settings.portal_background_colour || null,
+        allowed_domains: parsedDomains,
+        client_usage_mode: usageMode,
+      }),
+    });
+    const settingsData = await settingsResponse.json();
+    if (!settingsResponse.ok) {
+      throw new Error(settingsData.error || "Failed to save settings");
+    }
+    return settingsData;
+  };
+
+  const saveDomains = async () => {
+    if (!settings) return;
+    setIsSavingDomains(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const settingsData = await persistSettings(headers);
+      if (settingsData) {
+        setSettings(settingsData);
+        setDomains(settingsData.allowed_domains || []);
+        setDomainInput("");
+      }
+      toast({ title: "Saved", description: "Allowed domains updated successfully." });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save allowed domains.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingDomains(false);
+    }
+  };
+
+  const saveUsageLimits = async () => {
+    if (!settings) return;
+    if (usageMode === "allocated" && totalAllocated > poolLimit) {
+      toast({
+        title: "Allocations exceed your limit",
+        description: `Total allocated (${totalAllocated.toLocaleString("en-GB")}) is above your monthly message limit (${poolLimit.toLocaleString("en-GB")}). Reduce the split before saving.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSavingUsage(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const settingsData = await persistSettings(headers);
+
+      if (usageMode === "allocated") {
+        const allocationsResponse = await fetch("/api/app/agency-portal/shares", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            action: "save_allocations",
+            allocations: shares.map((share) => ({
+              shareId: share.id,
+              allocation: Number(allocations[share.id] || 0),
+            })),
+          }),
+        });
+        const allocationsData = await allocationsResponse.json();
+        if (!allocationsResponse.ok) {
+          throw new Error(allocationsData.error || "Failed to save client allocations");
+        }
+      }
+
+      if (settingsData) setSettings(settingsData);
+      await fetchData();
+      toast({ title: "Saved", description: "Usage limits updated successfully." });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save usage limits.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingUsage(false);
     }
   };
 
@@ -783,14 +922,313 @@ export function AgencySettings() {
         </div>
 
         <TabsContent value="settings" className="space-y-6">
-          <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
-        <CardHeader className="pb-4">
-          <CardTitle>Agency Portal Branding</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Customise how the branded portal appears to your end clients.
-          </p>
+          <Card className="overflow-hidden border-slate-200/80 bg-white/95 shadow-sm dark:border-input dark:bg-background">
+            <CardHeader className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
+                        <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </span>
+                      <span className="text-base sm:text-lg">General settings</span>
+                    </div>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
+                    Control which domains can embed your client portal.
+                  </CardDescription>
+                </div>
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+                  <Button
+                    type="button"
+                    onClick={saveDomains}
+                    className="bg-slate-900 text-white hover:bg-slate-800"
+                    disabled={!entitled || isSavingDomains || !generalOpen}
+                  >
+                    {isSavingDomains ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    onClick={() => setGeneralOpen((prev) => !prev)}
+                  >
+                    {generalOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                    {generalOpen ? "Collapse" : "Expand"}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            {generalOpen && (
+            <CardContent className="space-y-5 border-t border-slate-200/80 bg-slate-50/30 pt-5 dark:border-input dark:bg-background">
+              {!entitled && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                  Your plan does not include the agency portal. Upgrade to the Agency plan in Billing to activate these settings.
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="allowed-domains">Allowed domains</Label>
+                  <span className="group relative inline-flex">
+                    <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" aria-label="About allowed domains" />
+                    <span className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-80 rounded-md border bg-popover px-3 py-2 text-xs font-normal leading-relaxed text-popover-foreground shadow-md group-hover:block dark:border-input">
+                      Enter your own agency domain (e.g. vrtour360.co.uk) where you host the portal page. The branded portal can only be embedded on the domains listed here. Your clients visit that page on your site to manage their AI settings, fully white-labelled as your product. If left blank, the portal is blocked on all external sites.
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="allowed-domains"
+                    value={domainInput}
+                    onChange={(event) => setDomainInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addDomainsFromInput();
+                      }
+                    }}
+                    placeholder="e.g. vrtour360.co.uk - then press + or Enter"
+                    disabled={!entitled}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={addDomainsFromInput}
+                    disabled={!entitled || !domainInput.trim()}
+                    aria-label="Add domain"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {domains.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {domains.map((domain, domainIndex) => (
+                      <button
+                        key={`${domain}-${domainIndex}`}
+                        type="button"
+                        onClick={() => removeDomain(domainIndex)}
+                        className="group inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-xs text-slate-700 hover:bg-slate-200/80 disabled:cursor-not-allowed disabled:opacity-60 dark:border-input dark:bg-background dark:text-slate-200 dark:hover:bg-neutral-800"
+                        disabled={!entitled}
+                        title="Click to remove domain"
+                      >
+                        {domain}
+                        <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Add your own agency domain where you embed the portal (e.g. vrtour360.co.uk) - not your client&apos;s site. Any &quot;www.&quot; or &quot;https://&quot; is trimmed automatically, and www / subdomains are matched for you.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            )}
+          </Card>
+
+          <Card className="overflow-hidden border-slate-200/80 bg-white/95 shadow-sm dark:border-input dark:bg-background">
+            <CardHeader className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
+                        <Gauge className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </span>
+                      <span className="text-base sm:text-lg">Usage limits</span>
+                    </div>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
+                    See your monthly message usage and choose how credits are shared across your clients.
+                  </CardDescription>
+                </div>
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+                  <Button
+                    type="button"
+                    onClick={saveUsageLimits}
+                    className="bg-slate-900 text-white hover:bg-slate-800"
+                    disabled={!entitled || isSavingUsage || overAllocated || !usageOpen}
+                  >
+                    {isSavingUsage ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    onClick={() => setUsageOpen((prev) => !prev)}
+                  >
+                    {usageOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                    {usageOpen ? "Collapse" : "Expand"}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            {usageOpen && (
+            <CardContent className="space-y-5 border-t border-slate-200/80 bg-slate-50/30 pt-5 dark:border-input dark:bg-background">
+              <div className="rounded-lg border p-3 dark:border-input dark:bg-background">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="flex items-end gap-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Active spaces</p>
+                      <p className="text-2xl font-semibold">
+                        {primarySpacesUsed} / {totalSpaces ?? 0}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Message credits (this month)</p>
+                      <p className="text-2xl font-semibold">
+                        {(pool?.used ?? 0).toLocaleString("en-GB")} / {(pool?.limit ?? 0).toLocaleString("en-GB")}
+                      </p>
+                    </div>
+                  </div>
+                  {formatResetDate(pool?.resetAt) && (
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Resets</p>
+                      <p className="text-sm font-medium">{formatResetDate(pool?.resetAt)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Client usage mode</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={!entitled}
+                    onClick={() => setSettings((prev) => (prev ? { ...prev, client_usage_mode: "shared" } : prev))}
+                    className={`rounded-lg border p-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      usageMode === "shared"
+                        ? "border-slate-900 bg-slate-50 dark:border-slate-100 dark:bg-neutral-800"
+                        : "border-slate-200 hover:bg-slate-50 dark:border-input dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    <p className="font-medium">Shared pool</p>
+                    <p className="text-xs text-muted-foreground">All clients draw from your monthly pool. If it runs out, every client stops.</p>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!entitled}
+                    onClick={() => setSettings((prev) => (prev ? { ...prev, client_usage_mode: "allocated" } : prev))}
+                    className={`rounded-lg border p-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      usageMode === "allocated"
+                        ? "border-slate-900 bg-slate-50 dark:border-slate-100 dark:bg-neutral-800"
+                        : "border-slate-200 hover:bg-slate-50 dark:border-input dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    <p className="font-medium">Allocated</p>
+                    <p className="text-xs text-muted-foreground">Give each client a fixed monthly slice. When a client hits theirs, only that client stops.</p>
+                  </button>
+                </div>
+              </div>
+
+              {usageMode === "allocated" && (
+                <div className="space-y-3 rounded-lg border p-3 dark:border-input dark:bg-background">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Client allocations</p>
+                    <p className={`text-xs ${overAllocated ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                      Allocated {totalAllocated.toLocaleString("en-GB")} / {poolLimit.toLocaleString("en-GB")}
+                      {" · "}
+                      {Math.max(0, poolLimit - totalAllocated).toLocaleString("en-GB")} unallocated
+                    </p>
+                  </div>
+                  {shares.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Add clients below to allocate message credits.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {shares.map((share) => {
+                        const tourTitle = tours.find((tour) => tour.id === share.tour_id)?.title || "Untitled space";
+                        const clientLabel = share.users[0]?.display_name || share.users[0]?.email || share.share_slug;
+                        const usedThisMonth = Number(share.messages_used_this_month || 0);
+                        return (
+                          <div
+                            key={share.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2 dark:border-input dark:bg-background"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{tourTitle}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {clientLabel} · used {usedThisMonth.toLocaleString("en-GB")} this month
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor={`alloc-${share.id}`} className="text-xs text-muted-foreground">
+                                Allocation
+                              </Label>
+                              <Input
+                                id={`alloc-${share.id}`}
+                                type="number"
+                                min={0}
+                                step={100}
+                                className="h-9 w-28"
+                                disabled={!entitled}
+                                value={String(allocations[share.id] ?? 0)}
+                                onChange={(event) => {
+                                  const next = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                                  setAllocations((prev) => ({ ...prev, [share.id]: next }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {overAllocated && (
+                    <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                      Total allocations exceed your monthly limit. Reduce the split so it is at or below {poolLimit.toLocaleString("en-GB")}.
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Clients with a 0 allocation cannot send messages until you give them a slice. Allocations refresh monthly with your pool.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+            )}
+          </Card>
+
+          <Card className="overflow-hidden border-slate-200/80 bg-white/95 shadow-sm dark:border-input dark:bg-background">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
+                    <Palette className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </span>
+                  <span className="text-base sm:text-lg">Portal Branding</span>
+                </div>
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
+                Customise how the branded portal appears to your end clients.
+              </CardDescription>
+            </div>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+              <Button
+                type="button"
+                onClick={saveSettings}
+                className="bg-slate-900 text-white hover:bg-slate-800"
+                disabled={!entitled || isSavingSettings || !brandingOpen}
+              >
+                {isSavingSettings ? "Saving..." : "Save"}
+              </Button>
+              <Button
+                variant="outline"
+                type="button"
+                className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                onClick={() => setBrandingOpen((prev) => !prev)}
+              >
+                {brandingOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                {brandingOpen ? "Collapse" : "Expand"}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        {brandingOpen && (
+        <CardContent className="space-y-4 border-t border-slate-200/80 bg-slate-50/30 pt-5 dark:border-input dark:bg-background">
           {!entitled && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
               Your plan does not include the agency portal. Upgrade to the Agency plan in Billing to activate these settings.
@@ -914,82 +1352,42 @@ export function AgencySettings() {
                 </div>
               </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <Label htmlFor="allowed-domains">Allowed domains</Label>
-              <span className="group relative inline-flex">
-                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" aria-label="About allowed domains" />
-                <span className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-80 rounded-md border bg-popover px-3 py-2 text-xs font-normal leading-relaxed text-popover-foreground shadow-md group-hover:block dark:border-input">
-                  Enter your own agency domain (e.g. vrtour360.co.uk) where you host the portal page. The branded portal can only be embedded on the domains listed here. Your clients visit that page on your site to manage their AI settings, fully white-labelled as your product. If left blank, the portal is blocked on all external sites.
-                </span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                id="allowed-domains"
-                value={domainInput}
-                onChange={(event) => setDomainInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addDomainsFromInput();
-                  }
-                }}
-                placeholder="e.g. vrtour360.co.uk - then press + or Enter"
-                disabled={!entitled}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={addDomainsFromInput}
-                disabled={!entitled || !domainInput.trim()}
-                aria-label="Add domain"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            {domains.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {domains.map((domain, domainIndex) => (
-                  <button
-                    key={`${domain}-${domainIndex}`}
-                    type="button"
-                    onClick={() => removeDomain(domainIndex)}
-                    className="group inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-xs text-slate-700 hover:bg-slate-200/80 disabled:cursor-not-allowed disabled:opacity-60 dark:border-input dark:bg-background dark:text-slate-200 dark:hover:bg-neutral-800"
-                    disabled={!entitled}
-                    title="Click to remove domain"
-                  >
-                    {domain}
-                    <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Add your own agency domain where you embed the portal (e.g. vrtour360.co.uk) - not your client&apos;s site. Any &quot;www.&quot; or &quot;https://&quot; is trimmed automatically, and www / subdomains are matched for you.
-              </p>
-            )}
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={saveSettings} disabled={!entitled || isSavingSettings}>
-              <Save className="mr-2 h-4 w-4" />
-              {isSavingSettings ? "Saving..." : "Save agency settings"}
-            </Button>
-          </div>
         </CardContent>
+        )}
           </Card>
 
-          <Card className="dark:border-slate-800 dark:bg-[#121923]/92">
-            <CardHeader className="pb-4">
-              <CardTitle>Client Portal Embed Link</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Embed this once on your site to give every client a single login page. Each client signs in with their own
-                credentials and is taken straight to their own portal.
-              </p>
+          <Card className="overflow-hidden border-slate-200/80 bg-white/95 shadow-sm dark:border-input dark:bg-background">
+            <CardHeader className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
+                        <Code className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </span>
+                      <span className="text-base sm:text-lg">Portal Embed</span>
+                    </div>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
+                    Embed this once on your site to give every client a single login page. Each client signs in with their own
+                    credentials and is taken straight to their own portal.
+                  </CardDescription>
+                </div>
+                <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    onClick={() => setEmbedOpen((prev) => !prev)}
+                  >
+                    {embedOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                    {embedOpen ? "Collapse" : "Expand"}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            {embedOpen && (
+            <CardContent className="space-y-4 border-t border-slate-200/80 bg-slate-50/30 pt-5 dark:border-input dark:bg-background">
               {universalEmbed && settings?.is_enabled ? (
                 <>
                   <div className="h-px bg-slate-200 dark:bg-slate-800" />
@@ -1056,7 +1454,7 @@ export function AgencySettings() {
                         className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
                       >
                         <Copy className="mr-2 h-4 w-4" />
-                        Copy Code
+                        Copy Script
                       </Button>
                     </div>
                   </div>
@@ -1067,10 +1465,11 @@ export function AgencySettings() {
                 </>
               ) : (
                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Enable the agency portal in Agency Portal Branding and save agency settings to generate your embed code.
+                  Enable the agency portal in Portal Branding and save agency settings to generate your embed code.
                 </p>
               )}
             </CardContent>
+            )}
           </Card>
         </TabsContent>
 
@@ -1555,7 +1954,7 @@ export function AgencySettings() {
                 ) : null}
                 {selectedShare && !settings?.is_enabled ? (
                   <p className="text-xs text-amber-700 dark:text-amber-300">
-                    Agency portal is currently disabled in Agency Portal Branding. Enable it and save agency settings to activate permanent preview and embed code.
+                    Agency portal is currently disabled in Portal Branding. Enable it and save agency settings to activate permanent preview and embed code.
                   </p>
                 ) : null}
               </div>

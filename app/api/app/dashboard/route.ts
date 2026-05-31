@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { venueHasAnyCustomisedTourTraining } from '@/lib/chatbot-training-defaults';
+import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
 
     const sevenDaysAgo = getDateDaysAgo(7).toISOString();
     const thirtyDaysAgo = getDateDaysAgo(30).toISOString();
+    const { periodStart: messageCreditPeriodStart, resetAt: messageCreditsResetAt } =
+      getCurrentMessageCreditPeriod();
 
     const [
       tourViewRowsResult,
@@ -47,6 +50,7 @@ export async function GET(request: NextRequest) {
       activeTourChatbotConfigsResult,
       actionRecentConversationCountResult,
       venuePressedShareResult,
+      messageCreditsUsedResult,
     ] = await Promise.all([
       supabase.from('embed_stats').select('views_count').eq('venue_id', venueId).eq('embed_type', 'tour'),
       supabase.from('embed_stats').select('domain').eq('venue_id', venueId).eq('embed_type', 'tour').not('domain', 'is', null),
@@ -67,6 +71,15 @@ export async function GET(request: NextRequest) {
       supabase.from('chatbot_configs').select('id').eq('venue_id', venueId).eq('is_active', true),
       supabase.from('conversations').select('*', { count: 'exact', head: true }).eq('venue_id', venueId).gte('created_at', thirtyDaysAgo),
       supabase.from('venues').select('pressed_share').eq('id', venueId).maybeSingle(),
+      // Monthly message-credit usage: tour visitor messages since the start of the
+      // current calendar month, matching the billing enforcement service.
+      supabase
+        .from('conversations')
+        .select('*', { count: 'exact', head: true })
+        .eq('venue_id', venueId)
+        .eq('chatbot_type', 'tour')
+        .eq('message_type', 'visitor')
+        .gte('created_at', messageCreditPeriodStart),
     ]);
 
     const tourViewRows = tourViewRowsResult.data || [];
@@ -297,8 +310,9 @@ export async function GET(request: NextRequest) {
       quickStats: {
         viewsThisWeek: Number(weeklyViewCountResult.count || 0),
         tourChatMessages: Number(visitorMessages || 0),
-        messageCreditsUsed: Number(visitorMessages || 0),
+        messageCreditsUsed: Number(messageCreditsUsedResult.count || 0),
         messageCreditsLimit: Number(messageCreditsLimit || 0),
+        messageCreditsResetAt,
         spacesUsed: Number(activeTourCountResult.count || 0),
         spacesLimit: Number(spacesLimit || 1),
         uniqueDomains: Number(uniqueDomains) || 0,

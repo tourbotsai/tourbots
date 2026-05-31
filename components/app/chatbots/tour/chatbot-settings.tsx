@@ -31,6 +31,7 @@ interface TourChatbotSettingsProps {
   };
 }
 
+const MAX_DOCUMENTS_PER_CHATBOT = 10;
 const DEFAULT_TOUR_INSTRUCTION_PROMPT =
   "Guide visitors through the virtual tour clearly and concisely. Focus on what they can see in this location and help them navigate the space.";
 const DEFAULT_TOUR_GUARDRAIL_PROMPT =
@@ -450,7 +451,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
               <Button
                 type="button"
                 onClick={() => document.getElementById("file-upload")?.click()}
-                disabled={isUploading || !isKnowledgeBaseExpanded}
+                disabled={isUploading || !isKnowledgeBaseExpanded || documents.length >= MAX_DOCUMENTS_PER_CHATBOT}
                 size="sm"
                 variant="outline"
                 className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
@@ -485,6 +486,9 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
             />
             <p className="text-xs text-muted-foreground">
               Supports PDF, TXT, DOC, DOCX files (max 20MB)
+            </p>
+            <p className={`text-xs sm:ml-auto ${documents.length >= MAX_DOCUMENTS_PER_CHATBOT ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+              {documents.length} / {MAX_DOCUMENTS_PER_CHATBOT} documents used
             </p>
           </div>
 

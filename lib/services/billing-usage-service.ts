@@ -1,4 +1,5 @@
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
+import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
 
 export interface BillingMessageUsageResult {
   allowed: boolean;
@@ -7,6 +8,8 @@ export interface BillingMessageUsageResult {
   remaining: number;
   planCode: string;
   message: string;
+  /** ISO timestamp for when the message-credit allowance next refreshes. */
+  resetAt: string;
 }
 
 /**
@@ -16,6 +19,10 @@ export interface BillingMessageUsageResult {
  * - +1,000 per extra space add-on
  * - +1,000 per message block add-on
  * unless an effective_message_limit override is set.
+ *
+ * Usage is a *monthly* allowance: only visitor messages sent since the start of
+ * the current calendar month (UTC) count towards the limit, so the allowance
+ * refreshes automatically each month.
  */
 export async function checkBillingMessageUsage(venueId: string): Promise<BillingMessageUsageResult> {
   try {
@@ -44,12 +51,15 @@ export async function checkBillingMessageUsage(venueId: string): Promise<Billing
       (baseMessages + (extraSpaces * 1000) + (messageBlocks * 1000))
     );
 
+    const { periodStart, resetAt } = getCurrentMessageCreditPeriod();
+
     const { count: usedCount, error: usageError } = await supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('venue_id', venueId)
       .eq('chatbot_type', 'tour')
-      .eq('message_type', 'visitor');
+      .eq('message_type', 'visitor')
+      .gte('created_at', periodStart);
 
     if (usageError) {
       console.error('Error checking billing message usage:', usageError);
@@ -61,6 +71,7 @@ export async function checkBillingMessageUsage(venueId: string): Promise<Billing
         remaining: 0,
         planCode,
         message: 'Billing usage could not be verified. Chat has been temporarily paused to prevent unbounded usage.',
+        resetAt,
       };
     }
 
@@ -81,6 +92,7 @@ export async function checkBillingMessageUsage(venueId: string): Promise<Billing
       message: allowed
         ? 'Billing message allowance available.'
         : `Message credit limit reached (${used.toLocaleString('en-GB')}/${totalMessageLimit.toLocaleString('en-GB')}).`,
+      resetAt,
     };
   } catch (error) {
     console.error('Exception checking billing message usage:', error);
@@ -92,6 +104,7 @@ export async function checkBillingMessageUsage(venueId: string): Promise<Billing
       remaining: 0,
       planCode: 'unknown',
       message: 'Billing usage check failed. Chat has been temporarily paused to prevent unbounded usage.',
+      resetAt: getCurrentMessageCreditPeriod().resetAt,
     };
   }
 }

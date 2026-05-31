@@ -6,6 +6,7 @@ import { formatChatbotInfoSectionsForPrompt, getChatbotInfoSections } from '@/li
 import { rateLimiter } from '@/lib/rate-limiter';
 import { hardLimitService } from '@/lib/services/hard-limit-service';
 import { checkBillingMessageUsage } from '@/lib/services/billing-usage-service';
+import { checkClientAllocationUsage } from '@/lib/services/agency-allocation-service';
 import { ChatbotTrigger, HardLimitResult } from '@/lib/types';
 import { stripHTML } from '@/lib/input-sanitiser';
 import { buildTriggerInstructions, ResolvedTrigger } from '@/lib/chatbot-trigger-service';
@@ -346,6 +347,27 @@ export async function POST(
             remaining: billingUsageResult.remaining,
             planCode: billingUsageResult.planCode,
             upgradeUrl: '/app/settings',
+          },
+          { status: 402 }
+        );
+      }
+
+      // Per-client allocation: when the venue is an agency in allocated mode,
+      // each client tour has its own monthly slice of the agency pool. This is
+      // layered on top of the venue-wide pool check above.
+      const allocationResult = await checkClientAllocationUsage(
+        venueId,
+        configResult?.selectedTourId || tourId || null
+      );
+      if (allocationResult.enforced && !allocationResult.allowed) {
+        return NextResponse.json(
+          {
+            error: 'Message credit limit reached',
+            message: allocationResult.message,
+            currentUsage: allocationResult.used,
+            limit: allocationResult.allocation,
+            remaining: allocationResult.remaining,
+            resetAt: allocationResult.resetAt,
           },
           { status: 402 }
         );
