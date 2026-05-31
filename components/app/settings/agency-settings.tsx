@@ -180,6 +180,9 @@ export function AgencySettings() {
   const [isCheckingDomain, setIsCheckingDomain] = useState(false);
   const [isDisconnectingDomain, setIsDisconnectingDomain] = useState(false);
   const [copiedDnsKey, setCopiedDnsKey] = useState<string | null>(null);
+  // Auto-polling only starts after the agency has clicked "Check status" once —
+  // nobody adds a DNS record within the first few seconds of connecting.
+  const [domainCheckStarted, setDomainCheckStarted] = useState(false);
 
   const [generalOpen, setGeneralOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -709,6 +712,8 @@ export function AgencySettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to connect domain");
       applyDomainState(data);
+      // Fresh connect: wait for the agency to add DNS + click Check before polling.
+      setDomainCheckStarted(false);
       toast({ title: "Domain connected", description: "Add the DNS record shown below, then click Check status." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to connect domain.", variant: "destructive" });
@@ -718,6 +723,8 @@ export function AgencySettings() {
   };
 
   const checkDomain = async (silent = false) => {
+    // A manual check (re)enables auto-polling for the rest of this session.
+    if (!silent) setDomainCheckStarted(true);
     setIsCheckingDomain(true);
     try {
       const headers = await getAuthHeaders({ "Content-Type": "application/json" });
@@ -757,6 +764,7 @@ export function AgencySettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to disconnect domain");
       applyDomainState(data);
+      setDomainCheckStarted(false);
       toast({ title: "Domain disconnected", description: "Your embed code will use tourbots.ai again." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to disconnect domain.", variant: "destructive" });
@@ -795,13 +803,14 @@ export function AgencySettings() {
   // domain is mid-verification (DNS propagation). Stops on verified/failed/close.
   useEffect(() => {
     if (!generalOpen) return;
+    if (!domainCheckStarted) return;
     if (settings?.tour_embed_domain_status !== "verifying") return;
     const interval = setInterval(() => {
       void checkDomain(true);
-    }, 10000);
+    }, 12000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generalOpen, settings?.tour_embed_domain_status]);
+  }, [generalOpen, domainCheckStarted, settings?.tour_embed_domain_status]);
 
   const saveUsageLimits = async () => {
     if (!settings) return;
@@ -1305,7 +1314,7 @@ export function AgencySettings() {
                   Leave blank to use the default tourbots.ai embed. Once connected and verified, the embed code on your clients&apos; Share tab will use this domain automatically.
                 </p>
 
-                {(tourEmbedStatus === "pending" || tourEmbedStatus === "verifying") && tourEmbedDnsRecords.length > 0 && (
+                {tourEmbedStatus !== "verified" && tourEmbedDnsRecords.length > 0 && (
                   <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
                     <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
                       Add this DNS record at your domain provider, then click Check status. Verification can take a few minutes.
