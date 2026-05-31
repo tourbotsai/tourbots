@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require('@sentry/nextjs');
-const firebaseAuthHost = process.env.FIREBASE_AUTH_HOST || 'tourbots-ai.firebaseapp.com';
+const firebaseAuthHost = process.env.FIREBASE_AUTH_HOST || 'tourbotsai0210.firebaseapp.com';
 const isProduction = process.env.NODE_ENV === 'production';
 // Canonical embed origin nested by white-label custom-domain tour shells.
 // Must be allowed in the embed frame-src so the shell can frame it.
@@ -8,8 +8,8 @@ const canonicalEmbedOrigin = (process.env.NEXT_PUBLIC_CANONICAL_EMBED_ORIGIN || 
 
 function buildCsp({ embed = false } = {}) {
   const scriptSrc = isProduction
-    ? "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://static.matterport.com https://api.matterport.com https://www.gstatic.com"
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://static.matterport.com https://api.matterport.com https://www.gstatic.com";
+    ? "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://static.matterport.com https://api.matterport.com https://www.gstatic.com https://apis.google.com"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://static.matterport.com https://api.matterport.com https://www.gstatic.com https://apis.google.com";
 
   const connectSrc = isProduction
     ? "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com https://*.supabase.co wss://*.supabase.co https://my.matterport.com https://api.matterport.com https://api.stripe.com https://*.sentry.io https://*.ingest.sentry.io"
@@ -20,7 +20,7 @@ function buildCsp({ embed = false } = {}) {
     "base-uri 'self'",
     "object-src 'none'",
     "form-action 'self'",
-    `frame-src 'self' ${canonicalEmbedOrigin} https://my.matterport.com https://api.matterport.com https://js.stripe.com`,
+    `frame-src 'self' ${canonicalEmbedOrigin} https://my.matterport.com https://api.matterport.com https://js.stripe.com https://*.firebaseapp.com https://accounts.google.com https://apis.google.com`,
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",

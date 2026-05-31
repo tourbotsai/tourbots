@@ -1,13 +1,17 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
 import {
   GoogleAuthProvider,
   signInWithPopup,
+  type User,
 } from "firebase/auth";
 import { FC, useState } from "react";
 import { useAuth } from "reactfire";
+import { useRouter } from "next/navigation";
+import { clearUserCache } from "@/hooks/useUser";
 
 interface Props {
   onSignIn?: () => void;
@@ -15,85 +19,184 @@ interface Props {
 
 export const ProviderLoginButtons: FC<Props> = ({ onSignIn }) => {
   const auth = useAuth();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
-  const doProviderSignIn = async (provider: GoogleAuthProvider) => {
+  // Onboarding state for brand-new Google users. Google never supplies a
+  // company name, which `/api/auth/register` requires to create the venue,
+  // so we collect it before completing registration.
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [venueName, setVenueName] = useState("");
+
+  const finishSignIn = () => {
+    // Start the session from a clean cache so we never read a stale, pre-link
+    // (venue-less) copy of this user.
+    clearUserCache();
+    if (onSignIn) {
+      onSignIn();
+    } else {
+      router.push("/app/dashboard");
+    }
+    router.refresh();
+  };
+
+  const doProviderSignIn = async () => {
     try {
       setIsLoading(true);
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
       const result = await signInWithPopup(auth, provider);
-      
-      if (result.user) {
-        // Check if this is a new user or existing user
-        const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
-        
-        if (isNewUser) {
-          // For new Google users, they need to complete registration details
-          toast({ 
-            title: "Almost there!", 
-            description: "Please complete your account registration to continue.",
-            variant: "default"
-          });
-          // You might want to redirect to a completion form here
-          return;
-        } else {
-          // Existing user - check if they exist in Supabase
-          const response = await fetch('/api/auth/check-user', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              firebase_uid: result.user.uid,
-            }),
-          });
+      const idToken = await result.user.getIdToken();
 
-          if (!response.ok) {
-            // User exists in Firebase but not in Supabase - need to complete registration
-            toast({ 
-              title: "Complete Your Registration", 
-              description: "Please fill in your account details to continue.",
-              variant: "default"
-            });
-            return;
-          }
+      // Authoritative check: does this user already have a TourBots profile
+      // with a linked venue? `/api/auth/check-user` reads the Bearer token.
+      const response = await fetch("/api/auth/check-user", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        if (payload?.user?.venue) {
+          toast({
+            title: "Welcome back!",
+            description: "Successfully signed in with your Google account.",
+          });
+          finishSignIn();
+          return;
         }
       }
-      
-      toast({ 
-        title: "Welcome back!", 
-        description: "Successfully signed in with your Google account."
-      });
-      onSignIn?.();
+
+      // No profile/venue yet: collect a company name to complete registration.
+      const nameParts = (result.user.displayName || "").trim().split(/\s+/);
+      setFirstName(nameParts[0] || "");
+      setLastName(nameParts.slice(1).join(" ") || "");
+      setVenueName("");
+      setPendingUser(result.user);
     } catch (err: any) {
       console.error(err);
       let errorMessage = "An error occurred during sign in.";
-      
-      if (err.code === 'auth/popup-closed-by-user') {
+
+      if (err.code === "auth/popup-closed-by-user") {
         errorMessage = "Sign in was cancelled.";
-      } else if (err.code === 'auth/popup-blocked') {
+      } else if (err.code === "auth/popup-blocked") {
         errorMessage = "Pop-up was blocked. Please allow pop-ups and try again.";
       }
-      
-      toast({ 
-        title: "Sign In Failed", 
+
+      toast({
+        title: "Sign In Failed",
         description: errorMessage,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
-  
+
+  const completeRegistration = async () => {
+    if (!pendingUser) return;
+
+    if (!firstName.trim() || !lastName.trim() || !venueName.trim()) {
+      toast({
+        title: "Missing details",
+        description: "Please enter your name and company name to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const idToken = await pendingUser.getIdToken();
+
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          venue_name: venueName.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to complete registration");
+      }
+
+      toast({
+        title: "Account created!",
+        description: "Welcome to TourBots AI! Upload your VR Tour to get started.",
+      });
+      setPendingUser(null);
+      finishSignIn();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Registration Failed",
+        description: err.message || "An error occurred during registration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (pendingUser) {
+    return (
+      <div className="space-y-3 rounded-lg border border-slate-700/70 bg-slate-900/70 p-4">
+        <p className="text-sm text-slate-300">
+          Just one more step — confirm your details to finish setting up your account.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            placeholder="First name"
+            value={firstName}
+            disabled={isLoading}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="border-slate-700/70 bg-slate-900/70 text-white placeholder-slate-500 focus-visible:border-brand-primary"
+          />
+          <Input
+            placeholder="Last name"
+            value={lastName}
+            disabled={isLoading}
+            onChange={(e) => setLastName(e.target.value)}
+            className="border-slate-700/70 bg-slate-900/70 text-white placeholder-slate-500 focus-visible:border-brand-primary"
+          />
+        </div>
+        <Input
+          placeholder="Company name"
+          value={venueName}
+          disabled={isLoading}
+          onChange={(e) => setVenueName(e.target.value)}
+          className="border-slate-700/70 bg-slate-900/70 text-white placeholder-slate-500 focus-visible:border-brand-primary"
+        />
+        <Button
+          disabled={isLoading}
+          onClick={completeRegistration}
+          size="lg"
+          className="w-full bg-white font-semibold text-slate-900 transition-colors duration-200 hover:bg-slate-200"
+        >
+          {isLoading ? "Creating account..." : "Complete sign up"}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <Button
         className="w-full border border-slate-700/70 bg-slate-900/70 text-white shadow-sm transition-colors duration-200 hover:bg-slate-800"
         disabled={isLoading}
         size="lg"
-        onClick={async () => {
-          const provider = new GoogleAuthProvider();
-          await doProviderSignIn(provider);
-        }}
+        onClick={doProviderSignIn}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
