@@ -11,6 +11,9 @@ export async function GET(
     const embedId = searchParams.get('id');
     const domain = searchParams.get('domain');
     const pageUrl = searchParams.get('pageUrl');
+    // Optional: load a specific tour (e.g. an agency-portal client's shared tour)
+    // rather than defaulting to the venue's primary tour. Scoped to this venue below.
+    const requestedTourId = searchParams.get('tourId');
 
     // Fetch active tours deterministically to avoid .single() failures on multi-tour venues.
     const { data: tours, error } = await supabase
@@ -42,7 +45,14 @@ export async function GET(
       );
     }
 
-    const tour = tours.find((candidate) => candidate.tour_type === 'primary') || tours[0];
+    // If a specific tour was requested and it belongs to this venue (and is active),
+    // return it. Otherwise fall back to the venue's primary tour as before.
+    const tour =
+      (requestedTourId
+        ? tours.find((candidate) => candidate.id === requestedTourId)
+        : null) ||
+      tours.find((candidate) => candidate.tour_type === 'primary') ||
+      tours[0];
 
     // Track view if embedId provided
     if (embedId) {

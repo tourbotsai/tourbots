@@ -215,7 +215,13 @@ export function TourViewer({
       let allToursData: Tour[] = [];
 
       if (isAgencyPortalPath()) {
-        const response = await fetch(`/api/public/tours/${encodeURIComponent(activeVenueId)}`, {
+        // Load THIS share's tour, not the venue's primary. Without the tourId the
+        // endpoint defaults to the primary tour, so every client portal would show
+        // the agency's first tour instead of the client's own.
+        const tourQuery = selectedTourIdOverride
+          ? `?tourId=${encodeURIComponent(selectedTourIdOverride)}`
+          : "";
+        const response = await fetch(`/api/public/tours/${encodeURIComponent(activeVenueId)}${tourQuery}`, {
           credentials: "include",
         });
         const payload = await response.json();
@@ -269,7 +275,7 @@ export function TourViewer({
 
   useEffect(() => {
     fetchTour();
-  }, [activeVenueId, resolveLocationIdFromList, fetchTourCustomisation, getAuthHeaders]);
+  }, [activeVenueId, selectedTourIdOverride, resolveLocationIdFromList, fetchTourCustomisation, getAuthHeaders]);
 
   useEffect(() => {
     // Embedded agency sessions are cookie-authenticated and do not use app billing endpoints.
