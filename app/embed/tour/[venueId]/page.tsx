@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { TourEmbedClient } from './tour-embed-client';
+import { NestedTourShell } from './nested-tour-shell';
+import { isCanonicalEmbedHost, getCanonicalEmbedOrigin } from '@/lib/embed-host';
 import { createHmac } from 'crypto';
 
 function createPublicEmbedToken(venueId: string, embedId: string): string | null {
@@ -176,8 +179,24 @@ export default async function TourEmbedPage({
     showChat?: string;
     model?: string;
     tourId?: string;
+    domain?: string;
+    pageUrl?: string;
   };
 }) {
+  // White-label custom domains can't run the Matterport SDK (domain-locked key)
+  // or first-party chat directly, so nest the canonical tourbots embed instead.
+  // The canonical host (and Vercel previews / local) render the tour directly.
+  const host = headers().get('host');
+  if (!isCanonicalEmbedHost(host)) {
+    return (
+      <NestedTourShell
+        venueId={params.venueId}
+        canonicalOrigin={getCanonicalEmbedOrigin()}
+        searchParams={searchParams}
+      />
+    );
+  }
+
   const data = await getTourData(params.venueId, searchParams.model, searchParams.tourId);
   
   if (!data) {
