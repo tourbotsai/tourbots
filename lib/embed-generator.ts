@@ -8,6 +8,10 @@ export interface TourEmbedOptions {
   showTitle?: boolean;
   showChat?: boolean;
   tourId?: string;
+  // White-label: when set, the generated embed src/script point at this host
+  // (e.g. an agency's verified custom domain) instead of the running app host.
+  // Accepts a bare host or full URL; normalised to https://{host}.
+  baseUrlOverride?: string;
 }
 
 export interface ChatbotEmbedOptions {
@@ -271,21 +275,42 @@ export function detectDevice(userAgent?: string): DeviceDetection {
   };
 }
 
+/**
+ * Normalises a white-label base URL override (bare host or full URL) to
+ * `https://{host}`. Returns null when empty/invalid so callers fall back to the
+ * running host. Pure/client-safe (no server-only imports).
+ */
+function normaliseEmbedBaseUrl(value?: string): string | null {
+  if (!value) return null;
+  const host = value
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '')
+    .trim()
+    .toLowerCase();
+  if (!host) return null;
+  return `https://${host}`;
+}
+
 export function generateTourEmbed(venueId: string, options: TourEmbedOptions = {}) {
   const embedId = `tour-${venueId}-${Date.now()}`;
-  // Detect current domain for development/production
-  const baseUrl = typeof window !== 'undefined' 
-    ? `${window.location.protocol}//${window.location.host}`
-    : 'https://tourbots.ai'; // Fallback for server-side
+  // Keep the white-label override out of the serialised snippet options.
+  const { baseUrlOverride, ...embedOptions } = options;
+  // Prefer an explicit white-label host; otherwise detect the running domain
+  // (client) and fall back to tourbots.ai (server-side).
+  const baseUrl = normaliseEmbedBaseUrl(baseUrlOverride)
+    || (typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.host}`
+      : 'https://tourbots.ai');
   const queryParams = new URLSearchParams({
     id: embedId,
-    ...(options.tourId ? { tourId: options.tourId } : {}),
-    ...(options.showTitle !== undefined ? { showTitle: String(options.showTitle) } : {}),
-    ...(options.showChat !== undefined ? { showChat: String(options.showChat) } : {}),
+    ...(embedOptions.tourId ? { tourId: embedOptions.tourId } : {}),
+    ...(embedOptions.showTitle !== undefined ? { showTitle: String(embedOptions.showTitle) } : {}),
+    ...(embedOptions.showChat !== undefined ? { showChat: String(embedOptions.showChat) } : {}),
   });
   
   return {
-    iframe: `<iframe src="${baseUrl}/embed/tour/${venueId}?${queryParams.toString()}" width="${options.width || '100%'}" height="${options.height || '600px'}" frameborder="0" allowfullscreen></iframe>`,
+    iframe: `<iframe src="${baseUrl}/embed/tour/${venueId}?${queryParams.toString()}" width="${embedOptions.width || '100%'}" height="${embedOptions.height || '600px'}" frameborder="0" allowfullscreen></iframe>`,
     
     script: `<script>
 (function(w,d,s,o,f,js,fjs){
@@ -293,11 +318,11 @@ w['TourBotsObject']=o;w[o]=w[o]||function(){(w[o].q=w[o].q||[]).push(arguments)}
 js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
 js.id=o;js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
 }(window,document,'script','gt','${baseUrl}/embed/tour.js'));
-gt('init', '${embedId}', '${venueId}', ${JSON.stringify(options)});
+gt('init', '${embedId}', '${venueId}', ${JSON.stringify(embedOptions)});
 </script>`,
     
     embedId,
-    options
+    options: embedOptions
   };
 }
 

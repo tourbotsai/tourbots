@@ -11,6 +11,7 @@ const enabledModulesSchema = z.object({
   settings: z.boolean().optional(),
   customisation: z.boolean().optional(),
   analytics: z.boolean().optional(),
+  share: z.boolean().optional(),
   tour_blocks: z
     .object({
       setup: z.boolean().optional(),
@@ -488,6 +489,7 @@ export async function POST(request: NextRequest) {
       settings: payload.enabledModules?.settings ?? true,
       customisation: payload.enabledModules?.customisation ?? true,
       analytics: payload.enabledModules?.analytics ?? true,
+      share: payload.enabledModules?.share ?? true,
       tour_blocks: {
         setup: payload.enabledModules?.tour_blocks?.setup ?? true,
         menu: payload.enabledModules?.tour_blocks?.menu ?? true,

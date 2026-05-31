@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +17,12 @@ import { useUser } from "@/hooks/useUser";
 import { useBilling } from "@/hooks/app/useBilling";
 import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
 import { generateAgencyPortalEmbed, generateUniversalAgencyPortalEmbed } from "@/lib/embed-generator";
-import { Building2, ChevronDown, ChevronUp, Code, Copy, ExternalLink, Gauge, Info, KeyRound, Loader2, Lock, Palette, Plus, Share2, SlidersHorizontal, Trash2, UserPlus, X } from "lucide-react";
+import { Building2, Check, ChevronDown, ChevronUp, Code, Copy, ExternalLink, Gauge, Info, KeyRound, Loader2, Lock, Palette, Plus, Share2, SlidersHorizontal, Trash2, UserPlus, X } from "lucide-react";
+
+// Recommended subdomain prefix for the white-label tour embed domain. Steering
+// agencies to a `tours.` subdomain keeps setup to a single CNAME and avoids apex
+// A-record / existing-website conflicts.
+const TOUR_EMBED_PREFIX = "tours.";
 
 function extractMatterportId(url: string): string {
   const trimmed = url.trim();
@@ -59,6 +64,10 @@ interface AgencyPortalSettings {
   portal_background_colour: string | null;
   allowed_domains: string[];
   client_usage_mode?: "shared" | "allocated";
+  tour_embed_domain?: string | null;
+  tour_embed_domain_status?: string | null;
+  tour_embed_domain_verified_at?: string | null;
+  tour_embed_dns_records?: any;
 }
 
 interface AgencyPool {
@@ -93,6 +102,7 @@ interface ShareRow {
     settings?: boolean;
     customisation?: boolean;
     analytics?: boolean;
+    share?: boolean;
     tour_blocks?: {
       setup?: boolean;
       menu?: boolean;
@@ -114,6 +124,7 @@ const defaultModules = {
   settings: true,
   customisation: true,
   analytics: true,
+  share: true,
 };
 const defaultTourBlocks = {
   setup: true,
@@ -154,11 +165,21 @@ export function AgencySettings() {
 
   const [domains, setDomains] = useState<string[]>([]);
   const [domainInput, setDomainInput] = useState("");
+  // White-label tour embed domain. When the prefix is enabled the input holds only
+  // the part after `tours.` (e.g. "youragency.com"); the effective host is
+  // `tours.` + input. When disabled it holds the full host (custom/apex).
+  const [tourEmbedDomainInput, setTourEmbedDomainInput] = useState("");
+  const [tourEmbedPrefixEnabled, setTourEmbedPrefixEnabled] = useState(true);
+  const [removePrefixOpen, setRemovePrefixOpen] = useState(false);
 
   const [pool, setPool] = useState<AgencyPool | null>(null);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [isSavingDomains, setIsSavingDomains] = useState(false);
   const [isSavingUsage, setIsSavingUsage] = useState(false);
+  const [isConnectingDomain, setIsConnectingDomain] = useState(false);
+  const [isCheckingDomain, setIsCheckingDomain] = useState(false);
+  const [isDisconnectingDomain, setIsDisconnectingDomain] = useState(false);
+  const [copiedDnsKey, setCopiedDnsKey] = useState<string | null>(null);
 
   const [generalOpen, setGeneralOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -249,6 +270,7 @@ export function AgencySettings() {
       settings: String(enabledModules.settings ?? true),
       customisation: String(enabledModules.customisation ?? true),
       analytics: String(enabledModules.analytics ?? true),
+      share: String(enabledModules.share ?? true),
       tourSetup: String(tourBlocks.setup ?? true),
       tourMenu: String(tourBlocks.menu ?? true),
       settingsConfig: String(settingsBlocks.config ?? true),
@@ -270,6 +292,7 @@ export function AgencySettings() {
     enabledModules.tour,
     enabledModules.customisation,
     enabledModules.analytics,
+    enabledModules.share,
     tourBlocks.setup,
     tourBlocks.menu,
     settingsBlocks.config,
@@ -277,6 +300,22 @@ export function AgencySettings() {
     settingsBlocks.documents,
     settingsBlocks.triggers,
   ]);
+
+  // Splits a stored host into the recommended `tours.` prefix + remainder so the
+  // UI can show the prefix as a locked chip. A custom/apex host (no prefix) drops
+  // into the free-form mode instead.
+  const hydrateTourEmbedDomain = useCallback((domain: string | null | undefined) => {
+    if (domain && domain.startsWith(TOUR_EMBED_PREFIX)) {
+      setTourEmbedPrefixEnabled(true);
+      setTourEmbedDomainInput(domain.slice(TOUR_EMBED_PREFIX.length));
+    } else if (domain) {
+      setTourEmbedPrefixEnabled(false);
+      setTourEmbedDomainInput(domain);
+    } else {
+      setTourEmbedPrefixEnabled(true);
+      setTourEmbedDomainInput("");
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -301,6 +340,7 @@ export function AgencySettings() {
       setSettings(settingsJson.settings);
       setEntitled(Boolean(settingsJson.entitlement?.entitled));
       setDomains(settingsJson.settings?.allowed_domains || []);
+      hydrateTourEmbedDomain(settingsJson.settings?.tour_embed_domain || null);
       setTours(sharesJson.tours || []);
       setShares(sharesJson.shares || []);
       setPool(sharesJson.pool || null);
@@ -319,7 +359,7 @@ export function AgencySettings() {
     } finally {
       setIsLoading(false);
     }
-  }, [getAuthHeaders, toast]);
+  }, [getAuthHeaders, toast, hydrateTourEmbedDomain]);
 
   useEffect(() => {
     fetchData();
@@ -563,7 +603,24 @@ export function AgencySettings() {
     return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
   };
 
-  const persistSettings = async (headers: HeadersInit) => {
+  const tourEmbedStatus = settings?.tour_embed_domain_status || "unconfigured";
+  const tourEmbedStatusMeta: Record<string, { label: string; className: string }> = {
+    unconfigured: { label: "Unconfigured", className: "border-slate-200 bg-slate-100 text-slate-600 dark:border-input dark:bg-background dark:text-slate-300" },
+    pending: { label: "Pending", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200" },
+    verifying: { label: "Verifying", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200" },
+    verified: { label: "Verified", className: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200" },
+    failed: { label: "Failed", className: "border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950/40 dark:text-red-200" },
+  };
+  const tourEmbedStatusBadge = tourEmbedStatusMeta[tourEmbedStatus] || tourEmbedStatusMeta.unconfigured;
+  const tourEmbedDnsRecords: { type: string; name: string; value: string }[] = Array.isArray(settings?.tour_embed_dns_records)
+    ? settings!.tour_embed_dns_records
+    : [];
+  const tourEmbedConnected = tourEmbedStatus !== "unconfigured" && tourEmbedStatus !== "failed";
+
+  // `extra` lets a specific card add fields (e.g. the Domain card sends
+  // tour_embed_domain). Other savers omit it so they never disturb the domain
+  // status — the API only touches tour_embed_domain when the key is present.
+  const persistSettings = async (headers: HeadersInit, extra: Record<string, any> = {}) => {
     if (!settings) return null;
     const pendingDomains = parseDomainTokens(domainInput);
     const parsedDomains = Array.from(
@@ -582,6 +639,7 @@ export function AgencySettings() {
         portal_background_colour: settings.portal_background_colour || null,
         allowed_domains: parsedDomains,
         client_usage_mode: usageMode,
+        ...extra,
       }),
     });
     const settingsData = await settingsResponse.json();
@@ -596,6 +654,8 @@ export function AgencySettings() {
     setIsSavingDomains(true);
     try {
       const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      // The tour embed domain is managed separately via the domain route
+      // (Connect/Check/Disconnect), so this only persists the allowed domains.
       const settingsData = await persistSettings(headers);
       if (settingsData) {
         setSettings(settingsData);
@@ -613,6 +673,135 @@ export function AgencySettings() {
       setIsSavingDomains(false);
     }
   };
+
+  const applyDomainState = (data: any) => {
+    setSettings((prev) =>
+      prev
+        ? {
+            ...prev,
+            tour_embed_domain: data.domain ?? null,
+            tour_embed_domain_status: data.status ?? "unconfigured",
+            tour_embed_domain_verified_at: data.verifiedAt ?? null,
+            tour_embed_dns_records: data.dnsRecords ?? null,
+          }
+        : prev
+    );
+    hydrateTourEmbedDomain(data.domain || null);
+  };
+
+  const effectiveTourEmbedDomain = (() => {
+    const trimmed = tourEmbedDomainInput.trim();
+    if (!tourEmbedPrefixEnabled) return trimmed;
+    // Avoid doubling the prefix if the user pasted a full tours.* host.
+    return trimmed.startsWith(TOUR_EMBED_PREFIX) ? trimmed : `${TOUR_EMBED_PREFIX}${trimmed}`;
+  })();
+
+  const connectDomain = async () => {
+    if (!tourEmbedDomainInput.trim()) return;
+    setIsConnectingDomain(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const res = await fetch("/api/app/agency-portal/domain", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "connect", domain: effectiveTourEmbedDomain }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to connect domain");
+      applyDomainState(data);
+      toast({ title: "Domain connected", description: "Add the DNS record shown below, then click Check status." });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to connect domain.", variant: "destructive" });
+    } finally {
+      setIsConnectingDomain(false);
+    }
+  };
+
+  const checkDomain = async (silent = false) => {
+    setIsCheckingDomain(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const res = await fetch("/api/app/agency-portal/domain", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "check" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to check domain");
+      applyDomainState(data);
+      if (!silent) {
+        if (data.status === "verified") {
+          toast({ title: "Domain verified", description: "Your embed code now uses this domain." });
+        } else if (data.status === "failed") {
+          toast({ title: "Verification failed", description: "Please double-check your DNS records and try again.", variant: "destructive" });
+        } else {
+          toast({ title: "Still verifying", description: "DNS can take a little time to propagate. We'll keep checking automatically." });
+        }
+      }
+    } catch (error: any) {
+      if (!silent) toast({ title: "Error", description: error.message || "Failed to check domain.", variant: "destructive" });
+    } finally {
+      setIsCheckingDomain(false);
+    }
+  };
+
+  const disconnectDomain = async () => {
+    setIsDisconnectingDomain(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const res = await fetch("/api/app/agency-portal/domain", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "disconnect" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to disconnect domain");
+      applyDomainState(data);
+      toast({ title: "Domain disconnected", description: "Your embed code will use tourbots.ai again." });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to disconnect domain.", variant: "destructive" });
+    } finally {
+      setIsDisconnectingDomain(false);
+    }
+  };
+
+  const copyDnsValue = async (value: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedDnsKey(key);
+      setTimeout(() => setCopiedDnsKey((current) => (current === key ? null : current)), 2000);
+    } catch {
+      // Clipboard may be unavailable; ignore.
+    }
+  };
+
+  const confirmRemovePrefix = () => {
+    // Switch to free-form mode, prefilling the full host so nothing is lost.
+    setTourEmbedDomainInput(effectiveTourEmbedDomain);
+    setTourEmbedPrefixEnabled(false);
+    setRemovePrefixOpen(false);
+  };
+
+  const restorePrefix = () => {
+    // Re-enable the prefix, stripping any leading `tours.` already typed.
+    setTourEmbedDomainInput((current) => {
+      const trimmed = current.trim();
+      return trimmed.startsWith(TOUR_EMBED_PREFIX) ? trimmed.slice(TOUR_EMBED_PREFIX.length) : trimmed;
+    });
+    setTourEmbedPrefixEnabled(true);
+  };
+
+  // Auto-poll the verification status while the Domain card is open and the
+  // domain is mid-verification (DNS propagation). Stops on verified/failed/close.
+  useEffect(() => {
+    if (!generalOpen) return;
+    if (settings?.tour_embed_domain_status !== "verifying") return;
+    const interval = setInterval(() => {
+      void checkDomain(true);
+    }, 10000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generalOpen, settings?.tour_embed_domain_status]);
 
   const saveUsageLimits = async () => {
     if (!settings) return;
@@ -734,6 +923,7 @@ export function AgencySettings() {
       settings: existingShare?.enabled_modules?.settings ?? true,
       customisation: existingShare?.enabled_modules?.customisation ?? true,
       analytics: existingShare?.enabled_modules?.analytics ?? true,
+      share: existingShare?.enabled_modules?.share ?? true,
     });
     setTourBlocks({
       setup: existingShare?.enabled_modules?.tour_blocks?.setup ?? true,
@@ -931,11 +1121,11 @@ export function AgencySettings() {
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:border dark:border-input dark:bg-background dark:text-slate-300 dark:ring-0">
                         <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
                       </span>
-                      <span className="text-base sm:text-lg">General settings</span>
+                      <span className="text-base sm:text-lg">Domain settings</span>
                     </div>
                   </CardTitle>
                   <CardDescription className="text-xs sm:text-sm mt-1 dark:text-slate-400">
-                    Control which domains can embed your client portal.
+                    Control which domains can embed your client portal, and set a custom domain for the tour embed code.
                   </CardDescription>
                 </div>
                 <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
@@ -1021,6 +1211,154 @@ export function AgencySettings() {
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Add your own agency domain where you embed the portal (e.g. vrtour360.co.uk) - not your client&apos;s site. Any &quot;www.&quot; or &quot;https://&quot; is trimmed automatically, and www / subdomains are matched for you.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3 border-t border-slate-200/80 pt-5 dark:border-input">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="tour-embed-domain">Tour embed domain</Label>
+                    <span className="group relative inline-flex">
+                      <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" aria-label="About the tour embed domain" />
+                      <span className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-80 rounded-md border bg-popover px-3 py-2 text-xs font-normal leading-relaxed text-popover-foreground shadow-md group-hover:block dark:border-input">
+                        Set a custom domain so the embed code your clients copy uses your domain instead of tourbots.ai. Leave blank to use the default tourbots.ai embed. Use a subdomain like tours.youragency.com.
+                      </span>
+                    </span>
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${tourEmbedStatusBadge.className}`}>
+                    {tourEmbedStatusBadge.label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {tourEmbedPrefixEnabled ? (
+                    <div
+                      className={`flex h-10 flex-1 items-center overflow-hidden rounded-md border border-input bg-background ${
+                        tourEmbedConnected || isConnectingDomain ? "opacity-60" : ""
+                      }`}
+                    >
+                      <span className="flex h-full items-center gap-1 border-r border-input bg-slate-50 pl-3 pr-2 text-sm text-slate-600 dark:bg-neutral-900 dark:text-slate-300">
+                        tours.
+                        {!tourEmbedConnected && (
+                          <button
+                            type="button"
+                            onClick={() => setRemovePrefixOpen(true)}
+                            disabled={!entitled || isConnectingDomain}
+                            className="ml-0.5 rounded-full p-0.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-neutral-700"
+                            aria-label="Remove tours. prefix"
+                            title="Remove the recommended tours. prefix"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </span>
+                      <input
+                        id="tour-embed-domain"
+                        value={tourEmbedDomainInput}
+                        onChange={(event) => setTourEmbedDomainInput(event.target.value)}
+                        placeholder="youragency.com"
+                        disabled={!entitled || tourEmbedConnected || isConnectingDomain}
+                        className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed dark:text-slate-100"
+                      />
+                    </div>
+                  ) : (
+                    <Input
+                      id="tour-embed-domain"
+                      value={tourEmbedDomainInput}
+                      onChange={(event) => setTourEmbedDomainInput(event.target.value)}
+                      placeholder="tours.youragency.com"
+                      disabled={!entitled || tourEmbedConnected || isConnectingDomain}
+                    />
+                  )}
+                  {tourEmbedConnected ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={disconnectDomain}
+                      disabled={!entitled || isDisconnectingDomain}
+                      className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    >
+                      {isDisconnectingDomain ? "Removing..." : "Disconnect"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={connectDomain}
+                      className="bg-slate-900 text-white hover:bg-slate-800"
+                      disabled={!entitled || !tourEmbedDomainInput.trim() || isConnectingDomain}
+                    >
+                      {isConnectingDomain ? "Connecting..." : "Connect"}
+                    </Button>
+                  )}
+                </div>
+                {!tourEmbedPrefixEnabled && !tourEmbedConnected && (
+                  <button
+                    type="button"
+                    onClick={restorePrefix}
+                    disabled={!entitled}
+                    className="text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    Use the recommended tours. prefix
+                  </button>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the default tourbots.ai embed. Once connected and verified, the embed code on your clients&apos; Share tab will use this domain automatically.
+                </p>
+
+                {(tourEmbedStatus === "pending" || tourEmbedStatus === "verifying") && tourEmbedDnsRecords.length > 0 && (
+                  <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
+                    <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                      Add this DNS record at your domain provider, then click Check status. Verification can take a few minutes.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-slate-500 dark:text-slate-400">
+                            <th className="py-1 pr-3 font-medium">Type</th>
+                            <th className="py-1 pr-3 font-medium">Name</th>
+                            <th className="py-1 pr-3 font-medium">Value</th>
+                            <th className="py-1" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tourEmbedDnsRecords.map((record, recordIndex) => (
+                            <tr key={`${record.type}-${record.name}-${recordIndex}`} className="border-t border-slate-200 dark:border-input">
+                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200">{record.type}</td>
+                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200">{record.name}</td>
+                              <td className="py-1.5 pr-3 font-mono text-slate-700 dark:text-slate-200 break-all">{record.value}</td>
+                              <td className="py-1.5">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => copyDnsValue(record.value, `${recordIndex}`)}
+                                  aria-label="Copy value"
+                                >
+                                  {copiedDnsKey === `${recordIndex}` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => checkDomain(false)}
+                      disabled={isCheckingDomain}
+                      className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+                    >
+                      {isCheckingDomain ? "Checking..." : "Check status"}
+                    </Button>
+                  </div>
+                )}
+
+                {tourEmbedStatus === "verified" && (
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                    Verified. Your clients&apos; Share tab now generates embed code using {settings?.tour_embed_domain}.
                   </p>
                 )}
               </div>
@@ -1546,6 +1884,39 @@ export function AgencySettings() {
       )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={removePrefixOpen} onOpenChange={setRemovePrefixOpen}>
+        <DialogContent className="sm:max-w-[28rem]">
+          <DialogHeader>
+            <DialogTitle>Remove the tours. prefix?</DialogTitle>
+            <DialogDescription className="space-y-2 pt-1">
+              <span className="block">
+                Using a <span className="font-medium">tours.</span> subdomain (e.g.
+                {" "}<span className="font-medium">tours.youragency.com</span>) is the recommended,
+                safest setup. It points only that subdomain at TourBots with a single CNAME record
+                and leaves the rest of your domain untouched.
+              </span>
+              <span className="block">
+                Removing the prefix lets you enter a custom host or an apex domain, which can need
+                extra DNS changes, may clash with your existing website, and is harder to verify.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRemovePrefixOpen(false)}
+              className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+            >
+              Keep tours. prefix
+            </Button>
+            <Button type="button" onClick={confirmRemovePrefix} className="bg-slate-900 text-white hover:bg-slate-800">
+              Remove anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isAddClientOpen} onOpenChange={handleAddClientOpenChange}>
         <DialogContent className="sm:max-w-[40rem] max-h-[90vh] overflow-y-auto">

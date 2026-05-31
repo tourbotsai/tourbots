@@ -31,6 +31,7 @@ export default async function AgencyEmbedDraftPreviewPage({
     settings?: string;
     customisation?: string;
     analytics?: string;
+    share?: string;
     tourSetup?: string;
     tourMenu?: string;
     settingsConfig?: string;
@@ -201,6 +202,7 @@ export default async function AgencyEmbedDraftPreviewPage({
         settings: toBool(searchParams.settings, true),
         customisation: toBool(searchParams.customisation, true),
         analytics: toBool(searchParams.analytics, true),
+        share: toBool(searchParams.share, true),
       }}
       tourBlocks={{
         setup: toBool(searchParams.tourSetup, true),

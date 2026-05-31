@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
 import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
+import { normaliseDomain } from '@/lib/agency-portal-auth';
+
+// Mirrors the POSIX-safe hostname check on agency_portal_settings.tour_embed_domain
+// (sql/67): lowercase, >=2 dot-separated labels, each alphanumeric-bounded.
+const TOUR_EMBED_DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
 const updateSettingsSchema = z.object({
   is_enabled: z.boolean().optional(),
@@ -13,6 +18,9 @@ const updateSettingsSchema = z.object({
   portal_background_colour: z.string().trim().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).nullable().optional(),
   allowed_domains: z.array(z.string().trim().min(1).max(255)).max(100).optional(),
   client_usage_mode: z.enum(['shared', 'allocated']).optional(),
+  // White-label tour embed domain (Phase A: store + status only). Accepts a bare
+  // host or full URL; normalised + validated below. Null/empty clears it.
+  tour_embed_domain: z.string().trim().max(255).nullable().optional(),
 });
 
 async function ensureSettingsRow(venueId: string) {
@@ -111,11 +119,47 @@ export async function PUT(request: NextRequest) {
     await ensureSettingsRow(venueId);
 
     const payload = parsed.data;
+    const updatePayload: Record<string, any> = { ...payload };
+
+    // Handle the white-label tour embed domain specially: normalise, validate,
+    // and reset the verification lifecycle. Only touched when the key is present,
+    // so saving other settings (e.g. branding) never clobbers a connected domain.
+    if ('tour_embed_domain' in payload) {
+      const raw = payload.tour_embed_domain;
+      if (raw === null || raw === undefined || raw.trim() === '') {
+        updatePayload.tour_embed_domain = null;
+        updatePayload.tour_embed_domain_status = 'unconfigured';
+        updatePayload.tour_embed_domain_verified_at = null;
+        updatePayload.tour_embed_dns_records = null;
+      } else {
+        const host = normaliseDomain(raw);
+        if (
+          host === 'localhost' ||
+          host === 'tourbots.ai' ||
+          host === 'www.tourbots.ai' ||
+          host.endsWith('.tourbots.ai')
+        ) {
+          return NextResponse.json(
+            { error: 'Please use your own domain, not tourbots.ai or localhost.' },
+            { status: 400 }
+          );
+        }
+        if (host.length > 253 || !TOUR_EMBED_DOMAIN_REGEX.test(host)) {
+          return NextResponse.json(
+            { error: 'Enter a valid domain, e.g. tours.youragency.com.' },
+            { status: 400 }
+          );
+        }
+        updatePayload.tour_embed_domain = host;
+        // Phase A: saving a domain marks it pending (awaiting Vercel/DNS in Phase B).
+        updatePayload.tour_embed_domain_status = 'pending';
+        updatePayload.tour_embed_domain_verified_at = null;
+      }
+    }
+
     const { data: updated, error } = await supabase
       .from('agency_portal_settings')
-      .update({
-        ...payload,
-      })
+      .update(updatePayload)
       .eq('venue_id', venueId)
       .select('*')
       .single();

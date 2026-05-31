@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Camera, Eye, EyeOff, FileJson, LineChart, Settings } from 'lucide-react';
+import { Camera, Eye, EyeOff, FileJson, LineChart, Settings, Share2 } from 'lucide-react';
 import { CustomisationForm } from '@/components/app/chatbots/shared/customisation-form';
 import { ChatbotCustomisation, ChatbotTrigger, Conversation, EmbedStat } from '@/lib/types';
 import { getAdvancedDefaultCustomisation } from '@/lib/chatbot-customisation-service';
@@ -19,10 +19,11 @@ import { TourMenuBuilder } from '@/components/app/tours/menu/tour-menu-builder';
 import { TourTrendChart, TourTrendPoint } from '@/components/app/tours/tour-trend-chart';
 import { EmbedStatistics } from '@/components/app/chatbots/shared/embed-statistics';
 import { ConversationSessions } from '@/components/app/chatbots/shared/conversation-sessions';
+import { PortalTourShare } from '@/components/app/agency-portal/portal-tour-share';
 import { useUser } from '@/hooks/useUser';
 import { cn } from '@/lib/utils';
 
-type ModuleName = 'tour' | 'settings' | 'customisation' | 'analytics';
+type ModuleName = 'tour' | 'settings' | 'customisation' | 'analytics' | 'share';
 
 interface AgencyPortalShellProps {
   shareSlug: string;
@@ -38,6 +39,10 @@ interface AgencyPortalShellProps {
   modules: Partial<Record<ModuleName, boolean>>;
   venueId?: string | null;
   venueName?: string | null;
+  // White-label tour embed domain (Agency Tour Embed feature). The Share tab uses
+  // the verified custom domain for the generated embed code; otherwise tourbots.ai.
+  tourEmbedDomain?: string | null;
+  tourEmbedDomainStatus?: string | null;
   tourBlocks?: {
     setup?: boolean;
     menu?: boolean;
@@ -131,6 +136,8 @@ export function AgencyPortalShell({
   modules,
   venueId,
   venueName,
+  tourEmbedDomain = null,
+  tourEmbedDomainStatus = null,
   tourBlocks,
   settingsBlocks,
   previewOnly = false,
@@ -195,10 +202,19 @@ export function AgencyPortalShell({
       { value: 'settings', label: 'Settings', icon: Settings },
       { value: 'customisation', label: 'Customisation', icon: FileJson },
       { value: 'analytics', label: 'Analytics', icon: LineChart },
+      { value: 'share', label: 'Share', icon: Share2 },
     ];
     return meta.filter((item) => Boolean(modules[item.value]));
   }, [modules]);
   const resolvedTourId = tourId || null;
+  // White-label: only emit the agency's own domain in the embed code once it is
+  // verified end-to-end; otherwise the generator falls back to tourbots.ai.
+  const shareBaseUrlOverride = useMemo(() => {
+    if (tourEmbedDomainStatus === 'verified' && tourEmbedDomain) {
+      return `https://${tourEmbedDomain}`;
+    }
+    return undefined;
+  }, [tourEmbedDomain, tourEmbedDomainStatus]);
   const resolvedTourBlocks = {
     setup: tourBlocks?.setup !== false,
     menu: tourBlocks?.menu !== false,
@@ -274,7 +290,7 @@ export function AgencyPortalShell({
 
   useEffect(() => {
     if (modules[selectedModule]) return;
-    const fallbackModule = (['tour', 'settings', 'customisation', 'analytics'] as ModuleName[]).find(
+    const fallbackModule = (['tour', 'settings', 'customisation', 'analytics', 'share'] as ModuleName[]).find(
       (moduleName) => modules[moduleName]
     );
     if (fallbackModule) {
@@ -1063,6 +1079,14 @@ export function AgencyPortalShell({
                         <ConversationSessions conversations={analyticsConversations} typeLabel="tour" />
                       </div>
                     )}
+                  </TabsContent>
+
+                  <TabsContent value="share" className="mt-3">
+                    <PortalTourShare
+                      venueId={venueId || appUser?.venue?.id}
+                      tourId={resolvedTourId}
+                      baseUrlOverride={shareBaseUrlOverride}
+                    />
                   </TabsContent>
 
                 </Tabs>
