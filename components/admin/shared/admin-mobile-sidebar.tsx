@@ -10,7 +10,6 @@ import {
   X,
   LogOut,
   User,
-  Target,
   BookOpen,
   HelpCircle
 } from "lucide-react";
@@ -36,11 +35,6 @@ const adminNavigation = [
     name: "Payments",
     href: "/admin/payments",
     icon: CreditCard,
-  },
-  {
-    name: "Outbound",
-    href: "/admin/outbound",
-    icon: Target,
   },
   {
     name: "Help Centre",

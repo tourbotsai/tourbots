@@ -19,12 +19,18 @@ async function resolveMenuRouteAccess(
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { data: scopedTour, error: scopedTourError } = await supabase
+    // Platform admins may manage any account's tour menu, so scope to the
+    // tour's own venue. Everyone else is restricted to their own venue.
+    const isPlatformAdmin = authResult.role === 'platform_admin';
+    let tourQuery = supabase
       .from('tours')
-      .select('id')
-      .eq('id', tourId)
-      .eq('venue_id', authResult.venueId)
-      .maybeSingle();
+      .select('venue_id')
+      .eq('id', tourId);
+    if (!isPlatformAdmin) {
+      tourQuery = tourQuery.eq('venue_id', authResult.venueId);
+    }
+
+    const { data: scopedTour, error: scopedTourError } = await tourQuery.maybeSingle();
 
     if (scopedTourError) {
       return NextResponse.json({ error: scopedTourError.message }, { status: 500 });
@@ -33,7 +39,7 @@ async function resolveMenuRouteAccess(
       return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
     }
 
-    return { venueId: authResult.venueId };
+    return { venueId: scopedTour.venue_id };
   }
 
   const portalSession = await requireAgencyPortalSession(request, {

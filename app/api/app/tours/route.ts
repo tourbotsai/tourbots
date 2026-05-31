@@ -21,7 +21,7 @@ const createTourSchema = z.object({
   navigationKeywords: z.array(z.string()).optional(),
 });
 
-async function authenticateAndGetVenue(request: NextRequest): Promise<{ venueId: string } | NextResponse> {
+async function authenticateAndGetVenue(request: NextRequest): Promise<{ venueId: string; role: string } | NextResponse> {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -40,7 +40,7 @@ async function authenticateAndGetVenue(request: NextRequest): Promise<{ venueId:
       return NextResponse.json({ error: 'User not associated with a venue' }, { status: 403 });
     }
 
-    return { venueId: userWithVenue.venue_id };
+    return { venueId: userWithVenue.venue_id, role: (userWithVenue as any).role || 'user' };
   } catch (error) {
     console.error('Tours auth error:', error);
     return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
@@ -102,7 +102,9 @@ export async function POST(request: NextRequest) {
       navigationKeywords = [],
     } = parsed.data;
 
-    if (authResult.venueId !== venueId) {
+    // Platform admins may create tours for any venue (e.g. managing an agency's
+    // clients from the admin account page); everyone else is locked to their own.
+    if (authResult.venueId !== venueId && authResult.role !== 'platform_admin') {
       return NextResponse.json({ error: 'Forbidden venue scope' }, { status: 403 });
     }
 

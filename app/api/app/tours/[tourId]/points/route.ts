@@ -14,6 +14,18 @@ async function resolveTourAccess(
   if (hasBearer) {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
+    // Platform admins may manage any account's tour, so scope to the tour's
+    // actual venue rather than the admin's own (which would 404 the lookup).
+    if (authResult.role === 'platform_admin') {
+      const { data: adminTour } = await supabase
+        .from('tours')
+        .select('venue_id')
+        .eq('id', tourId)
+        .single();
+      if (adminTour?.venue_id) {
+        return { venueId: adminTour.venue_id };
+      }
+    }
     return { venueId: authResult.venueId };
   }
 

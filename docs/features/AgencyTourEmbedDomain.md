@@ -87,6 +87,13 @@ This is delivered in two phases:
   NOT origin-bound. So a custom-domain embed from the same app gets a valid token
   and chat works. `isAllowedPublicChatOriginHost` is only a fast-path bypass for
   `tourbots.ai`/localhost; everything else uses the token path.
+  - **⚠️ CORRECTION (see Phase C):** this was only half the story. The route handler
+    accepts the token, but the **edge middleware** (`middleware.ts`) ran its own
+    origin allowlist on all `/api/public/*` writes and 403'd the custom domain
+    before the handler was reached. It also missed that **Matterport's SDK key is
+    domain-locked**, so tour navigation broke on custom domains. Both were fixed in
+    Phase C; the final architecture nests the canonical embed so chat origin is
+    `tourbots.ai` again. Read Phase C before relying on this paragraph.
 - **Embed host is derived from `window.location.host`** with a `https://tourbots.ai`
   server-side fallback (`lib/embed-generator.ts`, `generateTourEmbed`). There is
   currently **no custom-domain concept anywhere** in the codebase.
@@ -789,3 +796,70 @@ Both shell entry points updated:
   `isAllowedDomain` needs no change. If a future feature serves the *portal* itself
   from the custom domain, add the verified host to the portal-access checks then —
   out of scope now. Matches the plan's §5.6 conclusion.
+
+---
+
+## Phase C — post-launch fixes (live custom domain `tours.hoteltours.ai`)
+
+After Phase B verified the first real custom domain, two things broke on the live
+embed that the Phase A/B analysis had missed. Customisation/menu loaded fine (those
+are GET requests), but **chat returned 403** and **tour navigation did nothing**.
+Both are now fixed. This section is the source of truth — it supersedes the "no
+change needed" conclusions in §2 and §5.6.
+
+### Issue 1 — chat 403 (edge middleware origin gate)
+
+- **Root cause:** `middleware.ts` runs `shouldApplyPublicOriginValidation` on every
+  `/api/public/*` **write** and rejects any `Origin` that isn't `tourbots.ai` /
+  `*.tourbots.ai` / localhost. With the tour iframe served from
+  `tours.hoteltours.ai`, the chat `POST` and `/api/public/embed/track` carried
+  `Origin: https://tours.hoteltours.ai` → **403 in the middleware, before the route
+  handler (and its embed-token path) ever ran.** §2's token analysis was correct
+  about the handler but blind to this earlier layer.
+- **Fix:** the wildcard-origin embed APIs (those with `allowWildcardOrigin: true` —
+  `tour-chatbot`, `embed/track`, `chatbot-config`) now **skip the strict origin
+  allowlist** in the middleware. They are token-authenticated and rate-limited by
+  design, so the origin check added nothing but the breakage. Non-wildcard public
+  writes (agency-portal, contact forms) keep the strict check.
+- This fix is now **belt-and-braces** thanks to Issue 2's nested shell (chat origin
+  reverts to `tourbots.ai`), but is kept as it is correct and defends direct embeds.
+
+### Issue 2 — tour navigation dead (Matterport SDK domain lock) → nested shell
+
+- **Root cause:** `MP_SDK.connect()` validates the **origin of the document running
+  the SDK** against the Matterport key's authorised domains, and the showcase iframe
+  must live in that same document. Served from `tours.hoteltours.ai` (not on the
+  key), `connect()` failed after retries → no SDK → the `matterport_navigate`
+  CustomEvent fired but `Sweep.moveTo` never ran. The showcase still rendered
+  visually (it loads from `my.matterport.com` regardless), which is why only the
+  *movement* was dead.
+- **✅ No per-domain Matterport registration required.** Rather than add every
+  white-label domain to the Matterport SDK key, the custom-domain embed page now
+  renders a **nested shell**: a thin page that frames the **canonical**
+  `tourbots.ai/embed/tour/...`. The inner frame runs the SDK in `tourbots.ai`
+  context → authorised for all agency domains forever, with zero Matterport admin.
+- **Implementation:**
+  - `lib/embed-host.ts` — `isCanonicalEmbedHost(host)` (tourbots / `*.vercel.app` /
+    localhost+LAN render directly) and `getCanonicalEmbedOrigin()`
+    (`NEXT_PUBLIC_CANONICAL_EMBED_ORIGIN`, default `https://tourbots.ai`).
+  - `app/embed/tour/[venueId]/page.tsx` — reads the `host` header; custom domains
+    render `<NestedTourShell>` (no DB fetch — the inner frame does it), canonical
+    hosts render `TourEmbedClient` directly (unchanged).
+  - `app/embed/tour/[venueId]/nested-tour-shell.tsx` — full-bleed iframe to the
+    canonical embed, forwarding tour params + the real parent `domain`/`pageUrl`
+    (from incoming params, else `document.referrer`) so analytics attribute to the
+    client site, not the shell. **No height relay needed** — the tour embed is
+    fixed-height, so the inner frame just fills 100%.
+  - `next.config.js` — added the canonical origin to the embed CSP `frame-src`
+    (otherwise the shell is blocked from framing `tourbots.ai`). `frame-ancestors *`
+    on `/embed/*` already permits the canonical page to be framed by any domain.
+- **Verified live:** `tours.hoteltours.ai` shows tour moves recorded, chat working,
+  and Embed statistics attributing to the correct parent domain.
+
+### Net result
+
+- White-label custom domains need **only** the Vercel domain + DNS verification flow
+  (Phase B). No Matterport changes, no per-domain env config, no allowlist edits.
+- `tourbots.ai` embeds and Vercel preview deploys are untouched (render directly).
+- Rollback is a single switch: force `isCanonicalEmbedHost` true to revert to direct
+  render everywhere.

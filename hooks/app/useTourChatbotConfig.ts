@@ -28,7 +28,7 @@ function getCookieValue(name: string): string {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
-export const useTourChatbotConfig = (tourId?: string | null) => {
+export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: string | null) => {
   const [tourConfig, setTourConfig] = useState<ChatbotConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,10 @@ export const useTourChatbotConfig = (tourId?: string | null) => {
     }
 
     const isPortal = isAgencyPortalPath();
-    if (!isPortal && !user?.venue?.id) {
+    // When a venue is forced (e.g. a platform admin viewing another account),
+    // scope the request to that venue rather than the signed-in user's own.
+    const effectiveVenueId = forcedVenueId || user?.venue?.id;
+    if (!isPortal && !effectiveVenueId) {
       // User context has not finished resolving yet.
       // Skip this fetch to avoid noisy `venueId=undefined` requests.
       return;
@@ -54,7 +57,7 @@ export const useTourChatbotConfig = (tourId?: string | null) => {
       const shareSlug = getAgencyShareSlug();
       const url = isPortal
         ? `/api/public/agency-portal/chatbot-config?tourId=${tourId}${shareSlug ? `&shareSlug=${encodeURIComponent(shareSlug)}` : ''}`
-        : `/api/app/chatbots/config?venueId=${user?.venue?.id}&tourId=${tourId}`;
+        : `/api/app/chatbots/config?venueId=${effectiveVenueId}&tourId=${tourId}`;
       const headers = isPortal ? {} : await getAuthHeaders();
       const response = await fetch(url, { headers });
       const data = await response.json();
@@ -69,7 +72,7 @@ export const useTourChatbotConfig = (tourId?: string | null) => {
     } finally {
       setIsLoading(false);
     }
-  }, [tourId, user?.venue?.id, getAuthHeaders]);
+  }, [tourId, forcedVenueId, user?.venue?.id, getAuthHeaders]);
 
   // Auto-fetch config when user/tour is available
   useEffect(() => {

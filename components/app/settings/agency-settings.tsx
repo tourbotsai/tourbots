@@ -146,12 +146,35 @@ function normaliseShareSlug(input: string): string {
     .slice(0, 120);
 }
 
-export function AgencySettings() {
+interface AgencySettingsProps {
+  // When set, scope all agency-portal calls to this venue instead of the
+  // logged-in user's venue. Used by the platform admin account detail page to
+  // view/edit another account's agency portal.
+  forcedVenueId?: string;
+}
+
+export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
   const { toast } = useToast();
   const { getAuthHeaders } = useAuthHeaders();
   const { user } = useUser();
   const { limits, fetchBilling } = useBilling();
   const router = useRouter();
+
+  // Appends the scoped venue id to a URL when an admin is viewing another
+  // account, so the (platform-admin-aware) agency-portal routes target it.
+  const withVenue = useCallback(
+    (url: string) => {
+      if (!forcedVenueId) return url;
+      return `${url}${url.includes("?") ? "&" : "?"}venueId=${encodeURIComponent(forcedVenueId)}`;
+    },
+    [forcedVenueId]
+  );
+
+  // Merges the scoped venue id into a JSON request body for write actions.
+  const withVenueBody = useCallback(
+    (body: Record<string, any>) => (forcedVenueId ? { ...body, venueId: forcedVenueId } : body),
+    [forcedVenueId]
+  );
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -251,14 +274,14 @@ export function AgencySettings() {
   }, [shareSlug, selectedShare?.share_slug, embedWidth, embedHeight]);
 
   const universalEmbed = useMemo(() => {
-    const venueId = user?.venue?.id;
+    const venueId = forcedVenueId || user?.venue?.id;
     if (!venueId) return null;
     return generateUniversalAgencyPortalEmbed(venueId, {
       width: "100%",
       height: "900px",
       showHeader: true,
     });
-  }, [user?.venue?.id]);
+  }, [forcedVenueId, user?.venue?.id]);
 
   const canUsePermanentPreview = useMemo(() => {
     return Boolean(selectedShare && settings?.is_enabled);
@@ -333,8 +356,8 @@ export function AgencySettings() {
       const headers = await getAuthHeaders();
 
       const [settingsRes, sharesRes] = await Promise.all([
-        fetch("/api/app/agency-portal/settings", { headers }),
-        fetch("/api/app/agency-portal/shares", { headers }),
+        fetch(withVenue("/api/app/agency-portal/settings"), { headers }),
+        fetch(withVenue("/api/app/agency-portal/shares"), { headers }),
       ]);
 
       const settingsJson = await settingsRes.json();
@@ -369,7 +392,7 @@ export function AgencySettings() {
     } finally {
       setIsLoading(false);
     }
-  }, [getAuthHeaders, toast, hydrateTourEmbedDomain]);
+  }, [getAuthHeaders, toast, hydrateTourEmbedDomain, withVenue]);
 
   useEffect(() => {
     fetchData();
@@ -413,7 +436,7 @@ export function AgencySettings() {
   };
 
   const createClient = async () => {
-    const venueId = user?.venue?.id;
+    const venueId = forcedVenueId || user?.venue?.id;
     if (!venueId) {
       toast({ title: "Error", description: "Unable to determine your account.", variant: "destructive" });
       return;
@@ -469,7 +492,7 @@ export function AgencySettings() {
       const shareResponse = await fetch("/api/app/agency-portal/shares", {
         method: "POST",
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(withVenueBody({
           action: "upsert_share",
           tourId: newTourId,
           shareSlug: slug,
@@ -481,7 +504,7 @@ export function AgencySettings() {
           },
           clientEmail: email,
           clientPassword: acClientPassword || undefined,
-        }),
+        })),
       });
       const shareData = await shareResponse.json();
 
@@ -564,7 +587,7 @@ export function AgencySettings() {
       const response = await fetch("/api/app/agency-portal/settings", {
         method: "PUT",
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(withVenueBody({
           is_enabled: settings.is_enabled,
           agency_name: settings.agency_name || null,
           logo_url: settings.logo_url || null,
@@ -573,7 +596,7 @@ export function AgencySettings() {
           portal_background_colour: settings.portal_background_colour || null,
           allowed_domains: parsedDomains,
           client_usage_mode: settings.client_usage_mode || "shared",
-        }),
+        })),
       });
       const data = await response.json();
 
@@ -640,7 +663,7 @@ export function AgencySettings() {
     const settingsResponse = await fetch("/api/app/agency-portal/settings", {
       method: "PUT",
       headers,
-      body: JSON.stringify({
+      body: JSON.stringify(withVenueBody({
         is_enabled: settings.is_enabled,
         agency_name: settings.agency_name || null,
         logo_url: settings.logo_url || null,
@@ -650,7 +673,7 @@ export function AgencySettings() {
         allowed_domains: parsedDomains,
         client_usage_mode: usageMode,
         ...extra,
-      }),
+      })),
     });
     const settingsData = await settingsResponse.json();
     if (!settingsResponse.ok) {
@@ -714,7 +737,7 @@ export function AgencySettings() {
       const res = await fetch("/api/app/agency-portal/domain", {
         method: "POST",
         headers,
-        body: JSON.stringify({ action: "connect", domain: effectiveTourEmbedDomain }),
+        body: JSON.stringify(withVenueBody({ action: "connect", domain: effectiveTourEmbedDomain })),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to connect domain");
@@ -753,7 +776,7 @@ export function AgencySettings() {
       const res = await fetch("/api/app/agency-portal/domain", {
         method: "POST",
         headers,
-        body: JSON.stringify({ action: "check" }),
+        body: JSON.stringify(withVenueBody({ action: "check" })),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to check domain");
@@ -788,7 +811,7 @@ export function AgencySettings() {
       const res = await fetch("/api/app/agency-portal/domain", {
         method: "POST",
         headers,
-        body: JSON.stringify({ action: "disconnect" }),
+        body: JSON.stringify(withVenueBody({ action: "disconnect" })),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to disconnect domain");
@@ -869,13 +892,13 @@ export function AgencySettings() {
         const allocationsResponse = await fetch("/api/app/agency-portal/shares", {
           method: "POST",
           headers,
-          body: JSON.stringify({
+          body: JSON.stringify(withVenueBody({
             action: "save_allocations",
             allocations: shares.map((share) => ({
               shareId: share.id,
               allocation: Number(allocations[share.id] || 0),
             })),
-          }),
+          })),
         });
         const allocationsData = await allocationsResponse.json();
         if (!allocationsResponse.ok) {
@@ -903,6 +926,7 @@ export function AgencySettings() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (forcedVenueId) formData.append("venueId", forcedVenueId);
       const headers = await getAuthHeaders();
       const response = await fetch("/api/app/agency-portal/upload-logo", {
         method: "POST",
@@ -938,7 +962,7 @@ export function AgencySettings() {
       const response = await fetch("/api/app/agency-portal/upload-logo", {
         method: "DELETE",
         headers,
-        body: JSON.stringify({ imageUrl: settings.logo_url }),
+        body: JSON.stringify(withVenueBody({ imageUrl: settings.logo_url })),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -1000,7 +1024,7 @@ export function AgencySettings() {
       const response = await fetch("/api/app/agency-portal/shares", {
         method: "POST",
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(withVenueBody({
           action: "upsert_share",
           shareId: selectedShare?.id,
           tourId: selectedTour.id,
@@ -1014,7 +1038,7 @@ export function AgencySettings() {
           clientEmail: clientEmail || undefined,
           clientPassword: clientPassword || undefined,
           regeneratePassword: regenPassword || undefined,
-        }),
+        })),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -1049,11 +1073,11 @@ export function AgencySettings() {
       const response = await fetch("/api/app/agency-portal/shares", {
         method: "POST",
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(withVenueBody({
           action: "toggle_share",
           shareId,
           isActive,
-        }),
+        })),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -1078,12 +1102,12 @@ export function AgencySettings() {
       const response = await fetch("/api/app/agency-portal/shares", {
         method: "POST",
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(withVenueBody({
           action: "regenerate_credentials",
           shareId: selectedShare.id,
           email: clientEmail,
           password: clientPassword || undefined,
-        }),
+        })),
       });
       const data = await response.json();
       if (!response.ok) {

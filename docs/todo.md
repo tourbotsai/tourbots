@@ -1,10 +1,10 @@
 
-- Rollout WhiteLabelEmbed.md
-- Complete ProdTestList.md
-
-- check message credits got reset 1st of month
-
 - Set up website tour demo account properly
+- Set up Apex VR Tours webisite, homepage tourbots account direct embed, agency client portal account, client portfolio page portal hoteltours client embed.
+
+- Complete ProdTestList.md - Check cancellations downgraded accounts
+
+
 - Set up hello@tourbots.ai and partners@tourbots.ai email
 - SPF/DKIM/DMARC
 

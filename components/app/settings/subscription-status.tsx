@@ -312,8 +312,20 @@ export function SubscriptionStatus() {
       );
     }
 
-    // Free plan card while on a paid plan: downgrading to free is a cancellation.
+    // Free plan card while on a paid plan: switching to free is a cancellation
+    // that takes effect at the end of the current billing period.
     if (plan.code === "free") {
+      if (isCancellationScheduled) {
+        return (
+          <Button
+            className="w-full dark:border-input dark:bg-background dark:text-slate-100"
+            variant="outline"
+            disabled
+          >
+            Reverts here on {formatDate(cancellationDate)}
+          </Button>
+        );
+      }
       return (
         <Button
           className="w-full dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-slate-800"
@@ -321,7 +333,7 @@ export function SubscriptionStatus() {
           onClick={handleManageSubscription}
           disabled={isOpeningPortal}
         >
-          {isOpeningPortal ? "Opening..." : "Cancel plan"}
+          {isOpeningPortal ? "Opening..." : "Switch to Free"}
         </Button>
       );
     }
@@ -535,12 +547,26 @@ export function SubscriptionStatus() {
             </div>
           )}
 
+          {isCancellationScheduled && isPaidPlanActive && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+              Your {activePlan?.name || "current"} plan is scheduled to cancel on{" "}
+              <span className="font-semibold">{formatDate(cancellationDate)}</span>. You'll keep full
+              access until then, after which you'll move to the Free plan (1 space, 25 messages) and
+              any add-ons will be removed. Choose <span className="font-semibold">Reactivate</span> to
+              stay on your current plan.
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {visiblePlans.map((plan) => {
               const isCurrent = currentPlan === plan.code;
 
               const positiveBullets: string[] = [
-                `${plan.included_spaces} included spaces`,
+                // Free grants one test space (its DB included_spaces is 0); show the
+                // real entitlement to match the pricing page ("One test tour").
+                plan.code === "free"
+                  ? "1 test space"
+                  : `${plan.included_spaces} included spaces`,
                 `${plan.included_messages.toLocaleString("en-GB")} included messages`,
               ];
               const negativeBullets: string[] = [];
@@ -572,6 +598,11 @@ export function SubscriptionStatus() {
                     )}
                   </div>
                   <p className="mt-1 min-h-[2.5rem] text-sm text-muted-foreground">{description}</p>
+                  {isCurrent && isCancellationScheduled && plan.code !== "free" && (
+                    <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+                      Cancelling — reverts to Free on {formatDate(cancellationDate)}
+                    </p>
+                  )}
                   <p className="mt-3 text-2xl font-semibold">
                     £{Number(plan.monthly_price_gbp || 0).toFixed(2)}
                     <span className="ml-1 text-sm text-muted-foreground">/month</span>

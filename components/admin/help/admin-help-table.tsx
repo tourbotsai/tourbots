@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   Table, 
   TableBody, 
@@ -130,59 +129,47 @@ export function AdminHelpTable({ className }: AdminHelpTableProps) {
   });
 
   const getStatusBadge = (article: HelpArticle) => {
-    if (article.is_published) {
-      return (
-        <Badge variant="default" className="bg-success-green text-white">
-          <Globe className="h-3 w-3 mr-1" />
-          Published
-        </Badge>
-      );
-    }
+    const isPublished = article.is_published;
     return (
-      <Badge variant="outline" className="text-muted-foreground">
-        <Edit className="h-3 w-3 mr-1" />
-        Draft
-      </Badge>
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            isPublished ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+          )}
+        />
+        <span className="text-sm text-foreground">
+          {isPublished ? "Published" : "Draft"}
+        </span>
+      </div>
     );
   };
 
-  const getCategoryBadge = (category: string) => {
-    const colors = {
-      'getting-started': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      'tours': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      'chatbots': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-      'analytics': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      'billing': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      'troubleshooting': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    };
-
-    return (
-      <Badge variant="outline" className={colors[category as keyof typeof colors] || 'bg-gray-100 text-gray-800'}>
-        {categoryLabels[category as keyof typeof categoryLabels] || category}
-      </Badge>
-    );
-  };
+  const getCategoryBadge = (category: string) => (
+    <span className="text-sm text-foreground">
+      {categoryLabels[category as keyof typeof categoryLabels] || category}
+    </span>
+  );
 
   const getPriorityBadge = (priority: number) => {
+    let label = "Low";
+    let dotClass = "bg-slate-300 dark:bg-slate-600";
+
     if (priority >= 80) {
-      return (
-        <Badge variant="destructive">
-          High ({priority})
-        </Badge>
-      );
+      label = "High";
+      dotClass = "bg-rose-500";
     } else if (priority >= 50) {
-      return (
-        <Badge variant="default" className="bg-yellow-500 text-white">
-          Medium ({priority})
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge variant="outline">
-          Low ({priority})
-        </Badge>
-      );
+      label = "Medium";
+      dotClass = "bg-amber-500";
     }
+
+    return (
+      <div className="flex items-center gap-2">
+        <span className={cn("h-1.5 w-1.5 rounded-full", dotClass)} />
+        <span className="text-sm text-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{priority}</span>
+      </div>
+    );
   };
 
   const handleCreateArticle = () => {
@@ -465,7 +452,7 @@ export function AdminHelpTable({ className }: AdminHelpTableProps) {
                   </TableRow>
                 ) : (
                   sortedArticles.map((article) => (
-                    <TableRow key={article.id}>
+                    <TableRow key={article.id} className="hover:bg-muted/50">
                       <TableCell>
                         <Checkbox
                           checked={selectedArticles.includes(article.id)}
@@ -500,8 +487,8 @@ export function AdminHelpTable({ className }: AdminHelpTableProps) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
+                        <div className="flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
+                          <Calendar className="h-3 w-3 shrink-0" />
                           {formatDate(article.created_at)}
                         </div>
                       </TableCell>

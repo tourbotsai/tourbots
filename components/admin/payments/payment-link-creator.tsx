@@ -19,50 +19,48 @@ interface PaymentVenueOption {
   slug: string;
 }
 
+interface PlanOption {
+  code: string;
+  name: string;
+  monthly_price_gbp: number;
+  description?: string | null;
+}
+
+const SELECTABLE_PLAN_CODES = ["pro", "agency"];
+
 export function PaymentLinkCreator() {
   const { createNewPaymentLink, isLoading } = usePaymentManagement();
   const { toast } = useToast();
   const [venues, setVenues] = useState<PaymentVenueOption[]>([]);
+  const [plans, setPlans] = useState<PlanOption[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string>("");
   const [customerEmail, setCustomerEmail] = useState<string>("");
-  const [planName, setPlanName] = useState<'pro'>('pro');
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [planName, setPlanName] = useState<string>("pro");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [isCustomPlan, setIsCustomPlan] = useState(false);
   const [customPrice, setCustomPrice] = useState<string>("");
   const [generatedLink, setGeneratedLink] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // Pricing aligned to website catalogue
-  const planConfigs = [
-    {
-      name: 'pro' as const,
-      monthlyPrice: 19.99,
-      yearlyPrice: 0,
-    },
-  ];
-
   useEffect(() => {
-    fetchVenues();
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    // Auto-fill email when venue is selected
     if (selectedVenueId) {
-      const selected = venues.find(v => v.id === selectedVenueId);
+      const selected = venues.find((v) => v.id === selectedVenueId);
       if (selected?.email && !customerEmail) {
         setCustomerEmail(selected.email);
       }
     }
   }, [selectedVenueId, venues, customerEmail]);
 
-  const fetchVenues = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch('/api/admin/billing/venues');
+      const response = await fetch("/api/admin/billing/venues");
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch venues');
-      }
+      if (!response.ok) throw new Error(data.error || "Failed to fetch venues");
 
       const venueOptions = (data.rows || [])
         .map((row: any) => row?.venue)
@@ -73,35 +71,35 @@ export function PaymentLinkCreator() {
           email: venue.email || "",
           slug: venue.slug || "",
         }));
-
       setVenues(venueOptions);
+
+      const planOptions = (data.plans || [])
+        .filter((plan: any) => SELECTABLE_PLAN_CODES.includes(plan.code))
+        .map((plan: any) => ({
+          code: plan.code,
+          name: plan.name,
+          monthly_price_gbp: Number(plan.monthly_price_gbp || 0),
+          description: plan.description,
+        }));
+      setPlans(planOptions);
+      if (planOptions.length > 0 && !planOptions.some((p: PlanOption) => p.code === planName)) {
+        setPlanName(planOptions[0].code);
+      }
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to fetch venues: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: `Failed to fetch venues: ${error.message}`, variant: "destructive" });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedVenueId || !customerEmail || !planName) {
-      toast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please fill in all required fields", variant: "destructive" });
       return;
     }
 
     if (isCustomPlan && (!customPrice || parseFloat(customPrice) <= 0)) {
-      toast({
-        title: "Error", 
-        description: "Please enter a valid custom price",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please enter a valid custom price", variant: "destructive" });
       return;
     }
 
@@ -109,30 +107,21 @@ export function PaymentLinkCreator() {
       const result = await createNewPaymentLink({
         venueId: selectedVenueId,
         customerEmail: customerEmail.trim(),
-        planName,
+        planName: planName as any,
         customPrice: isCustomPlan ? parseFloat(customPrice) : undefined,
         billingCycle,
       });
 
       setGeneratedLink(result.paymentLink);
-      toast({
-        title: "Success",
-        description: "Payment link created successfully!",
-      });
-      
-      // Reset form
+      toast({ title: "Success", description: "Payment link created successfully." });
+
       setSelectedVenueId("");
       setCustomerEmail("");
-      setPlanName('pro');
-      setBillingCycle('monthly');
+      setBillingCycle("monthly");
       setIsCustomPlan(false);
       setCustomPrice("");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to create payment link: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: `Failed to create payment link: ${error.message}`, variant: "destructive" });
     }
   };
 
@@ -140,58 +129,36 @@ export function PaymentLinkCreator() {
     try {
       await navigator.clipboard.writeText(generatedLink);
       setLinkCopied(true);
-      toast({
-        title: "Success",
-        description: "Payment link copied to clipboard!",
-      });
+      toast({ title: "Copied", description: "Payment link copied to clipboard." });
       setTimeout(() => setLinkCopied(false), 2000);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to copy link",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to copy link", variant: "destructive" });
     }
   };
 
-  const selectedPlan = planConfigs.find(p => p.name === planName);
-  
-  // Calculate the correct price based on billing cycle
-  const getDisplayPrice = () => {
-    if (isCustomPlan) {
-      const customAmount = parseFloat(customPrice) || 0;
-      return billingCycle === 'yearly' ? customAmount * 12 : customAmount;
-    }
-    
-    if (billingCycle === 'yearly') {
-      // For yearly billing, show the full annual amount (monthly rate × 12)
-      return (selectedPlan?.yearlyPrice || 0) * 12;
-    } else {
-      // For monthly billing, show monthly amount
-      return selectedPlan?.monthlyPrice || 0;
-    }
-  };
-  
-  const currentPrice = getDisplayPrice();
+  const selectedPlan = plans.find((p) => p.code === planName);
+
+  const displayPrice = (() => {
+    const base = isCustomPlan ? parseFloat(customPrice) || 0 : selectedPlan?.monthly_price_gbp || 0;
+    return billingCycle === "yearly" ? base * 12 : base;
+  })();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Link2 className="h-5 w-5" />
-          Create Payment Link
+    <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base text-slate-900">
+          <Link2 className="h-4 w-4 text-slate-500" />
+          Create payment link
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Venue selection */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="venue">Select venue *</Label>
+              <Label htmlFor="venue">Account *</Label>
               <Select value={selectedVenueId} onValueChange={setSelectedVenueId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a venue..." />
+                <SelectTrigger className="border-slate-300">
+                  <SelectValue placeholder="Choose an account..." />
                 </SelectTrigger>
                 <SelectContent>
                   {venues.map((v) => (
@@ -203,9 +170,8 @@ export function PaymentLinkCreator() {
               </Select>
             </div>
 
-            {/* Customer Email */}
             <div className="space-y-2">
-              <Label htmlFor="email">Customer Email *</Label>
+              <Label htmlFor="email">Customer email *</Label>
               <Input
                 id="email"
                 type="email"
@@ -213,103 +179,98 @@ export function PaymentLinkCreator() {
                 onChange={(e) => setCustomerEmail(e.target.value)}
                 placeholder="customer@example.com"
                 required
-                className="h-10 sm:h-11"
+                className="border-slate-300"
               />
             </div>
           </div>
 
-          {/* Plan Selection */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <Label>Plan Selection *</Label>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="custom-plan"
-                  checked={isCustomPlan}
-                  onCheckedChange={setIsCustomPlan}
-                />
-                <Label htmlFor="custom-plan" className="text-sm">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Plan *</Label>
+              <div className="flex items-center gap-2">
+                <Switch id="custom-plan" checked={isCustomPlan} onCheckedChange={setIsCustomPlan} />
+                <Label htmlFor="custom-plan" className="text-sm text-slate-600">
                   Custom pricing
                 </Label>
               </div>
             </div>
 
             {!isCustomPlan ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {planConfigs.map((plan) => (
-                  <div
-                    key={plan.name}
-                    className={`relative rounded-lg border p-4 cursor-pointer transition-all ${
-                      planName === plan.name
-                        ? 'border-brand-blue bg-brand-blue/5'
-                        : 'border-border-light dark:border-border-dark hover:border-brand-blue/50'
-                    }`}
-                    onClick={() => setPlanName(plan.name)}
-                  >
-                    <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {plans.map((plan) => {
+                  const isSelected = planName === plan.code;
+                  return (
+                    <button
+                      type="button"
+                      key={plan.code}
+                      onClick={() => setPlanName(plan.code)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        isSelected
+                          ? "border-slate-900 bg-slate-50"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
                       <div className="flex items-center justify-between">
-                        <h3 className="font-medium capitalize">{plan.name}</h3>
-                        {planName === plan.name && (
-                          <Badge className="bg-brand-blue">Selected</Badge>
+                        <h3 className="text-sm font-medium text-slate-900">{plan.name}</h3>
+                        {isSelected && (
+                          <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
+                            Selected
+                          </Badge>
                         )}
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">£19.99/month</p>
-                        <p className="text-xs text-muted-foreground">Core paid plan with add-ons layered on top.</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                      <p className="mt-1 text-sm text-slate-700">£{plan.monthly_price_gbp.toFixed(2)}/month</p>
+                      {plan.description && <p className="mt-1 text-xs text-slate-500">{plan.description}</p>}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="custom-price">Custom Monthly Price (£) *</Label>
-                    <Input
-                      id="custom-price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={customPrice}
-                      onChange={(e) => setCustomPrice(e.target.value)}
-                      placeholder="199.99"
-                      required={isCustomPlan}
-                      className="h-10 sm:h-11"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {billingCycle === 'yearly' 
-                        ? 'Enter monthly amount - customer will pay 12 months upfront'
-                        : 'Monthly subscription amount'
-                      }
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Plan Name</Label>
-                    <Select value={planName} onValueChange={(value: 'pro') => setPlanName(value)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pro">Pro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="custom-price">Custom monthly price (£) *</Label>
+                  <Input
+                    id="custom-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={customPrice}
+                    onChange={(e) => setCustomPrice(e.target.value)}
+                    placeholder="199.99"
+                    required={isCustomPlan}
+                    className="border-slate-300"
+                  />
+                  <p className="text-xs text-slate-500">
+                    {billingCycle === "yearly"
+                      ? "Enter the monthly amount — the customer pays 12 months upfront."
+                      : "Monthly subscription amount."}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Plan label</Label>
+                  <Select value={planName} onValueChange={setPlanName}>
+                    <SelectTrigger className="border-slate-300">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((plan) => (
+                        <SelectItem key={plan.code} value={plan.code}>
+                          {plan.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Billing Cycle Selection */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-bg-secondary-light dark:bg-bg-secondary-dark rounded-lg">
-            <div className="space-y-1">
-              <Label htmlFor="billing-cycle">Billing Cycle</Label>
-              <p className="text-sm text-muted-foreground">
-                Choose monthly or yearly billing
-              </p>
+          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label htmlFor="billing-cycle">Billing cycle</Label>
+              <p className="text-sm text-slate-500">Choose monthly or yearly billing.</p>
             </div>
-            <Select value={billingCycle} onValueChange={(value: 'monthly' | 'yearly') => setBillingCycle(value)}>
-              <SelectTrigger className="w-32">
+            <Select value={billingCycle} onValueChange={(value: "monthly" | "yearly") => setBillingCycle(value)}>
+              <SelectTrigger className="w-32 border-slate-300 bg-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -319,94 +280,61 @@ export function PaymentLinkCreator() {
             </Select>
           </div>
 
-          {/* Summary */}
-          {(selectedPlan || isCustomPlan) && (
-            <div className="p-4 bg-bg-tertiary-light dark:bg-bg-tertiary-dark rounded-lg">
-              <h4 className="font-medium mb-2">Payment Summary</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>
-                    {billingCycle === 'yearly'
-                      ? `Yearly subscription (${((selectedPlan?.yearlyPrice || selectedPlan?.monthlyPrice || 0)).toFixed(2)}/month × 12):`
-                      : 'Monthly subscription:'
-                    }
-                  </span>
-                  <span>£{currentPrice.toFixed(2)}</span>
-                </div>
-                <div className="border-t pt-2 flex justify-between font-medium">
-                  <span>
-                    {billingCycle === 'yearly' ? 'Annual payment (12 months upfront):' : 'First payment:'}
-                  </span>
-                  <span>£{currentPrice.toFixed(2)}</span>
-                </div>
-                {billingCycle === 'yearly' && (
-                  <p className="text-xs text-muted-foreground">
-                    Billed annually. Next payment in 12 months.
-                  </p>
-                )}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+            <h4 className="mb-2 text-sm font-medium text-slate-900">Payment summary</h4>
+            <div className="space-y-2 text-sm text-slate-700">
+              <div className="flex justify-between">
+                <span>{billingCycle === "yearly" ? "Annual subscription (12 months)" : "Monthly subscription"}</span>
+                <span>£{displayPrice.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between border-t border-slate-200 pt-2 font-medium text-slate-900">
+                <span>{billingCycle === "yearly" ? "Annual payment (upfront)" : "First payment"}</span>
+                <span>£{displayPrice.toFixed(2)}</span>
+              </div>
+              {billingCycle === "yearly" && (
+                <p className="text-xs text-slate-500">Billed annually. Next payment in 12 months.</p>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* Submit Button */}
-          <Button 
-            type="submit" 
-            disabled={isLoading}
-            className="w-full sm:w-auto bg-brand-blue hover:bg-brand-blue/90"
-          >
+          <Button type="submit" disabled={isLoading} className="bg-slate-900 text-white hover:bg-slate-800">
             {isLoading ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating Link...
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating link...
               </>
             ) : (
               <>
-                <Link2 className="w-4 h-4 mr-2" />
-                Create Payment Link
+                <Link2 className="mr-2 h-4 w-4" />
+                Create payment link
               </>
             )}
           </Button>
         </form>
 
-        {/* Generated Link */}
         {generatedLink && (
-          <div className="mt-8 p-4 bg-success-green/10 border border-success-green/20 rounded-lg">
-            <h4 className="font-medium text-success-green mb-2">
-              Payment Link Created Successfully!
-            </h4>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                value={generatedLink}
-                readOnly
-                className="flex-1 text-sm font-mono"
-              />
+          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+            <h4 className="mb-2 text-sm font-medium text-slate-900">Payment link created</h4>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input value={generatedLink} readOnly className="flex-1 border-slate-300 bg-white font-mono text-sm" />
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={copyToClipboard}
-                  className="w-full sm:w-auto"
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                 >
-                  {linkCopied ? (
-                    <Check className="w-4 h-4 mr-2" />
-                  ) : (
-                    <Copy className="w-4 h-4 mr-2" />
-                  )}
-                  {linkCopied ? 'Copied!' : 'Copy'}
+                  {linkCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                  {linkCopied ? "Copied" : "Copy"}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   asChild
-                  className="w-full sm:w-auto"
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                 >
-                  <a
-                    href={generatedLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                  <a href={generatedLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center">
+                    <ExternalLink className="mr-2 h-4 w-4" />
                     Open
                   </a>
                 </Button>
@@ -417,4 +345,4 @@ export function PaymentLinkCreator() {
       </CardContent>
     </Card>
   );
-} 
+}

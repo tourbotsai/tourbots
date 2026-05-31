@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, MessageCircle, ExternalLink, Settings, ArrowLeft } from "lucide-react";
+import { Copy, MessageCircle, ExternalLink, Settings, ArrowLeft, Lock } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
 import { useToast } from "@/components/ui/use-toast";
 import { useTourChatbotConfig } from "@/hooks/app/useTourChatbotConfig";
 import { useChatbotCustomisation } from "@/hooks/app/useChatbotCustomisation";
+import { useBilling } from "@/hooks/app/useBilling";
 import { generateTourChatbotEmbed, ChatbotEmbedOptions } from "@/lib/embed-generator";
 
 interface TourChatbotShareProps {
@@ -21,18 +22,39 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
   const { toast } = useToast();
   const { tourConfig, isLoading } = useTourChatbotConfig(selectedTourId);
   const { customisation, fetchCustomisation, isLoading: customisationLoading } = useChatbotCustomisation('tour', selectedTourId);
+  const { billingRecord, fetchBilling, isLoading: billingLoading } = useBilling();
   const [options] = useState<ChatbotEmbedOptions>({
     position: 'bottom-right',
     primaryColor: '#1E40AF',
     title: 'Tour Assistant'
   });
   const [embedCode, setEmbedCode] = useState<any>(null);
+  const [billingReady, setBillingReady] = useState(false);
 
   useEffect(() => {
     if (user?.venue?.id && selectedTourId) {
       fetchCustomisation();
     }
   }, [user?.venue?.id, selectedTourId, fetchCustomisation]);
+
+  useEffect(() => {
+    if (!user?.venue_id) return;
+    let cancelled = false;
+    (async () => {
+      await fetchBilling();
+      if (!cancelled) setBillingReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.venue_id, fetchBilling]);
+
+  const currentPlan = billingRecord?.plan_code || "free";
+  const effectivePlan =
+    billingRecord?.billing_override_enabled && billingRecord?.override_plan_code
+      ? billingRecord.override_plan_code
+      : currentPlan;
+  const isFreePlan = effectivePlan === "free";
 
   useEffect(() => {
     if (tourConfig && user?.venue?.id) {
@@ -62,11 +84,36 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
     }
   };
 
-  if (isLoading || customisationLoading) {
+  if (isLoading || customisationLoading || (!billingReady && billingLoading)) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
       </div>
+    );
+  }
+
+  if (isFreePlan) {
+    return (
+      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-6 rounded-full bg-slate-100 p-6 dark:border dark:border-input dark:bg-background">
+            <Lock className="h-10 w-10 text-slate-500" />
+          </div>
+          <h3 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
+            Publishing to your website is a Pro feature
+          </h3>
+          <p className="mb-6 max-w-md text-sm text-slate-600 dark:text-slate-400">
+            The Free plan is for building and previewing your chatbot. To generate embed code
+            and publish it on your live website, upgrade to Pro.
+          </p>
+          <Button
+            asChild
+            className="bg-slate-900 text-white hover:bg-slate-800 dark:border dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
+          >
+            <a href="/app/settings?tab=billing">Upgrade to Pro</a>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 

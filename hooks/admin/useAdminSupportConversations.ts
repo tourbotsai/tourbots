@@ -13,6 +13,7 @@ export function useAdminSupportConversations() {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUpdatingConversation, setIsUpdatingConversation] = useState(false);
 
   const fetchConversations = useCallback(async () => {
     setIsLoadingConversations(true);
@@ -120,6 +121,55 @@ export function useAdminSupportConversations() {
     }
   }, [toast]);
 
+  const updateConversation = useCallback(
+    async (
+      conversationId: string,
+      updates: { subject?: string; status?: 'open' | 'closed' }
+    ) => {
+      setIsUpdatingConversation(true);
+      try {
+        const response = await fetch(`/api/admin/help/conversations/${conversationId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updates),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to update conversation');
+        }
+
+        const updatedConversation = data.conversation as SupportConversation;
+        setConversations((prev) =>
+          prev.map((conversation) =>
+            conversation.id === conversationId
+              ? { ...conversation, ...updatedConversation }
+              : conversation
+          )
+        );
+
+        toast({
+          title: 'Conversation updated',
+          description: 'The conversation settings have been saved.',
+        });
+
+        return updatedConversation;
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to update conversation.',
+          variant: 'destructive',
+        });
+        return null;
+      } finally {
+        setIsUpdatingConversation(false);
+      }
+    },
+    [toast]
+  );
+
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
@@ -138,11 +188,13 @@ export function useAdminSupportConversations() {
     isLoadingConversations,
     isLoadingMessages,
     isSubmitting,
+    isUpdatingConversation,
     setSearchTerm,
     setStatusFilter,
     setActiveConversationId,
     fetchConversations,
     fetchMessages,
     sendAdminMessage,
+    updateConversation,
   };
 }

@@ -25,8 +25,7 @@ import {
   Settings,
   Tag,
   Eye,
-  Loader2,
-  Target
+  Loader2
 } from "lucide-react";
 import { useAdminGuides } from "@/hooks/admin/useAdminGuides";
 import { useImageUpload } from "@/hooks/admin/useImageUpload";
@@ -557,24 +556,6 @@ export function GuideEditorModal({ isOpen, onClose, guide }: GuideEditorModalPro
               <p className="text-xs text-muted-foreground">
                 Leave as 0 to auto-calculate based on content length
               </p>
-            </div>
-
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <h4 className="font-medium mb-2 flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Difficulty Level Guidelines
-              </h4>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div>
-                  <span className="font-medium">🌱 Beginner:</span> No prior knowledge required, basic concepts
-                </div>
-                <div>
-                  <span className="font-medium">🚀 Intermediate:</span> Some experience needed, builds on basics
-                </div>
-                <div>
-                  <span className="font-medium">⚡ Advanced:</span> Significant experience required, complex topics
-                </div>
-              </div>
             </div>
           </TabsContent>
         </Tabs>

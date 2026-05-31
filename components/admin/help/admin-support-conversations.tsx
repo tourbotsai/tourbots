@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, RefreshCw, Send } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RefreshCw, Send, Settings2 } from "lucide-react";
 import { useAdminSupportConversations } from "@/hooks/admin/useAdminSupportConversations";
 import { cn } from "@/lib/utils";
 
@@ -27,19 +36,31 @@ export function AdminSupportConversations() {
     isLoadingConversations,
     isLoadingMessages,
     isSubmitting,
+    isUpdatingConversation,
     setSearchTerm,
     setStatusFilter,
     fetchConversations,
     fetchMessages,
     sendAdminMessage,
+    updateConversation,
   } = useAdminSupportConversations();
 
   const [replyMessage, setReplyMessage] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [editSubject, setEditSubject] = useState("");
+  const [editStatus, setEditStatus] = useState<"open" | "closed">("open");
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
     [conversations, activeConversationId]
   );
+
+  useEffect(() => {
+    if (!isSettingsOpen && activeConversation) {
+      setEditSubject(activeConversation.subject ?? "");
+      setEditStatus(activeConversation.status);
+    }
+  }, [isSettingsOpen, activeConversation]);
 
   const formatDate = (value: string) =>
     new Date(value).toLocaleString("en-GB", {
@@ -56,6 +77,24 @@ export function AdminSupportConversations() {
     const sent = await sendAdminMessage(activeConversationId, replyMessage.trim());
     if (sent) {
       setReplyMessage("");
+    }
+  };
+
+  const handleOpenSettings = () => {
+    if (!activeConversation) return;
+    setEditSubject(activeConversation.subject ?? "");
+    setEditStatus(activeConversation.status);
+    setIsSettingsOpen(true);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!activeConversationId) return;
+    const updated = await updateConversation(activeConversationId, {
+      subject: editSubject.trim(),
+      status: editStatus,
+    });
+    if (updated) {
+      setIsSettingsOpen(false);
     }
   };
 
@@ -130,23 +169,39 @@ export function AdminSupportConversations() {
       </Card>
 
       <div className="space-y-6">
-        <Card>
+        <Card className="flex flex-col xl:h-[720px]">
           <CardHeader>
-            <CardTitle>{activeConversation ? activeConversation.help_topic : "Select a conversation"}</CardTitle>
-            <CardDescription>
-              {activeConversation
-                ? `${activeConversation.requester_name} (${activeConversation.requester_email})`
-                : "Choose a conversation on the left to review and reply."}
-            </CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1.5">
+                <CardTitle>{activeConversation ? activeConversation.help_topic : "Select a conversation"}</CardTitle>
+                <CardDescription>
+                  {activeConversation
+                    ? `${activeConversation.requester_name} (${activeConversation.requester_email})`
+                    : "Choose a conversation on the left to review and reply."}
+                </CardDescription>
+              </div>
+              {activeConversation && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleOpenSettings}
+                  title="Conversation settings"
+                  className="shrink-0"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  <span className="sr-only">Conversation settings</span>
+                </Button>
+              )}
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-1 flex-col space-y-4 overflow-hidden">
             {!activeConversation ? (
-              <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+              <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
                 No conversation selected.
               </div>
             ) : (
               <>
-                <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-lg border bg-muted/20 p-3">
+                <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border bg-muted/20 p-3">
                   {isLoadingMessages ? (
                     <p className="text-sm text-muted-foreground">Loading messages...</p>
                   ) : messages.length === 0 ? (
@@ -201,19 +256,61 @@ export function AdminSupportConversations() {
             )}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Conversation Guidance</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <div className="flex items-start gap-2">
-              <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
-              Keep all communication in the same thread so users have a complete support history in-app.
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Conversation settings</DialogTitle>
+            <DialogDescription>
+              Rename this conversation or update its status.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="conversation-subject">Conversation name</Label>
+              <Input
+                id="conversation-subject"
+                value={editSubject}
+                onChange={(event) => setEditSubject(event.target.value)}
+                placeholder="Add a conversation name"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="conversation-status">Status</Label>
+              <Select
+                value={editStatus}
+                onValueChange={(value) => setEditStatus(value as "open" | "closed")}
+              >
+                <SelectTrigger id="conversation-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsSettingsOpen(false)}
+              disabled={isUpdatingConversation}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveSettings} disabled={isUpdatingConversation}>
+              {isUpdatingConversation && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

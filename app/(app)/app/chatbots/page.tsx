@@ -92,7 +92,11 @@ function ChatbotsContent() {
         }
         description="Configure and manage your tour-specific AI assistant"
         action={
-          <div className="w-[200px] sm:min-w-[260px]">
+          <div className="flex items-center gap-2">
+            <span className="hidden whitespace-nowrap text-sm font-medium text-slate-600 dark:text-slate-300 sm:inline">
+              Location
+            </span>
+            <div className="w-[200px] sm:min-w-[260px]">
             <Select
               value={selectedTourId || undefined}
               onValueChange={(value) => setSelectedTourId(value)}
@@ -109,6 +113,7 @@ function ChatbotsContent() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
           </div>
         }
       />

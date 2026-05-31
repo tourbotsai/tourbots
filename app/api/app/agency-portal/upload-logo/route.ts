@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { supabaseServiceRole } from '@/lib/supabase-service-role';
-import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
+import { authenticateAndGetVenue, getScopedVenueId } from '@/lib/authenticated-venue';
 
 const PRIMARY_AGENCY_BUCKET = process.env.SUPABASE_AGENCY_BUCKET || 'Agency';
 const FALLBACK_AGENCY_BUCKET = PRIMARY_AGENCY_BUCKET === 'Agency' ? 'agency' : 'Agency';
@@ -55,8 +55,11 @@ export async function POST(request: NextRequest) {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId } = authResult;
     const formData = await request.formData();
+    const requestedVenueId = (formData.get('venueId') as string | null) || null;
+    const scopedVenueId = getScopedVenueId(authResult, requestedVenueId);
+    if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+    const venueId = scopedVenueId;
     const file = formData.get('file') as File | null;
 
     if (!file) {
@@ -127,8 +130,10 @@ export async function DELETE(request: NextRequest) {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId } = authResult;
     const body = await request.json().catch(() => ({}));
+    const scopedVenueId = getScopedVenueId(authResult, body?.venueId);
+    if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+    const venueId = scopedVenueId;
     const imageUrl = typeof body?.imageUrl === 'string' ? body.imageUrl : null;
 
     let logoUrl = imageUrl;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, scryptSync } from 'crypto';
 import { z } from 'zod';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
-import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
+import { authenticateAndGetVenue, getScopedVenueId } from '@/lib/authenticated-venue';
 import { ENTITLEMENT_COLUMNS, venueHasAgencyPortal } from '@/lib/billing-entitlements';
 import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
 
@@ -268,7 +268,10 @@ export async function GET(request: NextRequest) {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId } = authResult;
+    const requestedVenueId = new URL(request.url).searchParams.get('venueId');
+    const scopedVenueId = getScopedVenueId(authResult, requestedVenueId);
+    if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+    const venueId = scopedVenueId;
     const entitlementEnabled = await getEntitlement(venueId);
 
     const [{ data: tours, error: toursError }, { data: shares, error: sharesError }] = await Promise.all([
@@ -357,7 +360,12 @@ export async function POST(request: NextRequest) {
   try {
     const authResult = await authenticateAndGetVenue(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { venueId, userId } = authResult;
+    const { userId } = authResult;
+
+    const body = await request.json();
+    const scopedVenueId = getScopedVenueId(authResult, body?.venueId);
+    if (scopedVenueId instanceof NextResponse) return scopedVenueId;
+    const venueId = scopedVenueId;
 
     const entitlementEnabled = await getEntitlement(venueId);
     if (!entitlementEnabled) {
@@ -367,7 +375,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
     const parsed = actionSchema.safeParse(body);
 
     if (!parsed.success) {

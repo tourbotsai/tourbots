@@ -24,15 +24,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ accounts: [] });
     }
 
-    const [usersResult, toursResult] = await Promise.all([
+    const [usersResult, toursResult, billingResult] = await Promise.all([
       supabase
         .from("users")
-        .select("id, venue_id, first_name, last_name, email, phone, created_at")
+        .select("id, venue_id, first_name, last_name, email, phone, role, created_at")
         .in("venue_id", venueIds)
         .order("created_at", { ascending: true }),
       supabase
         .from("tours")
         .select("id, venue_id")
+        .in("venue_id", venueIds),
+      supabase
+        .from("venue_billing_records")
+        .select("venue_id, plan_code, override_plan_code, billing_override_enabled")
         .in("venue_id", venueIds),
     ]);
 
@@ -42,6 +46,10 @@ export async function GET(request: NextRequest) {
 
     if (toursResult.error) {
       throw new Error(toursResult.error.message);
+    }
+
+    if (billingResult.error) {
+      throw new Error(billingResult.error.message);
     }
 
     const usersByVenue = new Map<string, any[]>();
@@ -56,6 +64,11 @@ export async function GET(request: NextRequest) {
       tourCountByVenue.set(tour.venue_id, (tourCountByVenue.get(tour.venue_id) || 0) + 1);
     }
 
+    const billingByVenue = new Map<string, any>();
+    for (const record of billingResult.data || []) {
+      billingByVenue.set(record.venue_id, record);
+    }
+
     const accounts = (venues || []).map((venue) => {
       const venueUsers = usersByVenue.get(venue.id) || [];
       const primaryUser = venueUsers[0];
@@ -63,12 +76,21 @@ export async function GET(request: NextRequest) {
         ? `${primaryUser.first_name || ""} ${primaryUser.last_name || ""}`.trim() || "Not set"
         : "Not set";
 
+      const billingRecord = billingByVenue.get(venue.id);
+      const effectivePlanCode =
+        billingRecord?.billing_override_enabled && billingRecord?.override_plan_code
+          ? billingRecord.override_plan_code
+          : billingRecord?.plan_code || "free";
+      const isPlatformAdmin = venueUsers.some((user) => user.role === "platform_admin");
+      const accountType = isPlatformAdmin ? "platform_admin" : effectivePlanCode;
+
       return {
         id: venue.id,
         companyName: venue.name,
         contactName,
         email: primaryUser?.email || venue.email || "",
         phone: primaryUser?.phone || venue.phone || "",
+        accountType,
         toursCount: tourCountByVenue.get(venue.id) || 0,
         createdAt: venue.created_at,
       };

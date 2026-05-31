@@ -4,6 +4,7 @@ import {
   authenticateChatbotRoute,
   ensureTourScope,
   ensureVenueScope,
+  getScopedVenueId,
 } from '@/lib/chatbot-route-auth';
 
 export const dynamic = 'force-dynamic';
@@ -19,10 +20,12 @@ export async function GET(request: NextRequest) {
     const sessionId = searchParams.get('sessionId');
     const chatbotType = searchParams.get('chatbotType');
     const type = searchParams.get('type'); // 'conversations' | 'stats' | 'session'
-    const venueId = authResult.venueId;
 
     const venueScopeError = ensureVenueScope(authResult, requestedVenueId);
     if (venueScopeError) return venueScopeError;
+    // Scope to the requested venue (platform admins may read any venue;
+    // everyone else is constrained to their own).
+    const venueId = getScopedVenueId(authResult, requestedVenueId);
     if (tourId) {
       const tourScopeError = await ensureTourScope(venueId, tourId);
       if (tourScopeError) return tourScopeError;

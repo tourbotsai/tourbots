@@ -16,8 +16,20 @@ interface AdminAccountRow {
   contactName: string;
   email: string;
   phone: string;
+  accountType: string;
   toursCount: number;
   createdAt: string;
+}
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  free: "Free",
+  pro: "Pro",
+  agency: "Agency",
+  platform_admin: "Platform admin",
+};
+
+function getAccountTypeLabel(accountType: string) {
+  return ACCOUNT_TYPE_LABELS[accountType] || (accountType ? accountType.toUpperCase() : "Free");
 }
 
 export default function AdminAccountsPage() {
@@ -94,7 +106,7 @@ export default function AdminAccountsPage() {
                     <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Company name</th>
                     <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Contact name</th>
                     <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Email</th>
-                    <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</th>
+                    <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Account type</th>
                     <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Tours</th>
                     <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
                     <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
@@ -106,7 +118,11 @@ export default function AdminAccountsPage() {
                       <td className="px-3 py-3 text-sm font-medium text-slate-900">{account.companyName || "Not set"}</td>
                       <td className="px-3 py-3 text-sm text-slate-700">{account.contactName || "Not set"}</td>
                       <td className="px-3 py-3 text-sm text-slate-700">{account.email || "Not set"}</td>
-                      <td className="px-3 py-3 text-sm text-slate-700">{account.phone || "Not set"}</td>
+                      <td className="px-3 py-3">
+                        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
+                          {getAccountTypeLabel(account.accountType)}
+                        </Badge>
+                      </td>
                       <td className="px-3 py-3">
                         <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
                           {account.toursCount}

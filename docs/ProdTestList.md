@@ -4,16 +4,20 @@ Date: 14/04/2026
 Target: `tourbots.ai`  
 External test sites: `https://bodyactivegym.vercel.app` & `https://apexvrtours.vercel.app`
 
-User Test Account (Bodyactive Vercel) Email: `testone@test.com`  
+Platform Admin Test Account Email: tourbotsai@gmail.com
+
+User Test Account (BodyactiveVercel) Email: `testone@test.com`  
 User Test Account Password: `Test1234*`
 
-Agency Owner Test Account Email: `touragency@test.com`
+Agency Owner Test Account Email (ApexVRtours): `touragency@test.com`
 Agency Owner Test Account Password: `Test1234*`
 
-Agency Client Test Account Email: `uniqueclient@test.com`
+Agency Client Test Account Email (ApexVRtours): `uniqueclient@test.com`
 Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 
 ## TO DO
+
+## A) App Flow
 - [X] Confirm live app opens at `tourbots.ai`.
 - [X] Create account (or log in with test account above).
 - [X] Confirm successful redirect into app dashboard.
@@ -25,7 +29,7 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 - [X] Save menu.
 - [X] Refresh and confirm menu persists.
 
-## E) Chatbot Flow
+## B) Chatbot Flow
 
 - [X] Go to `App -> Chatbots`.
 - [X] Add chatbot information content.
@@ -45,7 +49,7 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
   - Prompt: "What's the best film to watch this weekend?"
 - [X] Test all customisation settings Desktop/Mobile
 
-## F) Tour Embed Flow (External Site)
+## C) Tour Embed Flow (External Site)
 
 - [X] Go to `Tours -> Share & Embed`.
 - [X] Copy tour embed code.
@@ -58,13 +62,13 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 - [X] Confirm mobile view works.
 - [X] Confirm desktop view works.
 
-## G) Tracking and Analytics
+## D) Tracking and Analytics
 
 - [X] Generate real embed interactions (views, moves, messages, navigation).
 - [X] Check TourBots analytics for matching events.
 - [X] Confirm events are tied to correct venue/tour.
 
-## H) Agency Portal Flow
+## E) Agency Portal Flow
 
 - [X] Upgrade to agency plan for account.
 - [X] Go to `Settings -> Agency Settings`.
@@ -77,7 +81,7 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 - [X] Confirm enabled modules load.
 - [X] Confirm disabled modules are blocked.
 
-## I) Agency Embed Flow (External Site)
+## F) Agency Embed Flow (External Site)
 
 - [X] Set up allowed domains.
 - [X] Copy agency embed code.
@@ -86,28 +90,30 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
 - [X] Confirm agency embed loads.
 - [X] Confirm login works inside embed.
 - [X] Confirm allowed actions work from embed context.
-- [ ] Confirm allocated message allowance works
-- [ ] Confirm white labelled embed code works
+- [X] Confirm allocated message allowance works
+- [X] Confirm white labelled embed code works
 
-## J) Billing Flow
+## G) Billing Flow
 
 - Plans (free / pro / agency):
-  - [x] Go to `Settings -> Billing`; three plan cards (Free, Pro, Agency), current plan, status, and limits display.
-  - [ ] On a free account, click `Upgrade plan` on Pro; complete Stripe checkout; confirm plan `Pro`, status `active`, limits update, invoice appears.
-  - [x] On a free account, click `Upgrade plan` on Agency; complete Stripe checkout; plan `Agency`, status `active`, 3 spaces / 3,000 messages, white-label enabled, invoice appears. *(verified 30/05/2026, local Stripe test)*
-  - [x] Confirm the Agency plan card lists its four features (incl. white-label / branded client portals).
-  - [x] After upgrading to Agency, the `Agency` tab appears in the app sidebar and the portal is active with no manual enable step. *(verified 30/05/2026)*
+  - [X] Go to `Settings -> Billing`; three plan cards (Free, Pro, Agency), current plan, status, and limits display.
+  - [X] On a free account, click `Upgrade plan` on Pro; complete Stripe checkout; confirm plan `Pro`, status `active`, limits update, invoice appears.
+  - [X] On a free account, click `Upgrade plan` on Agency; complete Stripe checkout; plan `Agency`, status `active`, 3 spaces / 3,000 messages, white-label enabled, invoice appears. *(verified 30/05/2026, local Stripe test)*
+  - [X] Confirm the Agency plan card lists its four features (incl. white-label / branded client portals).
+  - [X] After upgrading to Agency, the `Agency` tab appears in the app sidebar and the portal is active with no manual enable step. *(verified 30/05/2026)*
 
 - Plan switching (pro <-> agency):
-  - [ ] On Pro, click `Switch to Agency`; confirm no checkout (in-app), plan becomes `Agency` with prorated billing and limits update to the agency pool.
-  - [ ] On Agency, click `Switch to Pro`; confirm plan becomes `Pro` and agency add-ons section disappears (core add-ons section appears).
-  - [ ] Confirm an invoice / proration line appears for the switch.
+  - [X] On Pro no addons, click `Switch to Agency`; confirm no checkout (in-app), plan becomes `Agency` with prorated billing and limits update to the agency pool. - `proplanswitch@test.com`
+  - [X] On Agency no addons, click `Switch to Pro`; confirm plan becomes `Pro` and agency add-ons section disappears (core add-ons section appears). - `agencyplanswitch@test.com`
+  - [X] Confirm an invoice / proration line appears in for the switch. (Pending invoice items in Stripe: credit for unused outgoing plan + charge for new plan, applied to next invoice.)
+  - [X] On Pro with core Addons enabled, click `Switch to Agency`; confirm no checkout (in-app), plan becomes `Agency` with prorated billing and limits update to the agency pool. Confirm the core add-ons are cancelled as part of the switch (cascade): add-on counters reset, no core add-on subscriptions left active in Stripe, and a proration credit is generated for the unused add-on time. `protoagencyaddons@test.com`
+  - [X] On Agency with agency addons enabled, click `Switch to Pro`; confirm plan becomes `Pro` and agency add-ons section disappears (core add-ons section appears). Confirm the agency add-ons are cancelled as part of the switch (cascade): counters reset, no agency add-on subscriptions left active in Stripe, and a proration credit is generated. `agencytoproaddons@test.com`
 
 - Core add-ons (Pro only):
-  - [ ] On free or agency, confirm the `Core add-ons` section is not shown (Pro only).
-  - [ ] On Pro, buy extra spaces (quantity > 1); confirm count + total limits update.
-  - [ ] On Pro, buy a message block; confirm count + total messages update.
-  - [ ] On Pro, enable white-label; confirm status shows `active`.
+  - [X] On free or agency, confirm the `Core add-ons` section is not shown (Pro only).
+  - [X] On Pro, buy extra spaces (quantity > 1); confirm count + total limits update.
+  - [X] On Pro, buy a message block; confirm count + total messages update.
+  - [X] On Pro, enable white-label; confirm status shows `active`.
 
 - Agency add-ons (Agency only):
   - [x] On free or pro, confirm the `Agency add-ons` section is not shown (Agency only).
@@ -122,66 +128,70 @@ Agency Client Test Account Password: `NqhoGMYu9v69kq` `5MRvCy5uKefBW5`
   - [x] All subscriptions and invoices for a venue share a single Stripe customer (plan + add-ons grouped together). *(verified 30/05/2026)*
 
 - Cancellation:
-  - [ ] Pro: cancel a single core add-on; confirm only that add-on is scheduled and others stay active.
-  - [ ] Agency: cancel a single agency add-on; confirm only that add-on is scheduled and others stay active.
-  - [ ] Cancel the main plan via `Manage plan` (Stripe customer portal); confirm at period end the plan drops to free and add-ons clear.
-  - [ ] `Reactivate` a scheduled cancellation; confirm it resumes correctly.
+  - [x] Pro: cancel a single core add-on; confirm only that add-on is scheduled and others stay active.
+  - [x] Agency: cancel the agency plan; confirm scheduling (period-end drop to free tracked in section I).
+  - [x] Cancel the main plan via `Manage plan` (Stripe customer portal); add-ons cascade to cancelling confirmed (period-end drop to free / add-ons clear tracked in section I).
+  - [x] `Reactivate` a scheduled cancellation; confirm it resumes correctly.
+    - `billingreactivate@test.com` 
 
-## K) Platform Admin Flow
+## H) Platform Admin Flow
 
-- [ ] Log in with a platform admin account (email matches `PLATFORM_ADMIN_EMAIL`).
-- [ ] Confirm `Platform Admin` link appears in the app sidebar and opens `/admin/dashboard`.
-- [ ] Confirm a normal (non-admin) user is redirected away from `/admin/*` and admin APIs return 401/403.
+- [X] Log in with a platform admin account (email matches `PLATFORM_ADMIN_EMAIL`).
+- [X] Confirm `Platform Admin` link appears in the app sidebar and opens `/admin/dashboard`.
+- [X] Confirm a normal (non-admin) user is redirected away from `/admin/*` and admin APIs return 401/403.
 
 - Dashboard:
-  - [ ] Confirm KPIs load (total accounts, total messages, total conversations, monthly revenue).
-  - [ ] Click `Refresh`; confirm "Last updated" timestamp changes.
+  - [X] Confirm KPIs load (total accounts, total messages, total conversations, total views, total moves, monthly revenue).
+  - [X] Click `Refresh`; confirm "Last updated" timestamp changes.
 
 - Accounts:
-  - [ ] Open `Accounts`; confirm list loads (company, contact, email, phone, tours count, created).
-  - [ ] Open an account; edit and `Save` company details (name, email, phone, address).
-  - [ ] Toggle setup mode; refresh and confirm it persists.
-  - [ ] Confirm billing summary displays (revenue, message usage, active spaces, plan, add-ons).
-  - [ ] Select a tour; confirm `Tour Setup`, `Tour Menu`, `Share & Embed`, `Analytics` tabs load.
-  - [ ] In `Share & Embed`, copy preview URL / embed code and open preview.
-  - [ ] Edit + `Save` chatbot config (name, welcome, prompts, guardrails, active toggle, rate/hard limits).
-  - [ ] Add/edit a chatbot info section, upload a training document, add a trigger, apply customisation.
+  - [X] Open `Accounts`; confirm list loads (company, contact, email, phone, tours count, created).
+  - [X] Open an account; edit and `Save` company details (name, email, phone, address).
+  - [X] Confirm billing summary displays (revenue, message usage, active spaces, plan, add-ons).
+  - [X] Select a tour; confirm `Tour Setup`, `Tour Menu`, `Share & Embed`, `Analytics` tabs load.
+  - [X] In `Share & Embed`, copy preview URL / embed code and open preview.
+  - [X] Edit + `Save` chatbot config (name, welcome, prompts, guardrails, active toggle, rate/hard limits).
+  - [X] Add/edit a chatbot info section, upload a training document, add a trigger, apply customisation.
 
 - Payments:
-  - [ ] Open `Payments -> Subscriptions & Add-ons`; search a venue.
-  - [ ] Change plan / billing status / extra spaces / message blocks / limit overrides / white-label; `Save`.
-  - [ ] Confirm the change reflects on that account's billing panel.
-  - [ ] `Payment Links`: create a payment link (venue, email, plan, cycle); confirm it appears in the table; copy link.
-
-- Outbound:
-  - [ ] `Leads Database`: search a lead; open detail modal; add a note and `Save`.
-  - [ ] `Automated Sequences`: create a sequence with multiple email steps.
-  - [ ] Open sequence detail; `Add leads` (enrol a lead); confirm scheduled email actions appear.
-  - [ ] `Pause` then `Activate` the sequence.
+  - [X] Open `Payments -> Subscriptions & Add-ons`; search a venue.
+  - [X] Change plan / billing status / extra spaces / message blocks / limit overrides / white-label; `Save`.
+  - [X] Confirm the change reflects on that account's billing panel.
 
 - Help Centre:
-  - [ ] `Help Articles`: create a draft article; publish it; view the public article.
-  - [ ] Edit then delete a test article.
-  - [ ] `Contact Form`: open a conversation; send a reply.
+  - [X] `Help Articles`: create a draft article; publish it; view the public article.
+  - [X] Edit then delete a test article.
+  - [X] `Contact Form`: open a conversation; send a reply.
 
 - Resources:
-  - [ ] `Blogs`: create + publish (or schedule) a blog; view public page; delete the test blog.
-  - [ ] `Guides`: create + publish a guide (set difficulty); view public page; delete the test guide.
+  - [X] `Blogs`: create + publish (or schedule) a blog; view public page; delete the test blog.
+  - [X] `Guides`: create + publish a guide (set difficulty); view public page; delete the test guide.
 
-## L) Bugs and UX Sweep (Do Throughout)
 
-- [ ] Log every bug immediately (what happened, expected, screenshot).
-- [ ] Mark severity: `P0`, `P1`, `P2`, `P3`.
-- [ ] Fix critical issues found during run.
-- [ ] Re-test each fixed issue.
+## I) Awaiting time checks
+  
+  - [ ] Message usage limits reset on 1st of month
 
-## M) Final Sign-off
+  - [ ] Cancelled addons resets usage limits at end of billing period
+    - `billingtest@test.com` `Test1234*`
+      - 1000 Message credits add-on Access ends: 30/06/2026
+      - 1 Additional Space add-on Access ends: 30/06/2026
+      - White label add-on Access ends: 30/06/2026
+      Expected: Should stay on pro-plan, usage limits drop back 1 space 1000 message no white label.
 
-- [ ] Customer flow passes end-to-end.
-- [ ] Tour embed passes on external site.
-- [ ] Tracking/analytics pass.
-- [ ] Agency portal flow passes.
-- [ ] Agency embed flow passes.
-- [ ] Billing flow passes.
-- [ ] Platform admin flow passes.
-- [ ] No open `P0` or `P1` issues.
+  - [ ] Cancelled pro plan resets limits at end of billing period
+    - `billingtest2@test.com` `Test1234*` 
+      - Pro Plan Access ends: 30/06/2026
+      Expected: Should switch back to free plan limits
+
+  - [ ] Cancelled pro plan resets limits at end of billing period
+    - `agencybillingtest@test.com` `Test1234*` 
+      - Agency Plan Access ends: 30/06/2026
+      Expected: Should switch back to free plan limits
+
+  - [ ] Cancelled pro plan with addons to test if all addons cascade delete
+    - `billingplancanceladdoncascade@test.com` `Test1234*` 
+      - Pro Plan Access ends: 30/06/2026
+      Expected: Should switch back to free plan limits, with no addons.
+
+      

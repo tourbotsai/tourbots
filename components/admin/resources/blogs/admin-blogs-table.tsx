@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   Table, 
   TableBody, 
@@ -99,7 +98,6 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      timeZoneName: 'short',
     });
   };
 
@@ -117,44 +115,6 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
     if (diffHours > 0) return `in ${diffHours} hour${diffHours > 1 ? 's' : ''}`;
     if (diffMinutes > 0) return `in ${diffMinutes} min${diffMinutes > 1 ? 's' : ''}`;
     return 'Due now';
-  };
-
-  const getDateDisplay = (blog: Blog) => {
-    if (blog.is_published && blog.published_at) {
-      return (
-        <div className="text-sm">
-          <div className="font-medium">Published</div>
-          <div className="text-muted-foreground">{formatDate(blog.published_at)}</div>
-        </div>
-      );
-    }
-    
-    if (blog.is_scheduled && blog.scheduled_publish_at) {
-      const scheduledDate = new Date(blog.scheduled_publish_at);
-      const now = new Date();
-      const isPastDue = scheduledDate <= now;
-      const timeRemaining = getTimeRemaining(scheduledDate);
-      
-      return (
-        <div className="text-sm">
-          <div className={`font-medium flex items-center gap-1 ${isPastDue ? 'text-orange-600' : 'text-blue-600'}`}>
-            <Calendar className="h-3 w-3" />
-            {isPastDue ? 'Processing' : 'Scheduled'}
-          </div>
-          <div className="text-muted-foreground">{formatDate(blog.scheduled_publish_at)}</div>
-          <div className={`text-xs ${isPastDue ? 'text-orange-500' : 'text-blue-500'}`}>
-            {timeRemaining}
-          </div>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="text-sm">
-        <div className="font-medium">Created</div>
-        <div className="text-muted-foreground">{formatDate(blog.created_at)}</div>
-      </div>
-    );
   };
 
   const handleSort = (field: SortField) => {
@@ -192,40 +152,34 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
   const getStatusBadge = (blog: Blog) => {
     if (blog.is_published) {
       return (
-        <Badge variant="default" className="bg-success-green text-white">
-          <Globe className="h-3 w-3 mr-1" />
-          Published
-        </Badge>
-      );
-    }
-    
-    if (blog.is_scheduled && blog.scheduled_publish_at) {
-      const scheduledDate = new Date(blog.scheduled_publish_at);
-      const now = new Date();
-      const isPastDue = scheduledDate <= now;
-      const timeRemaining = getTimeRemaining(scheduledDate);
-      
-      return (
-        <div className="space-y-1">
-          <Badge 
-            variant="outline" 
-            className={`${isPastDue ? 'border-orange-500 text-orange-600' : 'border-blue-500 text-blue-600'}`}
-          >
-            <Calendar className="h-3 w-3 mr-1" />
-            {isPastDue ? 'Processing' : 'Scheduled'}
-          </Badge>
-          <div className={`text-xs ${isPastDue ? 'text-orange-500' : 'text-blue-500'}`}>
-            {timeRemaining}
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="text-sm text-foreground">Published</span>
         </div>
       );
     }
-    
+
+    if (blog.is_scheduled && blog.scheduled_publish_at) {
+      const scheduledDate = new Date(blog.scheduled_publish_at);
+      const isPastDue = scheduledDate <= new Date();
+      const timeRemaining = getTimeRemaining(scheduledDate);
+
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className={cn("h-1.5 w-1.5 rounded-full", isPastDue ? "bg-amber-500" : "bg-sky-500")} />
+            <span className="text-sm text-foreground">{isPastDue ? "Processing" : "Scheduled"}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">{timeRemaining}</div>
+        </div>
+      );
+    }
+
     return (
-      <Badge variant="secondary">
-        <Edit className="h-3 w-3 mr-1" />
-        Draft
-      </Badge>
+      <div className="flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+        <span className="text-sm text-foreground">Draft</span>
+      </div>
     );
   };
 
@@ -323,7 +277,7 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
           </div>
 
           {/* Search and Filters */}
-          <div className="space-y-4">
+          <div className="mt-1 space-y-4">
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -337,7 +291,6 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
               
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setShowFilters(!showFilters)}
                 className="shrink-0"
               >
@@ -348,7 +301,6 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
               {(filters.search || filters.tags?.length || filters.published !== undefined) && (
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={clearFilters}
                   className="shrink-0"
                 >
@@ -476,7 +428,7 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
                         }}
                       />
                     </TableHead>
-                    <TableHead className="w-[300px]">
+                    <TableHead className="w-[45%] min-w-[420px]">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -488,7 +440,6 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
                       </Button>
                     </TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Tags</TableHead>
                     <TableHead>
                       <Button
                         variant="ghost"
@@ -537,7 +488,7 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
                       
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium line-clamp-2">
+                          <div className="font-medium line-clamp-1">
                             {blog.title}
                           </div>
                           {blog.excerpt && (
@@ -550,21 +501,6 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
                       
                       <TableCell>
                         {getStatusBadge(blog)}
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {blog.tags?.slice(0, 2).map(tag => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {blog.tags && blog.tags.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{blog.tags.length - 2}
-                            </Badge>
-                          )}
-                        </div>
                       </TableCell>
                       
                       <TableCell>
@@ -582,7 +518,10 @@ export function AdminBlogsTable({ className }: AdminBlogsTableProps) {
                       </TableCell>
                       
                       <TableCell>
-                        {getDateDisplay(blog)}
+                        <div className="flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          <span>{formatDate(blog.created_at)}</span>
+                        </div>
                       </TableCell>
                       
                       <TableCell>
