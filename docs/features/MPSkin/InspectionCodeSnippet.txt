@@ -1,0 +1,115 @@
+<div id="tb-probe" style="position:fixed;z-index:2147483647;top:8px;right:8px;width:430px;max-width:94vw;height:60vh;overflow:auto;background:#000;color:#0f0;font:11px/1.45 monospace;padding:8px;border:1px solid #0f0;border-radius:6px;white-space:pre-wrap"></div>
+<button id="tb-copy" style="position:fixed;z-index:2147483647;top:8px;right:12px;background:#0f0;color:#000;border:0;font:bold 11px monospace;padding:3px 7px;border-radius:4px;cursor:pointer">COPY LOGS</button>
+<script>
+(function(){
+  var out=document.getElementById('tb-probe');
+  function log(){var a=[].slice.call(arguments).join(' ');if(out)out.textContent+=a+"\n";try{console.log('[TB]',a);}catch(e){}}
+  document.getElementById('tb-copy').onclick=function(){try{navigator.clipboard.writeText(out.textContent);this.textContent='COPIED';}catch(e){this.textContent='SELECT+COPY';}};
+
+  log('==== TourBots deep diagnostic ====',new Date().toISOString());
+  log('location:',location.href);
+  try{log('top window?',window===window.top,'| readyState:',document.readyState);}catch(e){}
+
+  function isLiveSdk(o){try{return !!(o&&o.Sweep&&typeof o.Sweep.moveTo==='function'&&o.Camera);}catch(e){return false;}}
+  function isEntry(o){try{return !!(o&&typeof o.connect==='function');}catch(e){return false;}}
+
+  var captured=false;
+  function capture(sdk,how){
+    if(captured||!isLiveSdk(sdk))return;
+    captured=true;window.__TB_SDK=sdk;
+    log('================================');
+    log('★★★ LIVE SDK CAPTURED via '+how);
+    log('★★★ saved as window.__TB_SDK');
+    log('================================');
+    try{sdk.Sweep.current.subscribe(function(s){if(s&&s.id)log('SWEEP now:',s.id);});}catch(e){log('sweep sub err:',e.message);}
+    var last=0;try{sdk.Camera.pose.subscribe(function(p){var t=Date.now();if(t-last>2500){last=t;try{log('pose r:',JSON.stringify(p.rotation));}catch(e){}}});}catch(e){}
+    log('TEST MOVE: in console run  __TB_SDK.Sweep.moveTo("<sweepId>",{transition:"transition.fly",transitionTime:1500})');
+    window.__tbMove=function(id){return sdk.Sweep.moveTo(id,{transition:"transition.fly",transitionTime:1500}).then(function(r){log('moved to',r);}).catch(function(e){log('move err:',e&&e.message);});};
+  }
+
+  function wrapConnect(win,label){try{
+    if(!win.MP_SDK||typeof win.MP_SDK.connect!=='function')return false;
+    if(win.MP_SDK.connect.__tb)return true;
+    var orig=win.MP_SDK.connect;
+    win.MP_SDK.connect=function(){var p=orig.apply(this,arguments);try{if(p&&p.then)p.then(function(sdk){capture(sdk,'intercept '+label);});}catch(e){}return p;};
+    win.MP_SDK.connect.__tb=1;log('hooked MP_SDK.connect on',label);return true;
+  }catch(e){log('wrap '+label+' err:',e.message);return false;}}
+
+  function trap(win,label){try{
+    if(win.MP_SDK){wrapConnect(win,label);return;}
+    var store;Object.defineProperty(win,'MP_SDK',{configurable:true,get:function(){return store;},set:function(v){store=v;log('MP_SDK ASSIGNED on',label);try{wrapConnect(win,label);}catch(e){}}});
+    log('trap set for MP_SDK on',label);
+  }catch(e){log('trap '+label+' err:',e.message);}}
+
+  function selfConnect(win,label){try{
+    if(win.MP_SDK&&typeof win.MP_SDK.connect==='function'){
+      log('self-connect attempt on',label);
+      var r=win.MP_SDK.connect(win);
+      if(r&&r.then)r.then(function(sdk){capture(sdk,'self-connect '+label);}).catch(function(e){log('self-connect '+label+' fail:',e&&e.message);});
+    }
+  }catch(e){log('selfConnect '+label+' err:',e.message);}}
+
+  // baseline diff: which globals did MPskin/Matterport add?
+  var baseline={};
+  try{var f=document.createElement('iframe');f.style.display='none';document.body.appendChild(f);
+    Object.getOwnPropertyNames(f.contentWindow).forEach(function(k){baseline[k]=1;});document.body.removeChild(f);}catch(e){log('baseline err:',e.message);}
+  function addedGlobals(){var r=[];try{Object.getOwnPropertyNames(window).forEach(function(k){if(!baseline[k])r.push(k);});}catch(e){}return r;}
+
+  function reportGlobals(){
+    var added=addedGlobals();
+    log('--- added globals ('+added.length+'):',added.slice(0,80).join(', '));
+    added.forEach(function(k){try{var v=window[k];if(isLiveSdk(v)){log('  '+k+' = LIVE SDK!');capture(v,'window.'+k);}else if(isEntry(v)){log('  '+k+' has .connect()');trap(window,'window');}}catch(e){}});
+  }
+
+  // recursive iframe + shadow DOM + canvas + custom element discovery
+  function discover(root,depth){
+    var acc={iframes:[],canvas:0,custom:[]};
+    function walk(node){
+      try{
+        node.querySelectorAll('iframe').forEach(function(f){acc.iframes.push(f);});
+        acc.canvas+=node.querySelectorAll('canvas').length;
+        node.querySelectorAll('*').forEach(function(el){
+          if(el.tagName&&el.tagName.indexOf('-')>-1)acc.custom.push(el.tagName.toLowerCase());
+          if(el.shadowRoot)walk(el.shadowRoot);
+        });
+      }catch(e){}
+    }
+    walk(root);return acc;
+  }
+  function reportDom(){
+    var d=discover(document,0);
+    log('--- DOM: iframes='+d.iframes.length+' canvas='+d.canvas+' customEls='+(d.custom.length?d.custom.slice(0,12).join(','):'none'));
+    d.iframes.forEach(function(f,i){
+      var same=false,hasSdk=false,cw=null;
+      try{cw=f.contentWindow;var _=cw.location.href;same=true;}catch(e){same=false;}
+      log('  iframe['+i+'] src='+(f.src||'(none)')+' sameOrigin='+same);
+      if(same&&cw){try{log('    contentWin.MP_SDK:',typeof cw.MP_SDK);trap(cw,'iframe['+i+']');wrapConnect(cw,'iframe['+i+']');selfConnect(cw,'iframe['+i+']');
+        var a=addedGlobalsOf(cw);log('    iframe added globals:',a.slice(0,40).join(', '));
+        a.forEach(function(k){try{if(isLiveSdk(cw[k]))capture(cw[k],'iframe['+i+'].'+k);}catch(e){}});
+      }catch(e){log('    iframe inspect err:',e.message);}}
+    });
+  }
+  function addedGlobalsOf(w){var r=[];try{Object.getOwnPropertyNames(w).forEach(function(k){if(!baseline[k])r.push(k);});}catch(e){}return r;}
+
+  // scripts (reveals matterport bundle path / mpskin app js)
+  try{var ss=[].slice.call(document.querySelectorAll('script')).map(function(s){return s.src;}).filter(function(x){return x&&/matter|showcase|bundle|mpskin|sdk/i.test(x);});log('--- relevant scripts:',ss.join('  |  ')||'(none matched)');}catch(e){}
+
+  // deep BFS through added globals for sdk-shaped objects
+  function deepScan(){
+    var added=addedGlobals(),q=[],visited=[],hits=[];
+    added.forEach(function(k){try{q.push({o:window[k],p:'window.'+k,d:0});}catch(e){}});
+    var guard=0;
+    while(q.length&&guard<4000){guard++;var c=q.shift();var o=c.o;if(!o)continue;var t=typeof o;if(t!=='object'&&t!=='function')continue;if(visited.indexOf(o)>-1)continue;visited.push(o);
+      try{if(isLiveSdk(o)){hits.push(c.p);capture(o,c.p);}}catch(e){}
+      if(c.d<3){var ks;try{ks=Object.keys(o).slice(0,40);}catch(e){ks=[];}ks.forEach(function(k){try{var v=o[k];if(v&&(typeof v==='object'||typeof v==='function'))q.push({o:v,p:c.p+'.'+k,d:c.d+1});}catch(e){}});}
+    }
+    log('--- deepScan '+(hits.length?('HIT: '+hits.join(', ')):'no sdk-shaped object found'));
+  }
+
+  function pass(tag){log('===== scan '+tag+' =====');trap(window,'window');reportGlobals();reportDom();selfConnect(window,'window');deepScan();}
+
+  // run now + repeat so late init / your clicks get caught
+  pass('t0');
+  var n=0,iv=setInterval(function(){n++;if(captured){log('(captured – still logging sweeps as you move)');clearInterval(iv);return;}pass('t'+(n*4)+'s');if(n>=12){log('==== done scanning (no capture) ====');clearInterval(iv);}},4000);
+})();
+</script>

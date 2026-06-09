@@ -20,6 +20,8 @@ import { TourTrendChart, TourTrendPoint } from '@/components/app/tours/tour-tren
 import { EmbedStatistics } from '@/components/app/chatbots/shared/embed-statistics';
 import { ConversationSessions } from '@/components/app/chatbots/shared/conversation-sessions';
 import { PortalTourShare } from '@/components/app/agency-portal/portal-tour-share';
+import { PortalChatbotShare } from '@/components/app/agency-portal/portal-chatbot-share';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useUser } from '@/hooks/useUser';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +54,10 @@ interface AgencyPortalShellProps {
     information?: boolean;
     documents?: boolean;
     triggers?: boolean;
+  };
+  shareBlocks?: {
+    tour?: boolean;
+    chatbot?: boolean;
   };
   previewOnly?: boolean;
   // When the shell is launched from the universal portal entry, the client has
@@ -140,6 +146,7 @@ export function AgencyPortalShell({
   tourEmbedDomainStatus = null,
   tourBlocks,
   settingsBlocks,
+  shareBlocks,
   previewOnly = false,
   initialSession = null,
   previewSettings = null,
@@ -196,6 +203,10 @@ export function AgencyPortalShell({
   const [informationExpanded, setInformationExpanded] = useState(true);
   const [expandedInformationSections, setExpandedInformationSections] = useState<Record<string, boolean>>({});
   const moduleList = useMemo(() => (Object.keys(modules) as ModuleName[]), [modules]);
+  // Share sub-blocks: which embed sections appear inside the Share tab. If both
+  // are off the Share tab is hidden entirely (the "none" state).
+  const shareTourBlock = shareBlocks?.tour !== false;
+  const shareChatbotBlock = shareBlocks?.chatbot !== false;
   const visibleModules = useMemo(() => {
     const meta: { value: ModuleName; label: string; icon: typeof Camera }[] = [
       { value: 'tour', label: 'Tour', icon: Camera },
@@ -204,8 +215,13 @@ export function AgencyPortalShell({
       { value: 'analytics', label: 'Analytics', icon: LineChart },
       { value: 'share', label: 'Share', icon: Share2 },
     ];
-    return meta.filter((item) => Boolean(modules[item.value]));
-  }, [modules]);
+    return meta.filter((item) => {
+      if (!modules[item.value]) return false;
+      // Hide the Share tab when the agency has turned off both embed sections.
+      if (item.value === 'share' && !shareTourBlock && !shareChatbotBlock) return false;
+      return true;
+    });
+  }, [modules, shareTourBlock, shareChatbotBlock]);
   const resolvedTourId = tourId || null;
   // White-label: only emit the agency's own domain in the embed code once it is
   // verified end-to-end; otherwise the generator falls back to tourbots.ai.
@@ -1107,11 +1123,49 @@ export function AgencyPortalShell({
                   </TabsContent>
 
                   <TabsContent value="share" className="mt-3">
-                    <PortalTourShare
-                      venueId={venueId || appUser?.venue?.id}
-                      tourId={resolvedTourId}
-                      baseUrlOverride={shareBaseUrlOverride}
-                    />
+                    {!shareTourBlock && !shareChatbotBlock ? (
+                      <p className="text-sm text-slate-600">No share sections are enabled for this share.</p>
+                    ) : (
+                      <Accordion
+                        type="multiple"
+                        className="space-y-3"
+                      >
+                        {shareTourBlock && (
+                          <AccordionItem
+                            value="tour"
+                            className="rounded-lg border border-slate-200 bg-white px-4"
+                          >
+                            <AccordionTrigger className="text-sm font-semibold text-slate-900">
+                              Tour Embed
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <PortalTourShare
+                                venueId={venueId || appUser?.venue?.id}
+                                tourId={resolvedTourId}
+                                baseUrlOverride={shareBaseUrlOverride}
+                              />
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                        {shareChatbotBlock && (
+                          <AccordionItem
+                            value="chatbot"
+                            className="rounded-lg border border-slate-200 bg-white px-4"
+                          >
+                            <AccordionTrigger className="text-sm font-semibold text-slate-900">
+                              Chatbot Embed
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <PortalChatbotShare
+                                venueId={venueId || appUser?.venue?.id}
+                                tourId={resolvedTourId}
+                                baseUrlOverride={shareBaseUrlOverride}
+                              />
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                      </Accordion>
+                    )}
                   </TabsContent>
 
                 </Tabs>

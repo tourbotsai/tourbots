@@ -26,6 +26,12 @@ const enabledModulesSchema = z.object({
       triggers: z.boolean().optional(),
     })
     .optional(),
+  share_blocks: z
+    .object({
+      tour: z.boolean().optional(),
+      chatbot: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 const upsertShareSchema = z.object({
@@ -566,6 +572,10 @@ export async function POST(request: NextRequest) {
         information: payload.enabledModules?.settings_blocks?.information ?? true,
         documents: payload.enabledModules?.settings_blocks?.documents ?? true,
         triggers: payload.enabledModules?.settings_blocks?.triggers ?? true,
+      },
+      share_blocks: {
+        tour: payload.enabledModules?.share_blocks?.tour ?? true,
+        chatbot: payload.enabledModules?.share_blocks?.chatbot ?? true,
       },
     };
 

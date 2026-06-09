@@ -22,6 +22,17 @@ export interface ChatbotEmbedOptions {
   tourId?: string;
   customisation?: ChatbotCustomisation;
   useDirect?: boolean;
+  // When true (default), the embed is allowed to drive the tour (move/switch).
+  // Baked into the snippet (?nav=on|off / data-nav) and read by the embed page +
+  // chatbot route. No database storage — mirrors how generateTourEmbed serialises
+  // showTitle/showChat.
+  navigationEnabled?: boolean;
+  // Optional sizing for the simple inline iframe.
+  width?: string;
+  height?: string;
+  // White-label: when set, the generated embed src/script point at this host
+  // (e.g. an agency's verified custom domain) instead of the running app host.
+  baseUrlOverride?: string;
 }
 
 export interface AgencyPortalEmbedOptions {
@@ -329,58 +340,49 @@ gt('init', '${embedId}', '${venueId}', ${JSON.stringify(embedOptions)});
 export function generateChatbotEmbed(venueId: string, options: ChatbotEmbedOptions = {}) {
   const chatbotType = options.chatbotType || 'tour';
   const embedId = `${chatbotType}-chat-${venueId}-${Date.now()}`;
-  // Detect current domain for development/production
-  const baseUrl = typeof window !== 'undefined' 
-    ? `${window.location.protocol}//${window.location.host}`
-    : 'https://tourbots.ai'; // Fallback for server-side
-  
-  const useDirect = options.useDirect ?? false;
-  const scriptFile = 'chat.js';
-  
-  // Create complete configuration object with all customisation fields
-  const config = {
-    ...options,
-    chatbotType,
-    venueId,
-    embedId,
-    useDirect,
-    customisation: options.customisation ? {
-      // Map desktop customisation
-      desktop: mapCustomisationToEmbed(options.customisation, 'desktop'),
-      // Map mobile customisation
-      mobile: mapCustomisationToEmbed(options.customisation, 'mobile'),
-      // Original field mapping for backward compatibility
-      ...mapLegacyCustomisation(options.customisation)
-    } : undefined
-  };
-  
-  // Simple embed - includes basic customisation with device detection
-  const simpleEmbed = `<script src="${baseUrl}/embed/${scriptFile}?v=${Date.now()}" 
-    data-venue-id="${venueId}" 
-    data-chatbot-type="${chatbotType}" 
-    data-embed-id="${embedId}"
-    ${options.tourId ? `data-tour-id="${options.tourId}"` : ''}
-    ${useDirect ? 'data-embed-type="direct"' : 'data-embed-type="iframe"'}
-    ${options.customisation ? `data-customisation='${JSON.stringify(config.customisation)}'` : ''}
-  ></script>`;
-  
-  // Advanced embed - with full customisation options and device detection
-  const advancedEmbed = `<script>
-(function(w,d,s,o,f,js,fjs){
-w['TourBotsChatObject']=o;w[o]=w[o]||function(){(w[o].q=w[o].q||[]).push(arguments)};
-js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
-js.id=o;js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
-}(window,document,'script','gc','${baseUrl}/embed/${scriptFile}?v=${Date.now()}'));
-gc('init', '${embedId}', '${venueId}', ${JSON.stringify(config)});
-</script>`;
-  
+  // Prefer an explicit white-label host; otherwise detect the running domain
+  // (client) and fall back to tourbots.ai (server-side).
+  const baseUrl = normaliseEmbedBaseUrl(options.baseUrlOverride)
+    || (typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.host}`
+      : 'https://tourbots.ai');
+
+  // Navigation defaults ON. Serialised into both snippets so the embed page and
+  // the chatbot route gate the navigation tools accordingly.
+  const navigationEnabled = options.navigationEnabled ?? true;
+  const navParam = navigationEnabled ? 'on' : 'off';
+
+  const queryParams = new URLSearchParams({
+    id: embedId,
+    nav: navParam,
+    ...(options.tourId ? { tourId: options.tourId } : {}),
+  });
+  const iframeSrc = `${baseUrl}/embed/chatbot/${venueId}?${queryParams.toString()}`;
+
+  // Simple = a self-contained chatbot iframe. Drop it inline anywhere for a
+  // website Q&A assistant. (Tour navigation only has an effect when the host page
+  // also renders the matching tour, so simple embeds are typically Q&A only.)
+  const simpleEmbed = `<iframe src="${iframeSrc}" width="${options.width || '100%'}" height="${options.height || '600px'}" frameborder="0" style="border:0;" allow="clipboard-write; microphone"></iframe>`;
+
+  // Advanced = the chat.js loader. Injects a floating chat bubble and, when
+  // navigation is on and a Matterport tour is present, installs the bridge that
+  // lets the AI drive the tour. This is also the snippet to paste into an MPskin
+  // "extend-HTML" block.
+  const advancedEmbed = `<script
+  src="${baseUrl}/embed/chat.js"
+  data-venue-id="${venueId}"${options.tourId ? `\n  data-tour-id="${options.tourId}"` : ''}
+  data-embed-id="${embedId}"
+  data-mode="embed"
+  data-nav="${navParam}"
+  async></script>`;
+
   return {
     simple: simpleEmbed,
     advanced: advancedEmbed,
     embedId,
-    options: config,
+    navigationEnabled,
+    previewUrl: iframeSrc,
     chatbotType,
-    embedType: useDirect ? 'direct' : 'iframe'
   };
 }
 
@@ -492,53 +494,6 @@ export function generateUniversalAgencyPortalEmbed(agencyId: string, options: Ag
     embedId,
     previewUrl: srcUrl,
     options,
-  };
-}
-
-/**
- * Maps legacy customisation fields for backward compatibility
- */
-function mapLegacyCustomisation(customisation: ChatbotCustomisation) {
-  return {
-    // Chat button styling
-    buttonColor: customisation.chat_button_color,
-    buttonSize: customisation.chat_button_size,
-    buttonSizePx: resolveChatButtonSizePx({
-      pxValue: customisation.chat_button_size_px,
-      legacySize: customisation.chat_button_size,
-      mode: 'desktop',
-    }),
-    buttonPosition: customisation.chat_button_position,
-    buttonIcon: customisation.chat_button_icon,
-    iconSize: customisation.icon_size,
-    headerIconSize: customisation.header_icon_size,
-    
-    // Chat window styling
-    headerBackgroundColor: customisation.header_background_color,
-    headerTextColor: customisation.header_text_color,
-    windowTitle: customisation.window_title,
-    windowWidth: customisation.window_width,
-    windowHeight: customisation.window_height,
-    
-    // Message styling
-    aiMessageBackground: customisation.ai_message_background,
-    aiMessageTextColor: customisation.ai_message_text_color,
-    thinkingBackgroundColor: customisation.thinking_background_color || '#F3F4F6',
-    thinkingTextColor: customisation.thinking_text_color || '#6B7280',
-    userMessageBackground: customisation.user_message_background,
-    userMessageTextColor: customisation.user_message_text_color,
-    
-    // Window body styling
-    windowBackgroundColor: customisation.window_background_color,
-
-    // Input area styling
-    inputBackgroundColor: customisation.input_background_color,
-    sendButtonColor: customisation.send_button_color,
-    sendButtonIconColor: customisation.send_button_icon_color,
-    
-    // Branding
-    showPoweredBy: customisation.show_powered_by,
-    customLogoUrl: customisation.custom_logo_url,
   };
 }
 

@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, MessageCircle, ExternalLink, Settings, ArrowLeft, Lock } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Copy, MessageCircle, ExternalLink, Settings, ArrowLeft, Lock, Navigation } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
 import { useToast } from "@/components/ui/use-toast";
 import { useTourChatbotConfig } from "@/hooks/app/useTourChatbotConfig";
@@ -23,10 +25,11 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
   const { tourConfig, isLoading } = useTourChatbotConfig(selectedTourId);
   const { customisation, fetchCustomisation, isLoading: customisationLoading } = useChatbotCustomisation('tour', selectedTourId);
   const { billingRecord, fetchBilling, isLoading: billingLoading } = useBilling();
-  const [options] = useState<ChatbotEmbedOptions>({
+  const [options, setOptions] = useState<ChatbotEmbedOptions>({
     position: 'bottom-right',
     primaryColor: '#1E40AF',
-    title: 'Tour Assistant'
+    title: 'Tour Assistant',
+    navigationEnabled: true,
   });
   const [embedCode, setEmbedCode] = useState<any>(null);
   const [billingReady, setBillingReady] = useState(false);
@@ -152,6 +155,11 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
     );
   }
 
+  const navParam = options.navigationEnabled === false ? "off" : "on";
+  const previewUrl = embedCode
+    ? `/embed/chatbot/${user?.venue?.id}?id=${embedCode.embedId}&tourId=${selectedTourId}&nav=${navParam}`
+    : "#";
+
   return (
     <div className="space-y-4">
       {embedCode && (
@@ -167,10 +175,30 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
               Add your chatbot widget to any page with one line of code, or use advanced embed options for extra control.
             </p>
 
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-input dark:bg-background">
+              <div>
+                <Label htmlFor="enable-tour-navigation" className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                  <Navigation className="h-4 w-4" />
+                  Enable tour navigation
+                </Label>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  Let the assistant move the virtual tour for visitors. Turn off for a question-and-answer assistant only.
+                </p>
+              </div>
+              <Switch
+                id="enable-tour-navigation"
+                checked={options.navigationEnabled ?? true}
+                onCheckedChange={(checked) => setOptions({ ...options, navigationEnabled: checked })}
+              />
+            </div>
+
             <div className="h-px bg-slate-200 dark:bg-slate-700" />
 
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Simple Embed (Recommended)</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                A self-contained chatbot you can drop onto any web page.
+              </p>
               <Textarea
                 value={embedCode.simple}
                 readOnly
@@ -193,9 +221,9 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
                   asChild
                   className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
                 >
-                  <a href={`/embed/tour/${user?.venue?.id}?id=${embedCode.embedId}&tourId=${selectedTourId}&showTitle=true&showChat=true`} target="_blank" rel="noopener noreferrer">
+                  <a href={previewUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" />
-                    Preview Tour
+                    Preview Chatbot
                   </a>
                 </Button>
               </div>
@@ -205,6 +233,9 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
 
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Advanced Embed</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                A floating chat bubble that can drive the virtual tour. Use this when the chatbot sits on the same page as your tour.
+              </p>
               <Textarea
                 value={embedCode.advanced}
                 readOnly
@@ -227,16 +258,12 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
                   asChild
                   className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
                 >
-                  <a href={`/embed/tour/${user?.venue?.id}?id=${embedCode.embedId}&tourId=${selectedTourId}&showTitle=true&showChat=true`} target="_blank" rel="noopener noreferrer">
+                  <a href={previewUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" />
-                    Preview Tour
+                    Preview Chatbot
                   </a>
                 </Button>
               </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs text-slate-600 dark:border-input dark:bg-background dark:text-slate-400">
-              The widget uses your current chatbot settings and branding automatically.
             </div>
           </CardContent>
         </Card>

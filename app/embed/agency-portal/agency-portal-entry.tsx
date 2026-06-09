@@ -24,6 +24,10 @@ interface EnabledModules {
     documents?: boolean;
     triggers?: boolean;
   };
+  share_blocks?: {
+    tour?: boolean;
+    chatbot?: boolean;
+  };
 }
 
 interface ResolvedShare {
@@ -204,6 +208,10 @@ export function AgencyPortalEntry({
           information: modules.settings_blocks?.information !== false,
           documents: modules.settings_blocks?.documents !== false,
           triggers: modules.settings_blocks?.triggers !== false,
+        }}
+        shareBlocks={{
+          tour: modules.share_blocks?.tour !== false,
+          chatbot: modules.share_blocks?.chatbot !== false,
         }}
       />
     );

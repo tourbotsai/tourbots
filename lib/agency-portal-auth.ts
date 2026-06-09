@@ -182,6 +182,10 @@ export interface AgencyPortalSessionContext {
       documents?: boolean;
       triggers?: boolean;
     };
+    share_blocks?: {
+      tour?: boolean;
+      chatbot?: boolean;
+    };
   };
   user: {
     id: string;

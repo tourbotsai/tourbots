@@ -114,6 +114,10 @@ interface ShareRow {
       documents?: boolean;
       triggers?: boolean;
     };
+    share_blocks?: {
+      tour?: boolean;
+      chatbot?: boolean;
+    };
   };
   users: ShareUser[];
   message_credit_allocation?: number | null;
@@ -136,6 +140,10 @@ const defaultSettingsBlocks = {
   information: true,
   documents: true,
   triggers: true,
+};
+const defaultShareBlocks = {
+  tour: true,
+  chatbot: true,
 };
 
 function normaliseShareSlug(input: string): string {
@@ -251,6 +259,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
   const [enabledModules, setEnabledModules] = useState(defaultModules);
   const [tourBlocks, setTourBlocks] = useState(defaultTourBlocks);
   const [settingsBlocks, setSettingsBlocks] = useState(defaultSettingsBlocks);
+  const [shareBlocks, setShareBlocks] = useState(defaultShareBlocks);
   const [clientEmail, setClientEmail] = useState("");
   const [clientPassword, setClientPassword] = useState("");
   const [regenPassword, setRegenPassword] = useState(false);
@@ -314,6 +323,8 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
       settingsInformation: String(settingsBlocks.information ?? true),
       settingsDocuments: String(settingsBlocks.documents ?? true),
       settingsTriggers: String(settingsBlocks.triggers ?? true),
+      shareTour: String(shareBlocks.tour ?? true),
+      shareChatbot: String(shareBlocks.chatbot ?? true),
     });
 
     return `${window.location.protocol}//${window.location.host}/embed/agency/preview?${params.toString()}`;
@@ -336,6 +347,8 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
     settingsBlocks.information,
     settingsBlocks.documents,
     settingsBlocks.triggers,
+    shareBlocks.tour,
+    shareBlocks.chatbot,
   ]);
 
   // Splits a stored host into the recommended `tours.` prefix + remainder so the
@@ -505,6 +518,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
             ...defaultModules,
             tour_blocks: defaultTourBlocks,
             settings_blocks: defaultSettingsBlocks,
+            share_blocks: defaultShareBlocks,
           },
           clientEmail: email,
           clientPassword: acClientPassword || undefined,
@@ -1010,6 +1024,10 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
       documents: existingShare?.enabled_modules?.settings_blocks?.documents ?? true,
       triggers: existingShare?.enabled_modules?.settings_blocks?.triggers ?? true,
     });
+    setShareBlocks({
+      tour: existingShare?.enabled_modules?.share_blocks?.tour ?? true,
+      chatbot: existingShare?.enabled_modules?.share_blocks?.chatbot ?? true,
+    });
     const primaryUser = existingShare?.users?.[0];
     setClientEmail(primaryUser?.email || "");
     setClientPassword("");
@@ -1038,6 +1056,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
             ...enabledModules,
             tour_blocks: tourBlocks,
             settings_blocks: settingsBlocks,
+            share_blocks: shareBlocks,
           },
           clientEmail: clientEmail || undefined,
           clientPassword: clientPassword || undefined,
@@ -2349,6 +2368,25 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                       checked={Boolean(value)}
                       onCheckedChange={(checked) => setSettingsBlocks((prev) => ({ ...prev, [key]: checked }))}
                       disabled={!enabledModules.settings}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3 dark:border-input dark:bg-background">
+              <p className="text-sm font-medium">Share blocks</p>
+              <p className="text-xs text-muted-foreground">
+                Control which embed sections appear inside the Share tab. Turn both off to hide the tab entirely.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(shareBlocks).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <Label className="capitalize">{key}</Label>
+                    <Switch
+                      checked={Boolean(value)}
+                      onCheckedChange={(checked) => setShareBlocks((prev) => ({ ...prev, [key]: checked }))}
+                      disabled={!enabledModules.share}
                     />
                   </div>
                 ))}
