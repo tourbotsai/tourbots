@@ -138,8 +138,23 @@ export function ChatbotEmbedClient({
   }, [navigationEnabled, embedId, venue.id, locationScopeTourId, tour.matterport_tour_id]);
 
   return (
-    <div className="w-full h-full" style={{ background: 'transparent' }}>
+    <>
+      {/* The shared embed layout's body is bg-neutral-900 (globals.css). For a
+          chatbot-only embed we want a transparent page so the floating widget sits
+          over the host page (or shows cleanly in a standalone preview) instead of a
+          black box. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `html, body, #__next { background: transparent !important; }`,
+        }}
+      />
+      {/* TourChatWidget positions its button/window absolutely within its own
+          `relative` wrapper, which collapses to height 0. In the full-tour embed a
+          full-height Matterport sibling pushes that wrapper to the bottom of the
+          viewport; here there is no such sibling, so we make the wrapper itself fill
+          the viewport (h-screen) so the button anchors to the bottom corner. */}
       <TourChatWidget
+        className="h-screen w-full"
         venueId={venue.id}
         venueName={venue.name}
         tour={tour}
@@ -154,6 +169,6 @@ export function ChatbotEmbedClient({
         forcePublic
         navTarget={navTarget}
       />
-    </div>
+    </>
   );
 }

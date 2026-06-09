@@ -2,6 +2,8 @@
 
 > Status: PLANNING. Author: TourBots engineering. Last updated: 09/06/2026.
 > This is the build plan for shipping a **Share & Embed** tab on the Chatbot page: a standalone chatbot embed (simple iframe + advanced script) with a navigation on/off toggle. This same advanced script is what gets pasted into MPskin to overlay the AI chatbot on a Level 2 tour.
+> MP SKIN PRO ACCOUNT: lukesimmons747@gmail.com 
+> TB TEST ACCOUNT: mpskin@tourbots.ai
 
 ---
 
