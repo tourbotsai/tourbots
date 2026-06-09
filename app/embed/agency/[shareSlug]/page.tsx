@@ -96,6 +96,10 @@ export default async function AgencyEmbedPreviewPage({
     documents: share.enabled_modules?.settings_blocks?.documents !== false,
     triggers: share.enabled_modules?.settings_blocks?.triggers !== false,
   };
+  const shareBlocks = {
+    tour: share.enabled_modules?.share_blocks?.tour !== false,
+    chatbot: share.enabled_modules?.share_blocks?.chatbot !== false,
+  };
 
   const primaryColour = settings?.primary_colour || '#1E40AF';
   const secondaryColour = settings?.secondary_colour || '#0F172A';
@@ -121,6 +125,7 @@ export default async function AgencyEmbedPreviewPage({
       tourEmbedDomainStatus={settings?.tour_embed_domain_status || 'unconfigured'}
       tourBlocks={tourBlocks}
       settingsBlocks={settingsBlocks}
+      shareBlocks={shareBlocks}
     />
   );
 }

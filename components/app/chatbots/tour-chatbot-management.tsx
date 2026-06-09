@@ -10,8 +10,9 @@ import { TourChatbotSettings } from "./tour/chatbot-settings";
 import { TourChatbotCustomisation } from "./tour/chatbot-customisation";
 import { TourChatbotAnalytics } from "./tour/chatbot-analytics";
 import { TourChatbotPlayground } from "./tour/chatbot-playground";
+import { TourChatbotShare } from "./tour/chatbot-share";
 
-const CHATBOT_TAB_VALUES = new Set(["settings", "customisation", "playground", "analytics"]);
+const CHATBOT_TAB_VALUES = new Set(["settings", "customisation", "playground", "share", "analytics"]);
 
 interface TourChatbotManagementProps {
   onBack: () => void;
@@ -61,7 +62,7 @@ export function TourChatbotManagement({ onBack, selectedTourId }: TourChatbotMan
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <div ref={mobileTabsScrollRef} className="overflow-x-auto md:overflow-visible">
-          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-4">
+          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-5">
             <TabsTrigger
               value="settings"
               className="h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
@@ -79,6 +80,12 @@ export function TourChatbotManagement({ onBack, selectedTourId }: TourChatbotMan
               className="h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
             >
               Playground
+            </TabsTrigger>
+            <TabsTrigger
+              value="share"
+              className="h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
+            >
+              Share &amp; Embed
             </TabsTrigger>
             <TabsTrigger
               value="analytics"
@@ -99,6 +106,10 @@ export function TourChatbotManagement({ onBack, selectedTourId }: TourChatbotMan
 
         <TabsContent value="playground" className="space-y-6">
           <TourChatbotPlayground onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} />
+        </TabsContent>
+
+        <TabsContent value="share" className="space-y-6">
+          <TourChatbotShare onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} />
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">

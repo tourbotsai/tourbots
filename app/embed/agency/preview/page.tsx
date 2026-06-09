@@ -38,6 +38,8 @@ export default async function AgencyEmbedDraftPreviewPage({
     settingsInformation?: string;
     settingsDocuments?: string;
     settingsTriggers?: string;
+    shareTour?: string;
+    shareChatbot?: string;
   };
 }) {
   const shareSlug = searchParams.shareSlug || 'draft-share';
@@ -213,6 +215,10 @@ export default async function AgencyEmbedDraftPreviewPage({
         information: toBool(searchParams.settingsInformation, true),
         documents: toBool(searchParams.settingsDocuments, true),
         triggers: toBool(searchParams.settingsTriggers, true),
+      }}
+      shareBlocks={{
+        tour: toBool(searchParams.shareTour, true),
+        chatbot: toBool(searchParams.shareChatbot, true),
       }}
       previewOnly={true}
       previewSettings={data.settings}

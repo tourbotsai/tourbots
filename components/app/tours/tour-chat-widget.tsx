@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { MessageCircle, X, Send, Bot, User, Loader2, Heart, Star, Headphones, Settings, 
   Info, Search, ArrowRight, ChevronRight, Play, MessageSquare, Maximize2, Minimize2,
   Mail, Phone, Users, Zap, HelpCircle, UserCheck, UserCog, Crown, Shield, Smile, Coffee } from 'lucide-react';
@@ -84,6 +84,13 @@ interface TourChatWidgetProps {
   // the app: without this, a logged-in app session would make the public hero hit
   // the authenticated config route for a venue it doesn't own (403 → shows offline).
   forcePublic?: boolean;
+  // Where tour navigation requests are dispatched:
+  // - 'event'  (default): same-page CustomEvents consumed by MatterportSDKWrapper
+  //   (the TourBots-hosted full-tour embed and the dashboard viewer).
+  // - 'parent': postMessage to the parent window, for the standalone chatbot embed
+  //   injected onto a third-party page (e.g. MPskin) where a bridge drives the SDK.
+  // - 'none': navigation is disabled for this embed; no events are emitted.
+  navTarget?: 'event' | 'parent' | 'none';
 }
 
 export function TourChatWidget({ 
@@ -102,7 +109,8 @@ export function TourChatWidget({
   embedId,
   embedToken,
   initialConfig,
-  forcePublic = false
+  forcePublic = false,
+  navTarget = 'event'
 }: TourChatWidgetProps) {
   const { user } = useUser();
   // In forced-public mode (marketing site) skip the authenticated config hook
@@ -131,6 +139,31 @@ export function TourChatWidget({
   // Determine if this is a public/demo usage (no logged-in user, or explicitly
   // forced for the marketing site which shares a domain with the app).
   const isPublicDemo = forcePublic || !user;
+
+  // Whether this embed is allowed to drive the tour. When 'none', no navigation
+  // events are emitted and the backend is told to withhold the navigation tools.
+  const navigationEnabled = navTarget !== 'none';
+
+  // Single dispatch point for tour-control events so the destination ('event' vs
+  // 'parent' window) is decided in one place:
+  // - 'event'  → same-page CustomEvent (MatterportSDKWrapper / tour embed client).
+  // - 'parent' → postMessage to the host page, where chat.js's bridge drives the SDK.
+  // - 'none'   → no-op.
+  const emitTourEvent = useCallback(
+    (type: 'matterport_navigate' | 'switch_matterport_model' | 'tour_chatbot_open_url', detail: Record<string, any>) => {
+      if (navTarget === 'none') return;
+      if (navTarget === 'parent') {
+        try {
+          window.parent?.postMessage({ source: 'tourbots', type, ...detail }, '*');
+        } catch {
+          /* cross-origin postMessage best-effort */
+        }
+        return;
+      }
+      window.dispatchEvent(new CustomEvent(type, { detail }));
+    },
+    [navTarget]
+  );
 
   // Load config for public demos WITHOUT storing messages.
   // Skipped entirely when SSR already provided the config (embed fast path).
@@ -527,6 +560,7 @@ export function TourChatWidget({
           conversationId: currentConversationId,
           embedId: embedId || `tour-widget-${venueId}`,
           embedToken,
+          navigationEnabled,
           domain: parentTrackingCtx?.domain ?? window.location.hostname,
           pageUrl: parentTrackingCtx?.pageUrl ?? window.location.href,
           tourContext: tour ? {
@@ -598,44 +632,29 @@ export function TourChatWidget({
                     }]
               );
             } else if (data.type === 'navigate_to_area') {
-              const navigationEvent = new CustomEvent('matterport_navigate', {
-                detail: {
+              emitTourEvent('matterport_navigate', {
+                sweep_id: data.sweep_id,
+                position: data.position,
+                rotation: data.rotation,
+                area_name: data.area_name,
+              });
+            } else if (data.type === 'switch_tour_model') {
+              emitTourEvent('switch_matterport_model', { modelId: data.model_id });
+            } else if (data.type === 'trigger_action') {
+              if (data.action_type === 'navigate_tour_point') {
+                emitTourEvent('matterport_navigate', {
                   sweep_id: data.sweep_id,
                   position: data.position,
                   rotation: data.rotation,
                   area_name: data.area_name,
-                },
-              });
-              window.dispatchEvent(navigationEvent);
-            } else if (data.type === 'switch_tour_model') {
-              const switchEvent = new CustomEvent('switch_matterport_model', {
-                detail: { modelId: data.model_id },
-              });
-              window.dispatchEvent(switchEvent);
-            } else if (data.type === 'trigger_action') {
-              if (data.action_type === 'navigate_tour_point') {
-                const navigationEvent = new CustomEvent('matterport_navigate', {
-                  detail: {
-                    sweep_id: data.sweep_id,
-                    position: data.position,
-                    rotation: data.rotation,
-                    area_name: data.area_name,
-                  },
                 });
-                window.dispatchEvent(navigationEvent);
               } else if (data.action_type === 'open_url' && data.url) {
                 // Remember the URL so it can be appended to the assistant message
                 // (AI Response + URL triggers should show the link after the reply).
                 triggeredUrl = data.url;
-                const urlEvent = new CustomEvent('tour_chatbot_open_url', {
-                  detail: { url: data.url },
-                });
-                window.dispatchEvent(urlEvent);
+                emitTourEvent('tour_chatbot_open_url', { url: data.url });
               } else if (data.action_type === 'switch_tour_model' && data.model_id) {
-                const switchEvent = new CustomEvent('switch_matterport_model', {
-                  detail: { modelId: data.model_id },
-                });
-                window.dispatchEvent(switchEvent);
+                emitTourEvent('switch_matterport_model', { modelId: data.model_id });
               }
             } else if (data.type === 'done') {
               if (typeof data.responseId === 'string' && data.responseId.length > 0) {
