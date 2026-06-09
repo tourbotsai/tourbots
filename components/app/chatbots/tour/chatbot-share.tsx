@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Copy, MessageCircle, ExternalLink, Settings, ArrowLeft, Lock, Navigation } from "lucide-react";
+import { Copy, ExternalLink, Settings, ArrowLeft, Lock, Navigation } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
 import { useToast } from "@/components/ui/use-toast";
 import { useTourChatbotConfig } from "@/hooks/app/useTourChatbotConfig";
@@ -165,10 +165,7 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
       {embedCode && (
         <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
-              <MessageCircle className="h-4 w-4" />
-              Share and Embed
-            </CardTitle>
+            <CardTitle className="text-base text-slate-900 dark:text-slate-100">Share and Embed</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <p className="text-sm text-slate-600 dark:text-slate-400">
