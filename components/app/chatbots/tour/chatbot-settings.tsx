@@ -190,8 +190,8 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
     }
   };
 
-  const handleViewDocument = (fileUrl?: string | null) => {
-    if (!fileUrl) {
+  const handleViewDocument = async (documentId?: string | null) => {
+    if (!documentId) {
       toast({
         title: "Error",
         description: "Document link is unavailable",
@@ -200,7 +200,23 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
       return;
     }
 
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
+    try {
+      const venueId = user?.venue?.id || '';
+      const response = await fetch(
+        `/api/app/chatbots/documents/view?documentId=${encodeURIComponent(documentId)}&venueId=${encodeURIComponent(venueId)}`
+      );
+      const data = await response.json();
+      if (!response.ok || !data?.url) {
+        throw new Error(data?.error || 'Failed to open document');
+      }
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Could not open document",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading) {
@@ -514,7 +530,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleViewDocument(doc.file_url)}
+                      onClick={() => handleViewDocument(doc.id)}
                       className="flex-shrink-0 text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-neutral-800 dark:hover:text-slate-100"
                       title="View document"
                       aria-label={`View ${doc.original_filename}`}

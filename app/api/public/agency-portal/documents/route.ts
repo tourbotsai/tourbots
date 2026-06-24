@@ -157,8 +157,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
 
-    const { data: publicUrlData } = supabase.storage.from('venue-documents').getPublicUrl(filePath);
-
+    // The bucket is private (see sql/40_make_venue_documents_private.sql); no
+    // public URL is stored. Owner views use short-lived signed URLs from file_path.
     const { data: document, error: insertError } = await supabase
       .from('chatbot_documents')
       .insert([
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
           file_type: file.type,
           file_size: file.size,
           file_path: filePath,
-          file_url: publicUrlData.publicUrl,
+          file_url: null,
           uploaded_by: null,
           openai_file_id: '',
           openai_vector_store_id: '',
