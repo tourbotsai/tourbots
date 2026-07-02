@@ -91,6 +91,11 @@ interface TourChatWidgetProps {
   //   injected onto a third-party page (e.g. MPskin) where a bridge drives the SDK.
   // - 'none': navigation is disabled for this embed; no events are emitted.
   navTarget?: 'event' | 'parent' | 'none';
+  // When the widget renders inside a small floating iframe (the standalone chatbot
+  // embed), its own `window.innerWidth` is the iframe's width, not the host page's,
+  // so responsive/mobile detection would always be wrong. The host loader (chat.js)
+  // relays the real host viewport width, which we use here instead.
+  hostViewportWidth?: number | null;
 }
 
 export function TourChatWidget({ 
@@ -110,7 +115,8 @@ export function TourChatWidget({
   embedToken,
   initialConfig,
   forcePublic = false,
-  navTarget = 'event'
+  navTarget = 'event',
+  hostViewportWidth = null
 }: TourChatWidgetProps) {
   const { user } = useUser();
   // In forced-public mode (marketing site) skip the authenticated config hook
@@ -213,14 +219,20 @@ export function TourChatWidget({
   // Detect client-only viewport/device state
   useEffect(() => {
     const checkViewportState = () => {
-      setIsMobile(window.innerWidth < 768); // 768px is the 'md' breakpoint
+      // In a floating-iframe embed, window.innerWidth is the iframe width (tiny),
+      // so prefer the host viewport width relayed by chat.js when provided.
+      const viewportWidth =
+        typeof hostViewportWidth === 'number' && hostViewportWidth > 0
+          ? hostViewportWidth
+          : window.innerWidth;
+      setIsMobile(viewportWidth < 768); // 768px is the 'md' breakpoint
       setIsIPad(/iPad|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
     };
     
     checkViewportState();
     window.addEventListener('resize', checkViewportState);
     return () => window.removeEventListener('resize', checkViewportState);
-  }, []);
+  }, [hostViewportWidth]);
 
   // Use appropriate config based on context
   const config = isPublicDemo ? publicConfig : authTourConfig;
