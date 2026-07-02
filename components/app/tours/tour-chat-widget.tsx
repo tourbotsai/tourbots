@@ -96,6 +96,11 @@ interface TourChatWidgetProps {
   // so responsive/mobile detection would always be wrong. The host loader (chat.js)
   // relays the real host viewport width, which we use here instead.
   hostViewportWidth?: number | null;
+  // Same idea for height: mobile clamps the window to 90vh, but inside the tiny
+  // floating iframe `vh` resolves against the iframe, not the host page. When the
+  // host height is known we clamp using host pixels so the window footprint (and
+  // therefore the iframe sizing that mirrors it) is correct on mobile.
+  hostViewportHeight?: number | null;
 }
 
 export function TourChatWidget({ 
@@ -116,7 +121,8 @@ export function TourChatWidget({
   initialConfig,
   forcePublic = false,
   navTarget = 'event',
-  hostViewportWidth = null
+  hostViewportWidth = null,
+  hostViewportHeight = null
 }: TourChatWidgetProps) {
   const { user } = useUser();
   // In forced-public mode (marketing site) skip the authenticated config hook
@@ -294,6 +300,26 @@ export function TourChatWidget({
       default: return '0 8px 24px rgba(0,0,0,0.15)';
     }
   };
+
+  // Resolve the expanded-window footprint once so both the loading and live
+  // windows stay in sync. On mobile the window is clamped to 95vw / 90vh, but
+  // `vw`/`vh` resolve against whatever viewport the widget lives in. Inside the
+  // standalone chatbot iframe that's the tiny iframe, not the host page, which
+  // used to force us to render the iframe fullscreen (blocking the tour). When
+  // the host viewport is relayed we clamp with host pixels instead, so the
+  // window footprint is real and the iframe can be sized to it (leaving the rest
+  // of the tour clickable, exactly like desktop).
+  const configuredWindowWidthPx = Number(getCustomisationValue('window_width', 'mobile_chat_window_width')) || (isMobileView ? 280 : 400);
+  const configuredWindowHeightPx = Number(getCustomisationValue('window_height', 'mobile_chat_window_height')) || (isMobileView ? 500 : 600);
+  const hasHostViewport =
+    typeof hostViewportWidth === 'number' && hostViewportWidth > 0 &&
+    typeof hostViewportHeight === 'number' && hostViewportHeight > 0;
+  const mobileMaxWidthCss = hasHostViewport ? `${Math.round((hostViewportWidth as number) * 0.95)}px` : '95vw';
+  const mobileMaxHeightCss = hasHostViewport ? `${Math.round((hostViewportHeight as number) * 0.9)}px` : '90vh';
+  const responsiveWindowWidth = isMobileView ? `min(${mobileMaxWidthCss}, ${configuredWindowWidthPx}px)` : `${configuredWindowWidthPx}px`;
+  const responsiveWindowHeight = isMobileView ? `min(${mobileMaxHeightCss}, ${configuredWindowHeightPx}px)` : `${configuredWindowHeightPx}px`;
+  const responsiveWindowMaxWidth = isMobileView ? mobileMaxWidthCss : `${configuredWindowWidthPx}px`;
+  const responsiveWindowMaxHeight = isMobileView ? mobileMaxHeightCss : `${configuredWindowHeightPx}px`;
 
   // Get animation settings
   const animationType = getCustomisationValue('idle_animation_type', 'mobile_idle_animation_type') as 'none' | 'bounce' | 'pulse' | 'shake' | 'glow';
@@ -1142,18 +1168,10 @@ export function TourChatWidget({
               // Use only inline styles for dimensions - no hardcoded Tailwind classes.
               // Mobile honours the configured px, only guarding against viewport overflow
               // (95vw / 90vh) so the window can't spill off small screens.
-              width: isMobileView 
-                ? `min(95vw, ${getCustomisationValue('window_width', 'mobile_chat_window_width')}px)`
-                : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
-              height: isMobileView 
-                ? `min(90vh, ${getCustomisationValue('window_height', 'mobile_chat_window_height')}px)`
-                : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
-              maxWidth: isMobileView 
-                ? '95vw'
-                : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
-              maxHeight: isMobileView 
-                ? '90vh'
-                : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
+              width: responsiveWindowWidth,
+              height: responsiveWindowHeight,
+              maxWidth: responsiveWindowMaxWidth,
+              maxHeight: responsiveWindowMaxHeight,
               ...(isFullscreen 
                 ? {
                     bottom: '24px',
@@ -1326,18 +1344,10 @@ export function TourChatWidget({
             // Use only inline styles for dimensions - no hardcoded Tailwind classes.
             // Mobile honours the configured px, only guarding against viewport overflow
             // (95vw / 90vh) so the window can't spill off small screens.
-            width: isMobileView 
-              ? `min(95vw, ${getCustomisationValue('window_width', 'mobile_chat_window_width')}px)`
-              : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
-            height: isMobileView 
-              ? `min(90vh, ${getCustomisationValue('window_height', 'mobile_chat_window_height')}px)`
-              : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
-            maxWidth: isMobileView 
-              ? '95vw'
-              : `${getCustomisationValue('window_width', 'mobile_chat_window_width')}px`,
-            maxHeight: isMobileView 
-              ? '90vh'
-              : `${getCustomisationValue('window_height', 'mobile_chat_window_height')}px`,
+            width: responsiveWindowWidth,
+            height: responsiveWindowHeight,
+            maxWidth: responsiveWindowMaxWidth,
+            maxHeight: responsiveWindowMaxHeight,
             // Dynamic positioning for both fullscreen and normal modes
             ...(isFullscreen 
               ? {
