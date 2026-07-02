@@ -122,6 +122,14 @@ export function ChatbotEmbedClient({
     const BUTTON_ALLOWANCE = 44;
     const WINDOW_ALLOWANCE = 56;
 
+    // The window is anchored to one corner, so the horizontal allowance becomes a
+    // transparent, click-blocking band on the *far* side (e.g. the left, for a
+    // bottom-right window). On a narrow phone 56px is a big chunk of dead space, and
+    // the near/bottom edges already clip the shadow at just the offset (~15px) and
+    // look fine — so on mobile we use a tight side allowance to hand that space back
+    // to the tour. Desktop keeps the roomier value (it looks perfect there).
+    const WINDOW_SIDE_ALLOWANCE = isMobile ? 20 : WINDOW_ALLOWANCE;
+
     // On mobile the widget clamps its window to 95vw / 90vh. We must size the
     // iframe to that SAME clamped footprint (not fullscreen), otherwise the
     // transparent iframe covers the whole tour and blocks navigation while the
@@ -139,7 +147,7 @@ export function ChatbotEmbedClient({
     const payload = isChatExpanded
       ? {
           state: 'expanded' as const,
-          width: effectiveWindowWidth + windowSideOffset + WINDOW_ALLOWANCE,
+          width: effectiveWindowWidth + windowSideOffset + WINDOW_SIDE_ALLOWANCE,
           height: effectiveWindowHeight + windowBottomOffset + WINDOW_ALLOWANCE,
           fullscreen: false,
         }
