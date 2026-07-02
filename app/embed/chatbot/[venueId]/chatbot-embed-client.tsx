@@ -46,6 +46,14 @@ export function ChatbotEmbedClient({
         ? window.innerWidth
         : 1024);
 
+  const resolvedHostHeight =
+    hostViewport?.height ??
+    (mode === 'embed'
+      ? 768
+      : typeof window !== 'undefined'
+        ? window.innerHeight
+        : 768);
+
   // A chatbot-only iframe has no in-page Matterport SDK, so navigation must be
   // delivered to the host page (postMessage), where chat.js's bridge drives the
   // tour. When navigation is disabled, emit nothing.
@@ -114,12 +122,26 @@ export function ChatbotEmbedClient({
     const BUTTON_ALLOWANCE = 44;
     const WINDOW_ALLOWANCE = 56;
 
+    // On mobile the widget clamps its window to 95vw / 90vh. We must size the
+    // iframe to that SAME clamped footprint (not fullscreen), otherwise the
+    // transparent iframe covers the whole tour and blocks navigation while the
+    // chat is open — the exact desktop bug, just on mobile. We resolve the clamp
+    // against the host viewport (relayed by chat.js) so it matches what the
+    // widget actually renders. The widget receives the same host dimensions and
+    // clamps identically, so footprint and render stay in lockstep.
+    const effectiveWindowWidth = isMobile
+      ? Math.min(Math.round(resolvedHostWidth * 0.95), windowWidth)
+      : windowWidth;
+    const effectiveWindowHeight = isMobile
+      ? Math.min(Math.round(resolvedHostHeight * 0.9), windowHeight)
+      : windowHeight;
+
     const payload = isChatExpanded
       ? {
           state: 'expanded' as const,
-          width: isMobile ? null : windowWidth + windowSideOffset + WINDOW_ALLOWANCE,
-          height: isMobile ? null : windowHeight + windowBottomOffset + WINDOW_ALLOWANCE,
-          fullscreen: isMobile,
+          width: effectiveWindowWidth + windowSideOffset + WINDOW_ALLOWANCE,
+          height: effectiveWindowHeight + windowBottomOffset + WINDOW_ALLOWANCE,
+          fullscreen: false,
         }
       : {
           state: 'collapsed' as const,
@@ -136,7 +158,7 @@ export function ChatbotEmbedClient({
     } catch {
       /* best-effort cross-origin size relay */
     }
-  }, [isChatExpanded, mode, customisation, resolvedHostWidth]);
+  }, [isChatExpanded, mode, customisation, resolvedHostWidth, resolvedHostHeight]);
 
   // Track an embed view (chatbot type). Same-origin to tourbots.ai, so no CORS.
   useEffect(() => {
@@ -233,6 +255,7 @@ export function ChatbotEmbedClient({
         forcePublic
         navTarget={navTarget}
         hostViewportWidth={mode === 'embed' ? resolvedHostWidth : null}
+        hostViewportHeight={mode === 'embed' ? resolvedHostHeight : null}
       />
     </>
   );
