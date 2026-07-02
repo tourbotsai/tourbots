@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Tour, Venue, ChatbotCustomisation } from '@/lib/types';
 import { TourChatWidget } from '@/components/app/tours/tour-chat-widget';
 import { getTourEmbedParentTrackingContext } from '@/lib/tour-embed-parent-context';
+import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
 
 interface ChatbotEmbedClientProps {
   tour: Tour;
@@ -47,20 +48,48 @@ export function ChatbotEmbedClient({
       window.matchMedia('(max-width: 767px)').matches;
 
     const position = customisation?.chat_button_position || 'bottom-right';
-    const windowWidth = Number(customisation?.window_width) || 400;
-    const windowHeight = Number(customisation?.window_height) || 600;
+
+    // Read a numeric customisation value (with mobile fallback) or a default.
+    const num = (desktopKey: string, mobileKey: string, fallback: number) => {
+      const key = isMobile ? mobileKey : desktopKey;
+      const raw = customisation ? Number((customisation as any)[key]) : NaN;
+      return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+    };
+
+    // Size the floating iframe to the widget's ACTUAL footprint (just the button
+    // when collapsed, just the window when expanded) plus a small allowance for
+    // its drop shadow. This keeps the transparent area around the widget
+    // click-through to the host page's Matterport tour, mirroring how the in-page
+    // tour embed behaves. (Previously the iframe reserved a large fixed box, which
+    // swallowed clicks meant for the tour behind it.)
+    const buttonSizePx = resolveChatButtonSizePx({
+      pxValue: (customisation as any)?.[isMobile ? 'mobile_chat_button_size_px' : 'chat_button_size_px'],
+      legacySize: (customisation as any)?.[isMobile ? 'mobile_chat_button_size' : 'chat_button_size'],
+      mode: isMobile ? 'mobile' : 'desktop',
+    });
+    const buttonSideOffset = num('chat_button_side_offset', 'mobile_chat_button_side_offset', 20);
+    const buttonBottomOffset = num('chat_button_bottom_offset', 'mobile_chat_button_bottom_offset', 20);
+    const windowWidth = num('window_width', 'mobile_chat_window_width', 400);
+    const windowHeight = num('window_height', 'mobile_chat_window_height', 600);
+    const windowSideOffset = num('chat_offset_side', 'mobile_chat_offset_side', 20);
+    const windowBottomOffset = num('chat_offset_bottom', 'mobile_chat_offset_bottom', 20);
+
+    // Allowances cover the drop shadow (and idle button animation) so nothing is
+    // clipped by the iframe's overflow:hidden.
+    const BUTTON_ALLOWANCE = 44;
+    const WINDOW_ALLOWANCE = 56;
 
     const payload = isChatExpanded
       ? {
           state: 'expanded' as const,
-          width: isMobile ? null : windowWidth + 48,
-          height: isMobile ? null : windowHeight + 112,
+          width: isMobile ? null : windowWidth + windowSideOffset + WINDOW_ALLOWANCE,
+          height: isMobile ? null : windowHeight + windowBottomOffset + WINDOW_ALLOWANCE,
           fullscreen: isMobile,
         }
       : {
           state: 'collapsed' as const,
-          width: 360,
-          height: 168,
+          width: buttonSizePx + buttonSideOffset + BUTTON_ALLOWANCE,
+          height: buttonSizePx + buttonBottomOffset + BUTTON_ALLOWANCE,
           fullscreen: false,
         };
 

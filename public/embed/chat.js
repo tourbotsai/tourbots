@@ -83,8 +83,11 @@
   s.bottom = '0px';
   s.right = '0px';
   s.left = 'auto';
-  s.width = '360px';
-  s.height = '168px';
+  // Small initial footprint (just the collapsed button area) until the chat page
+  // posts its exact size. Keeping this tight avoids a large transparent box
+  // swallowing clicks meant for the host tour during the first moment of load.
+  s.width = '140px';
+  s.height = '140px';
   s.maxWidth = '100vw';
   s.maxHeight = '100vh';
   s.border = '0';

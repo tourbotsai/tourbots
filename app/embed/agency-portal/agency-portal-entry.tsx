@@ -132,10 +132,19 @@ export function AgencyPortalEntry({
     window.addEventListener('load', schedule);
     window.addEventListener('resize', schedule);
 
+    // Belt-and-braces first-load convergence: some height changes don't produce
+    // a clean ResizeObserver tick (web fonts settling, the loading -> login ->
+    // authed transition on a fresh mount, or the new iframe injected after a
+    // single-page-app navigation). Without this the parent can sit at its
+    // initial height. `post` is a no-op once the height stops changing, so these
+    // extra broadcasts are cheap and simply guarantee the parent converges.
+    const timers = [50, 150, 300, 600, 1000].map((ms) => window.setTimeout(schedule, ms));
+
     return () => {
       observer.disconnect();
       window.removeEventListener('load', schedule);
       window.removeEventListener('resize', schedule);
+      timers.forEach((timer) => window.clearTimeout(timer));
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
@@ -222,6 +231,12 @@ export function AgencyPortalEntry({
       <style jsx global>{`
         html, body, #__next {
           height: auto !important;
+          /* The shared embed body is bg-neutral-900 (globals.css). The login view
+             is short (min-h-[440px]) while the host iframe starts at its initial
+             height (~900px), so the dark body showed as a black box beneath the
+             card until the auto-resize settled. Force a white page so any extra
+             iframe height is white, never black — regardless of resize timing. */
+          background: #ffffff !important;
         }
       `}</style>
       <div className="w-full max-w-md space-y-6">

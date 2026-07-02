@@ -400,22 +400,58 @@ export function generateAgencyPortalEmbed(shareSlug: string, options: AgencyPort
 
   const srcUrl = `${baseUrl}/embed/agency/${shareSlug}?${queryParams.toString()}`;
 
-  const iframe = `<iframe src="${srcUrl}" width="${options.width || '100%'}" height="${options.height || '900px'}" frameborder="0" allowfullscreen></iframe>`;
+  const perClientWidth = options.width || '100%';
+  const perClientHeight = options.height || '900px';
+
+  const iframe = `<iframe src="${srcUrl}" width="${perClientWidth}" height="${perClientHeight}" frameborder="0" allowfullscreen></iframe>`;
 
   const script = `<div id="${embedId}"></div>
 <script>
 (function() {
-  var container = document.getElementById('${embedId}');
-  if (!container) return;
-  var iframe = document.createElement('iframe');
-  iframe.src = '${srcUrl}';
-  iframe.width = '${options.width || '100%'}';
-  iframe.height = '${options.height || '900px'}';
-  iframe.frameBorder = '0';
-  iframe.allowFullscreen = true;
-  iframe.style.width = '${options.width || '100%'}';
-  iframe.style.border = '0';
-  container.appendChild(iframe);
+  var EMBED_ID = '${embedId}';
+  var IFRAME_SRC = '${srcUrl}';
+  var WIDTH = '${perClientWidth}';
+  var HEIGHT = '${perClientHeight}';
+
+  // Inject the iframe if the container is present and not already mounted. Kept
+  // idempotent so it is safe to call repeatedly (see the MutationObserver below,
+  // which re-mounts after single-page-app navigation recreates the container).
+  function mount() {
+    var container = document.getElementById(EMBED_ID);
+    if (!container || container.querySelector('iframe')) return;
+    var iframe = document.createElement('iframe');
+    iframe.src = IFRAME_SRC;
+    iframe.width = WIDTH;
+    iframe.height = HEIGHT;
+    iframe.frameBorder = '0';
+    iframe.allowFullscreen = true;
+    iframe.style.width = WIDTH;
+    iframe.style.border = '0';
+    container.appendChild(iframe);
+  }
+
+  if (window.__tourbotsPortalEmbeds && window.__tourbotsPortalEmbeds[EMBED_ID]) {
+    mount();
+    return;
+  }
+  window.__tourbotsPortalEmbeds = window.__tourbotsPortalEmbeds || {};
+  window.__tourbotsPortalEmbeds[EMBED_ID] = true;
+
+  mount();
+
+  // Re-mount after client-side navigation recreates an empty container in a
+  // single-page app. Debounced to one frame; the mount() guard keeps the steady
+  // state a cheap no-op.
+  if (typeof MutationObserver !== 'undefined') {
+    var scheduled = false;
+    new MutationObserver(function() {
+      if (scheduled) return;
+      scheduled = true;
+      var run = function() { scheduled = false; mount(); };
+      if (window.requestAnimationFrame) window.requestAnimationFrame(run);
+      else setTimeout(run, 0);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
 })();
 </script>`;
 
@@ -462,29 +498,73 @@ export function generateUniversalAgencyPortalEmbed(agencyId: string, options: Ag
   const script = `<div id="${embedId}"></div>
 <script>
 (function() {
-  var container = document.getElementById('${embedId}');
-  if (!container) return;
-  var iframe = document.createElement('iframe');
-  iframe.src = '${scriptSrcUrl}';
-  iframe.width = '${width}';
-  iframe.height = '${initialHeight}';
-  iframe.frameBorder = '0';
-  iframe.allowFullscreen = true;
-  iframe.scrolling = 'no';
-  iframe.style.width = '${width}';
-  iframe.style.border = '0';
-  container.appendChild(iframe);
+  var EMBED_ID = '${embedId}';
+  var IFRAME_SRC = '${scriptSrcUrl}';
+  var ALLOWED_ORIGIN = '${baseUrl}';
+  var WIDTH = '${width}';
+  var INITIAL_HEIGHT = '${initialHeight}';
+
+  // Inject the iframe if the container is present and not already mounted. Kept
+  // idempotent so it is safe to call repeatedly (see the MutationObserver below,
+  // which re-mounts after single-page-app navigation recreates the container).
+  function mount() {
+    var container = document.getElementById(EMBED_ID);
+    if (!container || container.querySelector('iframe')) return;
+    var iframe = document.createElement('iframe');
+    iframe.src = IFRAME_SRC;
+    iframe.width = WIDTH;
+    iframe.height = INITIAL_HEIGHT;
+    iframe.frameBorder = '0';
+    iframe.allowFullscreen = true;
+    iframe.scrolling = 'no';
+    iframe.style.width = WIDTH;
+    iframe.style.border = '0';
+    container.appendChild(iframe);
+  }
+
+  // Bind the resize listener + observer only once per page load, even if the
+  // snippet is evaluated more than once. Re-running mount() stays safe.
+  if (window.__tourbotsPortalEmbeds && window.__tourbotsPortalEmbeds[EMBED_ID]) {
+    mount();
+    return;
+  }
+  window.__tourbotsPortalEmbeds = window.__tourbotsPortalEmbeds || {};
+  window.__tourbotsPortalEmbeds[EMBED_ID] = true;
+
+  // Auto-resize: the portal posts its live content height so the iframe fits
+  // with no inner scrollbar. Look the iframe up per message so we always target
+  // the current one (SPA navigation can replace it).
   window.addEventListener('message', function(event) {
-    if (event.origin !== '${baseUrl}') return;
-    if (event.source !== iframe.contentWindow) return;
+    if (event.origin !== ALLOWED_ORIGIN) return;
     var data = event.data;
     if (!data || data.type !== 'tourbots-portal-resize') return;
+    var container = document.getElementById(EMBED_ID);
+    var iframe = container && container.querySelector('iframe');
+    if (!iframe || event.source !== iframe.contentWindow) return;
     var height = parseInt(data.height, 10);
     if (height > 0) {
       iframe.style.height = height + 'px';
       iframe.setAttribute('height', String(height));
     }
   });
+
+  mount();
+
+  // Re-mount after client-side navigation. In a single-page app the container
+  // <div> is unmounted when navigating away and recreated (empty) on return,
+  // but this script only runs once — so watch the DOM and re-inject when the
+  // container reappears without an iframe. Debounced to one frame; the mount()
+  // guard makes the steady state a cheap no-op.
+  if (typeof MutationObserver !== 'undefined') {
+    var scheduled = false;
+    new MutationObserver(function() {
+      if (scheduled) return;
+      scheduled = true;
+      var run = function() { scheduled = false; mount(); };
+      if (window.requestAnimationFrame) window.requestAnimationFrame(run);
+      else setTimeout(run, 0);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
 })();
 </script>`;
 
