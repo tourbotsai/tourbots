@@ -30,12 +30,48 @@ export function ChatbotEmbedClient({
   mode,
 }: ChatbotEmbedClientProps) {
   const [isChatExpanded, setIsChatExpanded] = useState(false);
+  // The host viewport size, relayed by chat.js. Inside a floating iframe our own
+  // window.innerWidth is the iframe's width (tiny), which would make responsive
+  // detection think it is always mobile — and wrongly request a fullscreen widget
+  // that covers (and blocks clicks to) the whole host tour. In embed mode we assume
+  // desktop until the host reports otherwise, to avoid that fullscreen flash.
+  const [hostViewport, setHostViewport] = useState<{ width: number; height: number } | null>(null);
   const locationScopeTourId = tour.parent_tour_id || tour.id;
+
+  const resolvedHostWidth =
+    hostViewport?.width ??
+    (mode === 'embed'
+      ? 1024
+      : typeof window !== 'undefined'
+        ? window.innerWidth
+        : 1024);
 
   // A chatbot-only iframe has no in-page Matterport SDK, so navigation must be
   // delivered to the host page (postMessage), where chat.js's bridge drives the
   // tour. When navigation is disabled, emit nothing.
   const navTarget: 'parent' | 'none' = navigationEnabled ? 'parent' : 'none';
+
+  // Receive the host viewport from chat.js (posted on load + resize) and request it
+  // on mount, so our responsive/fullscreen decisions reflect the real host page.
+  useEffect(() => {
+    if (mode !== 'embed') return;
+    if (typeof window === 'undefined' || window.parent === window) return;
+
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.source !== 'tourbots-host' || data.type !== 'tourbots:viewport') return;
+      if (typeof data.width === 'number' && typeof data.height === 'number' && data.width > 0) {
+        setHostViewport({ width: data.width, height: data.height });
+      }
+    };
+    window.addEventListener('message', onMessage);
+    try {
+      window.parent.postMessage({ source: 'tourbots', type: 'tourbots:request-viewport' }, '*');
+    } catch {
+      /* best-effort */
+    }
+    return () => window.removeEventListener('message', onMessage);
+  }, [mode]);
 
   // Tell the host loader (chat.js) how large to make the floating iframe as the
   // widget opens/closes. Harmless for a plain inline iframe (no listener).
@@ -43,9 +79,8 @@ export function ChatbotEmbedClient({
     if (mode !== 'embed') return;
     if (typeof window === 'undefined' || window.parent === window) return;
 
-    const isMobile =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(max-width: 767px)').matches;
+    // Use the host viewport width (not the iframe's) to decide mobile/fullscreen.
+    const isMobile = resolvedHostWidth < 768;
 
     const position = customisation?.chat_button_position || 'bottom-right';
 
@@ -101,7 +136,7 @@ export function ChatbotEmbedClient({
     } catch {
       /* best-effort cross-origin size relay */
     }
-  }, [isChatExpanded, mode, customisation]);
+  }, [isChatExpanded, mode, customisation, resolvedHostWidth]);
 
   // Track an embed view (chatbot type). Same-origin to tourbots.ai, so no CORS.
   useEffect(() => {
@@ -197,6 +232,7 @@ export function ChatbotEmbedClient({
         embedToken={embedToken || undefined}
         forcePublic
         navTarget={navTarget}
+        hostViewportWidth={mode === 'embed' ? resolvedHostWidth : null}
       />
     </>
   );

@@ -96,6 +96,20 @@
   s.zIndex = '2147483000';
   s.overflow = 'hidden';
 
+  // Relay the HOST viewport to the iframe. Inside the (small) floating iframe the
+  // chat UI's own window.innerWidth is the iframe width, so without this it would
+  // always think it is mobile and request a fullscreen widget that blocks the tour.
+  function postViewport() {
+    postToIframe({
+      source: 'tourbots-host',
+      type: 'tourbots:viewport',
+      width: window.innerWidth || document.documentElement.clientWidth || 0,
+      height: window.innerHeight || document.documentElement.clientHeight || 0,
+    });
+  }
+
+  iframe.addEventListener('load', postViewport);
+
   function mount() {
     if (document.body) {
       document.body.appendChild(iframe);
@@ -104,6 +118,8 @@
     }
   }
   mount();
+
+  window.addEventListener('resize', postViewport);
 
   // ---- Size + position relay from the iframe ---------------------------------
   function applySize(data) {
@@ -259,6 +275,9 @@
     if (!data || data.source !== 'tourbots' || typeof data.type !== 'string') return;
 
     switch (data.type) {
+      case 'tourbots:request-viewport':
+        postViewport();
+        break;
       case 'tourbots:size':
         applySize(data);
         break;
