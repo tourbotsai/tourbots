@@ -1,8 +1,8 @@
 - Complete ProdTestList.md - Check cancellations downgraded accounts
 
 
-- Set up hello@tourbots.ai and partners@tourbots.ai email
-- SPF/DKIM/DMARC
+- set up info@tourbots.ai & swap all support emails to that
+
 
 
 - Upgrade Vercel to pro plan & follow AgencyTourEmbedDomain.md to implent `VERCEL_TEAM_ID`
@@ -10,5 +10,7 @@
 - Vercel env, rotate any secrets previously stored in local `.env` files
 
 
-- Register LTD company
+
 - Create Production Stripe Environment, Products & Prices, Insert Price IDs into supabase plans & addons
+
+- CRM inbound emial reply monitrong, read, clicked, stop sequence
