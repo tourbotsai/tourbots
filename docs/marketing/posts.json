@@ -1,0 +1,150 @@
+[
+  {
+    "id": "01-hook",
+    "label": "Hook post — The Opportunity",
+    "template": "quote-card.html",
+    "params": {
+      "headline": "Your virtual tour isn't capturing all the engagement it could.",
+      "subcopy": "Visitors browse, then bounce. There's no one to answer their questions, guide them round, keep them engaged, or convert them.",
+      "teaser": "An AI guide could be that someone."
+    }
+  },
+  {
+    "id": "02-info",
+    "label": "Info post — Lost Visitors",
+    "template": "product-spotlight.html",
+    "params": {
+      "headline": "Add an AI guide to your tour.",
+      "subcopy": "Most tours leave visitors to wander alone - like a hotel with nobody on the front desk. AI can answer questions, guide them around and collect details.",
+      "variant": "split",
+      "leftLabel": "Without TourBots",
+      "rightLabel": "With TourBots",
+      "venueLabel": "Manor Hotel \u00b7 Lobby",
+      "photo": "assets/manor-hotel-lobby.png",
+      "brandLabel": "Manor Hotel AI",
+      "widgetColour": "#A9812F",
+      "userMessage": "Do you have a spa?",
+      "aiReply": "Yes! We have fantastic spa facilities including Sauna, Steam Room, Hot Tub and Plunge Pool. Would you like me to take you there?"
+    }
+  },
+  {
+    "id": "09-navigation",
+    "label": "Navigation post — Guided to the Spa",
+    "template": "product-spotlight.html",
+    "params": {
+      "headline": "Ask, and it takes you there.",
+      "subcopy": "AI doesn't just answer questions - it guides visitors around the tour itself. Ask about a room, and you're taken straight there.",
+      "variant": "split",
+      "leftLabel": "Without TourBots",
+      "rightLabel": "With TourBots",
+      "venueLabel": "Manor Hotel \u00b7 Lobby",
+      "venueLabelRight": "Manor Hotel \u00b7 Spa",
+      "photo": "assets/manor-hotel-lobby.png",
+      "photoRight": "assets/manor-hotel-spa.png",
+      "brandLabel": "Manor Hotel AI",
+      "widgetColour": "#A9812F",
+      "conversation": [
+        { "role": "user", "text": "Do you have a spa?" },
+        { "role": "ai", "text": "Yes! We have fantastic spa facilities including Sauna, Steam Room, Hot Tub and Plunge Pool. Want to see?" },
+        { "role": "user", "text": "Yeah, show me" },
+        { "role": "ai", "text": "Taking you there now \u2192" }
+      ]
+    }
+  },
+  {
+    "id": "10-agency",
+    "label": "Agency post — One Dashboard, Every Client",
+    "template": "product-spotlight.html",
+    "params": {
+      "headline": "One dashboard. Every client tour.",
+      "subcopy": "Manage every client's tour and AI assistant from one place - fully white-labelled under your own domain.",
+      "variant": "agency",
+      "activeNav": "Clients",
+      "agencyName": "Apex Tours",
+      "pageTitle": "Clients",
+      "pageSubtitle": "Manage all client tours and chatbots from one account.",
+      "customDomain": "tours.apextours.co.uk",
+      "clients": [
+        { "name": "Coastal Retreat Hotel", "status": "Active", "updated": "Updated 2 days ago", "metric": "86 messages" },
+        { "name": "The Old Barn Wedding Venue", "status": "Active", "updated": "Updated 5 days ago", "metric": "42 messages" },
+        { "name": "Meridian Gym & Spa", "status": "Active", "updated": "Updated 1 day ago", "metric": "214 views" },
+        { "name": "Fairview Golf Club", "status": "Active", "updated": "Updated 3 days ago", "metric": "58 messages" },
+        { "name": "Harbourview Serviced Apartments", "status": "Active", "updated": "Updated 6 days ago", "metric": "129 views" }
+      ]
+    }
+  },
+  {
+    "id": "03-analytics",
+    "label": "Analytics post — Visibility",
+    "template": "product-spotlight.html",
+    "params": {
+      "headline": "You can't improve what you can't see.",
+      "subcopy": "Every tour load, navigation, and message is logged. You can see exactly what's happening in your tour.",
+      "variant": "dashboard",
+      "activeNav": "Analytics",
+      "dashTitle": "Analytics",
+      "dashSubtitle": "Track views, navigations, and user messages across your tours.",
+      "cards": [
+        { "label": "Tour moves", "value": "135" },
+        { "label": "Tour views", "value": "214" },
+        { "label": "Visitor messages", "value": "86" },
+        { "label": "Avg. response", "value": "3s" }
+      ],
+      "messages": [
+        { "text": "Do you have parking on site?", "time": "2 min ago" },
+        { "text": "What are your opening hours?", "time": "14 min ago" },
+        { "text": "Can I book a private tour?", "time": "41 min ago" }
+      ]
+    }
+  },
+  {
+    "id": "04-out-of-hours",
+    "label": "Out-of-hours post — Always On",
+    "template": "quote-card.html",
+    "params": {
+      "headline": "Your tour doesn't clock off. Neither should the answers.",
+      "subcopy": "Most virtual tours get browsed evenings and weekends - exactly when there's no one around to answer a question.",
+      "teaser": "An AI guide is on, always."
+    }
+  },
+  {
+    "id": "05-missed-question",
+    "label": "Missed question post — The Cost of Silence",
+    "template": "quote-card.html",
+    "params": {
+      "headline": "One unanswered question is one lost booking.",
+      "subcopy": "Visitors don't always ask twice. If nobody's there to answer the first time, they simply move on.",
+      "teaser": "An AI guide never misses a question."
+    }
+  },
+  {
+    "id": "06-front-desk",
+    "label": "Front desk post — Always Staffed",
+    "template": "quote-card.html",
+    "params": {
+      "headline": "There's no one at the front desk of a virtual tour.",
+      "subcopy": "Visitors arrive, look around, and there's no one there to greet them, answer questions, or point them in the right direction.",
+      "teaser": "An AI guide is always at the desk."
+    }
+  },
+  {
+    "id": "07-silent-scroll",
+    "label": "Silent scroll post — Unseen Visitors",
+    "template": "quote-card.html",
+    "params": {
+      "headline": "Most visitors leave without saying a word.",
+      "subcopy": "No feedback, no questions answered, no idea what almost convinced them to book.",
+      "teaser": "An AI guide finds out, every time."
+    }
+  },
+  {
+    "id": "08-just-a-video",
+    "label": "Just a video post — The Difference a Guide Makes",
+    "template": "quote-card.html",
+    "params": {
+      "headline": "A virtual tour without a guide is just a video.",
+      "subcopy": "Static, one-way, and easy to forget. Add someone to talk to, and it becomes an experience.",
+      "teaser": "That's the difference an AI guide makes."
+    }
+  }
+]

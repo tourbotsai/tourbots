@@ -1,0 +1,115 @@
+/* Shared theme tokens — mirrors tailwind.config.ts brand colours exactly. Do not "improve" the palette; this must match the live product. */
+
+:root {
+  --bg-primary: #0A0E1A;
+  --bg-secondary: #1E293B;
+  --bg-card-light: #FFFFFF;
+  --brand-primary: #363ADF;
+  --brand-secondary: #0EA5E9;
+  --brand-accent: #06B6D4;
+  --text-primary: #F9FAFB;
+  --text-secondary: #E5E7EB;
+  --text-tertiary: #9CA3AF;
+  --border-dark: #334155;
+  --border-accent: #475569;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Manrope', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.canvas {
+  width: 1080px;
+  height: 1080px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-row img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.logo-row span {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.pill-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--brand-primary);
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 22px;
+  padding: 16px 30px;
+  border-radius: 12px;
+  width: fit-content;
+}
+
+.headline-accent {
+  color: var(--brand-primary);
+}
+
+.rule {
+  width: 120px;
+  height: 4px;
+  background: var(--brand-primary);
+  border-radius: 2px;
+}
+
+.browser-frame {
+  border-radius: 12px;
+  border: 1px solid var(--border-dark);
+  overflow: hidden;
+  background: #0B1220;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.browser-frame .chrome-bar {
+  height: 34px;
+  background: #0B1220;
+  border-bottom: 1px solid var(--border-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.browser-frame .chrome-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.browser-frame .chrome-dot.red { background: #EF4444; }
+.browser-frame .chrome-dot.yellow { background: #F59E0B; }
+.browser-frame .chrome-dot.green { background: #10B981; }
+
+.slide-counter {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}

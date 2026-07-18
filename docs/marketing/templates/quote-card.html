@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8" />
+<title>Quote Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css" />
+<style>
+  .canvas { padding: 76px; position: relative; overflow: hidden; }
+
+  /* Bigger, bolder lockup — should read as the dominant top element.
+     Uses the alpha-cropped icon (assets/tourbots-icon-cropped.png) so the glyph fills
+     its box edge-to-edge, rather than the source file's baked-in transparent margin. */
+  .logo-row img { height: 88px; width: auto; }
+  .logo-row span { font-size: 40px; font-weight: 800; letter-spacing: -0.01em; }
+
+  /* Large flat watermark mark for depth, no glow/blur — just a low-opacity monochrome shape.
+     bottom:76 lines its base up exactly with the domain tag's baseline (canvas padding is 76px,
+     but padding doesn't inset absolutely-positioned children, so it must be set explicitly here). */
+  .watermark {
+    position: absolute;
+    right: 48px;
+    bottom: 76px;
+    height: 520px;
+    width: auto;
+    opacity: 0.05;
+    pointer-events: none;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand-secondary);
+    border: 1px solid var(--border-accent);
+    background: rgba(14, 165, 233, 0.08);
+    padding: 8px 18px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+  }
+
+  .headline {
+    font-size: 84px;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    max-width: 860px;
+    text-wrap: balance;
+  }
+  .subcopy {
+    margin-top: 26px;
+    font-size: 30px;
+    line-height: 1.42;
+    color: var(--text-tertiary);
+    max-width: 700px;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    margin-top: auto;
+    margin-bottom: auto;
+    position: relative;
+    z-index: 1;
+  }
+  .teaser {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--brand-secondary);
+  }
+  .teaser::before {
+    content: "\2192";
+    font-weight: 800;
+  }
+  .footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    position: relative;
+    z-index: 1;
+  }
+  .domain-tag {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <img class="watermark" src="assets/tourbots-icon-cropped.png" alt="" />
+
+    <div class="logo-row">
+      <img src="assets/tourbots-icon-cropped.png" alt="TourBots AI" />
+      <span>TourBots AI</span>
+    </div>
+
+    <div class="content">
+      <div class="eyebrow" id="eyebrow" style="display:none;"></div>
+      <div class="headline" id="headline"></div>
+      <div class="subcopy" id="subcopy"></div>
+      <div class="teaser" id="teaser" style="display:none;"></div>
+    </div>
+
+    <div class="footer-row">
+      <div class="pill-cta" id="cta" style="display:none;"></div>
+      <div class="domain-tag">tourbots.ai</div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById('headline').textContent = params.get('headline') || '';
+    const subcopy = params.get('subcopy');
+    if (subcopy) document.getElementById('subcopy').textContent = subcopy;
+    const eyebrow = params.get('eyebrow');
+    if (eyebrow) {
+      const eyebrowEl = document.getElementById('eyebrow');
+      eyebrowEl.style.display = 'inline-flex';
+      eyebrowEl.textContent = eyebrow;
+    }
+    const teaser = params.get('teaser');
+    if (teaser) {
+      const teaserEl = document.getElementById('teaser');
+      teaserEl.style.display = 'flex';
+      teaserEl.textContent = teaser;
+    }
+    const cta = params.get('cta');
+    if (cta) {
+      const ctaEl = document.getElementById('cta');
+      ctaEl.style.display = 'inline-flex';
+      ctaEl.textContent = cta;
+    }
+  </script>
+</body>
+</html>

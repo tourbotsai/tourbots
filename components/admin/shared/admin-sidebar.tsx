@@ -12,7 +12,8 @@ import {
   CreditCard,
   Users,
   BookOpen,
-  HelpCircle
+  HelpCircle,
+  Contact2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
@@ -30,6 +31,11 @@ const adminNavigation = [
     name: "Accounts",
     href: "/admin/accounts",
     icon: Users,
+  },
+  {
+    name: "CRM",
+    href: "/admin/crm",
+    icon: Contact2,
   },
   {
     name: "Payments",
