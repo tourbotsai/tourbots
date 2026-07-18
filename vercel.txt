@@ -9,6 +9,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/send-crm-sequence-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/reconcile-stripe-cancellation-state",
       "schedule": "0 3 * * *"
     }
