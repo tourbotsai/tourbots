@@ -108,11 +108,21 @@ export function getGoogleOAuthConsentUrl(state: string, loginHint?: string | nul
     response_type: 'code',
     scope: GMAIL_SCOPES,
     access_type: 'offline',
-    prompt: 'consent',
+    // select_account forces Google to show the account chooser instead of
+    // silently continuing with whichever Google session happens to be
+    // active in the browser — important because the admin panel login and
+    // the Workspace mailbox being connected are different Google accounts,
+    // and a stale/wrong active session otherwise causes a spurious
+    // "Error 403: org_internal" even for legitimate org members.
+    prompt: 'consent select_account',
     include_granted_scopes: 'true',
     state,
   });
-  if (loginHint) params.set('login_hint', loginHint);
+  // Deliberately no login_hint: the only email we'd have here is the admin's
+  // own login email (e.g. a personal Gmail used to sign into the CRM), which
+  // is not the Workspace mailbox being connected and would just mislead the
+  // account chooser.
+  void loginHint;
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
