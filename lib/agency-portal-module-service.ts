@@ -35,7 +35,52 @@ export async function getScopedTourChatbotConfig(venueId: string, tourId: string
   return data;
 }
 
-async function getScopedTourChatbotConfigId(venueId: string, tourId: string): Promise<string | null> {
+export async function getScopedWebsiteChatbotConfig(venueId: string, chatbotConfigId: string) {
+  const { data, error } = await supabase
+    .from('chatbot_configs')
+    .select(`
+      id,
+      venue_id,
+      tour_id,
+      chatbot_type,
+      chatbot_name,
+      welcome_message,
+      instruction_prompt,
+      personality_prompt,
+      guardrail_prompt,
+      guardrails_enabled,
+      is_active,
+      updated_at
+    `)
+    .eq('venue_id', venueId)
+    .eq('id', chatbotConfigId)
+    .eq('chatbot_type', 'website')
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+/** Resolve chatbot config for a portal session (tour or website). */
+export async function getScopedSessionChatbotConfig(
+  venueId: string,
+  tourId: string | null,
+  chatbotConfigId: string | null
+) {
+  if (chatbotConfigId) {
+    return getScopedWebsiteChatbotConfig(venueId, chatbotConfigId);
+  }
+  if (tourId) {
+    return getScopedTourChatbotConfig(venueId, tourId);
+  }
+  return null;
+}
+
+async function getScopedTourChatbotConfigId(venueId: string, tourId: string | null): Promise<string | null> {
+  if (!tourId) return null;
   const { data, error } = await supabase
     .from('chatbot_configs')
     .select('id')
@@ -129,7 +174,7 @@ async function ensureDefaultGeneralSection(chatbotConfigId: string) {
 
 export async function updateScopedTourChatbotConfig(
   venueId: string,
-  tourId: string,
+  tourId: string | null,
   updates: {
     chatbot_name?: string;
     welcome_message?: string;
@@ -138,17 +183,26 @@ export async function updateScopedTourChatbotConfig(
     guardrail_prompt?: string;
     guardrails_enabled?: boolean;
     is_active?: boolean;
-  }
+  },
+  chatbotConfigId?: string | null
 ) {
-  const { data, error } = await supabase
+  let query = supabase
     .from('chatbot_configs')
     .update({
       ...updates,
       updated_at: new Date().toISOString(),
     })
-    .eq('venue_id', venueId)
-    .eq('tour_id', tourId)
-    .eq('chatbot_type', 'tour')
+    .eq('venue_id', venueId);
+
+  if (chatbotConfigId) {
+    query = query.eq('id', chatbotConfigId).eq('chatbot_type', 'website');
+  } else if (tourId) {
+    query = query.eq('tour_id', tourId).eq('chatbot_type', 'tour');
+  } else {
+    return null;
+  }
+
+  const { data, error } = await query
     .select(`
       id,
       venue_id,
@@ -172,20 +226,30 @@ export async function updateScopedTourChatbotConfig(
   return data;
 }
 
-export async function getScopedTourCustomisation(venueId: string, tourId: string) {
+export async function getScopedTourCustomisation(
+  venueId: string,
+  tourId: string | null,
+  chatbotConfigId?: string | null
+) {
+  if (chatbotConfigId) {
+    return getChatbotCustomisation(venueId, 'website', null, chatbotConfigId);
+  }
+  if (!tourId) return null;
   return getChatbotCustomisation(venueId, 'tour', tourId);
 }
 
 export async function updateScopedTourCustomisation(
   venueId: string,
-  tourId: string,
-  customisation: Record<string, unknown>
+  tourId: string | null,
+  customisation: Record<string, unknown>,
+  chatbotConfigId?: string | null
 ) {
   const blockedKeys = new Set([
     'id',
     'venue_id',
     'tour_id',
     'chatbot_type',
+    'chatbot_config_id',
     'created_at',
     'updated_at',
   ]);
@@ -197,10 +261,25 @@ export async function updateScopedTourCustomisation(
     return acc;
   }, {});
 
+  if (chatbotConfigId) {
+    return upsertChatbotCustomisation(
+      venueId,
+      'website',
+      null,
+      safeCustomisation,
+      chatbotConfigId
+    );
+  }
+  if (!tourId) {
+    throw new Error('tourId is required for tour customisations');
+  }
   return upsertChatbotCustomisation(venueId, 'tour', tourId, safeCustomisation);
 }
 
-export async function getScopedTourAnalyticsStats(venueId: string, tourId: string) {
+export async function getScopedTourAnalyticsStats(venueId: string, tourId: string | null) {
+  if (!tourId) {
+    return { totalMessages: 0, totalConversations: 0, totalSessions: 0, tourViews: 0, tourMoves: 0 };
+  }
   const [
     { data, error },
     tourViewsResult,
@@ -243,7 +322,8 @@ export async function getScopedTourAnalyticsStats(venueId: string, tourId: strin
   };
 }
 
-export async function getScopedTourEmbedStats(venueId: string, tourId: string) {
+export async function getScopedTourEmbedStats(venueId: string, tourId: string | null) {
+  if (!tourId) return [];
   const { data, error } = await supabase
     .from('embed_stats')
     .select('*')
@@ -259,7 +339,8 @@ export async function getScopedTourEmbedStats(venueId: string, tourId: string) {
   return data || [];
 }
 
-export async function getScopedTourConversations(venueId: string, tourId: string) {
+export async function getScopedTourConversations(venueId: string, tourId: string | null) {
+  if (!tourId) return [];
   const { data, error } = await supabase
     .from('conversations')
     .select('*')
@@ -281,7 +362,8 @@ export async function getScopedTourConversations(venueId: string, tourId: string
  * last `days` days, scoped to a venue + tour. Mirrors the dashboard trend
  * computation so the portal chart matches the main app.
  */
-export async function getScopedTourAnalyticsTrend(venueId: string, tourId: string, days = 90) {
+export async function getScopedTourAnalyticsTrend(venueId: string, tourId: string | null, days = 90) {
+  if (!tourId) return [];
   const rangeStart = new Date();
   rangeStart.setDate(rangeStart.getDate() - (days - 1));
   rangeStart.setHours(0, 0, 0, 0);
@@ -354,7 +436,8 @@ export async function getScopedTourAnalyticsTrend(venueId: string, tourId: strin
   });
 }
 
-export async function getScopedTourAnalyticsSessions(venueId: string, tourId: string, limit = 50) {
+export async function getScopedTourAnalyticsSessions(venueId: string, tourId: string | null, limit = 50) {
+  if (!tourId) return [];
   const { data, error } = await supabase
     .from('conversations')
     .select('session_id, conversation_id, created_at, message_type')
@@ -399,9 +482,10 @@ export async function getScopedTourAnalyticsSessions(venueId: string, tourId: st
 
 export async function getScopedTourAnalyticsSessionMessages(
   venueId: string,
-  tourId: string,
+  tourId: string | null,
   sessionId: string
 ) {
+  if (!tourId) return [];
   const { data, error } = await supabase
     .from('conversations')
     .select(
@@ -420,15 +504,20 @@ export async function getScopedTourAnalyticsSessionMessages(
   return data || [];
 }
 
-export async function getScopedTourInformationSections(venueId: string, tourId: string) {
-  const chatbotConfigId = await getScopedTourChatbotConfigId(venueId, tourId);
-  if (!chatbotConfigId) return [];
-  return ensureDefaultGeneralSection(chatbotConfigId);
+export async function getScopedTourInformationSections(
+  venueId: string,
+  tourId: string | null,
+  chatbotConfigId?: string | null
+) {
+  const configId =
+    chatbotConfigId || (await getScopedTourChatbotConfigId(venueId, tourId));
+  if (!configId) return [];
+  return ensureDefaultGeneralSection(configId);
 }
 
 export async function updateScopedTourInformationSections(
   venueId: string,
-  tourId: string,
+  tourId: string | null,
   sections: Array<{
     id?: string;
     section_key: string;
@@ -445,11 +534,13 @@ export async function updateScopedTourInformationSections(
       is_required: boolean;
       field_rows?: number;
     }>;
-  }>
+  }>,
+  explicitChatbotConfigId?: string | null
 ) {
-  const chatbotConfigId = await getScopedTourChatbotConfigId(venueId, tourId);
+  const chatbotConfigId =
+    explicitChatbotConfigId || (await getScopedTourChatbotConfigId(venueId, tourId));
   if (!chatbotConfigId) {
-    throw new Error('Tour chatbot configuration not found.');
+    throw new Error('Chatbot configuration not found.');
   }
 
   const safeSections = (sections || []).map((section, index) => ({
@@ -538,8 +629,13 @@ export async function updateScopedTourInformationSections(
   return getSectionsWithFields(chatbotConfigId);
 }
 
-export async function getScopedTourTriggers(venueId: string, tourId: string) {
-  const chatbotConfigId = await getScopedTourChatbotConfigId(venueId, tourId);
+export async function getScopedTourTriggers(
+  venueId: string,
+  tourId: string | null,
+  explicitChatbotConfigId?: string | null
+) {
+  const chatbotConfigId =
+    explicitChatbotConfigId || (await getScopedTourChatbotConfigId(venueId, tourId));
   if (!chatbotConfigId) {
     return {
       triggers: [],
@@ -554,11 +650,13 @@ export async function getScopedTourTriggers(venueId: string, tourId: string) {
       .select('*')
       .eq('chatbot_config_id', chatbotConfigId)
       .order('display_order', { ascending: true }),
-    supabase
-      .from('tour_points')
-      .select('id, name')
-      .eq('tour_id', tourId)
-      .order('created_at', { ascending: true }),
+    tourId
+      ? supabase
+          .from('tour_points')
+          .select('id, name')
+          .eq('tour_id', tourId)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
     supabase
       .from('tours')
       .select('id, title, matterport_tour_id, parent_tour_id, tour_type')

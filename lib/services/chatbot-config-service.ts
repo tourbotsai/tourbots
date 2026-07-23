@@ -2,7 +2,7 @@ export interface ChatbotConfigResponse {
   chatbot_name: string;
   welcome_message: string;
   is_active: boolean;
-  chatbot_type: 'tour';
+  chatbot_type: 'tour' | 'website';
   venue_name: string;
   venue_id: string;
 }
@@ -14,16 +14,18 @@ export class ChatbotConfigService {
    */
   static async getPublicConfig(
     venueId: string, 
-    type: 'tour',
+    type: 'tour' | 'website',
     tourId?: string,
     options: {
       embedId?: string;
       embedToken?: string;
+      chatbotConfigId?: string;
     } = {}
   ): Promise<ChatbotConfigResponse> {
     const query = new URLSearchParams();
     query.set('type', type);
     if (tourId) query.set('tourId', tourId);
+    if (options.chatbotConfigId) query.set('chatbotConfigId', options.chatbotConfigId);
     if (options.embedId) query.set('embedId', options.embedId);
     if (options.embedToken) query.set('embedToken', options.embedToken);
     const response = await fetch(`/api/public/chatbot-config/${venueId}?${query.toString()}`);
@@ -42,7 +44,7 @@ export class ChatbotConfigService {
    */
   static async getPublicConfigWithTracking(
     venueId: string,
-    type: 'tour',
+    type: 'tour' | 'website',
     options: {
       embedId?: string;
       embedToken?: string;
@@ -51,6 +53,7 @@ export class ChatbotConfigService {
       sessionId?: string;
       conversationId?: string;
       getCustomisation?: boolean;
+      chatbotConfigId?: string;
     } = {}
   ): Promise<any> {
     const response = await fetch(`/api/public/chatbot-config/${venueId}`, {
@@ -77,8 +80,9 @@ export class ChatbotConfigService {
    */
   static async getAppConfig(
     venueId: string, 
-    type?: 'tour',
-    tourId?: string
+    type?: 'tour' | 'website',
+    tourId?: string,
+    chatbotConfigId?: string
   ): Promise<ChatbotConfigResponse[]> {
     let url = `/api/app/chatbots/config?venueId=${venueId}`;
     if (type) {
@@ -86,6 +90,9 @@ export class ChatbotConfigService {
     }
     if (tourId) {
       url += `&tourId=${tourId}`;
+    }
+    if (chatbotConfigId) {
+      url += `&chatbotConfigId=${chatbotConfigId}`;
     }
     
     const response = await fetch(url);

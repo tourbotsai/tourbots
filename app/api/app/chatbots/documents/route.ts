@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
     const venueScopeError = ensureVenueScope(authResult, requestedVenueId);
     if (venueScopeError) return venueScopeError;
     
-    if (!file || !tourId || !chatbotConfigId) {
+    if (!file || !chatbotConfigId) {
       return NextResponse.json(
-        { error: 'File, tour ID, and chatbot configuration ID are required' },
+        { error: 'File and chatbot configuration ID are required' },
         { status: 400 }
       );
     }
@@ -126,11 +126,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tourScopeError = await ensureTourScope(venueId, tourId);
-    if (tourScopeError) return tourScopeError;
     const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, venueId);
     if (!scopedConfig) {
       return NextResponse.json({ error: 'Chatbot configuration not found for venue' }, { status: 404 });
+    }
+
+    // Tour chatbots must reference a real, scoped tour. Website chatbots have
+    // no tour at all, so tourId is optional and stored as null.
+    const isWebsiteConfig = scopedConfig.chatbot_type === 'website';
+    if (!isWebsiteConfig) {
+      if (!tourId) {
+        return NextResponse.json({ error: 'Tour ID is required for tour chatbots' }, { status: 400 });
+      }
+      const tourScopeError = await ensureTourScope(venueId, tourId);
+      if (tourScopeError) return tourScopeError;
     }
 
     // Soft limit: cap the number of training documents per chatbot.
@@ -148,7 +157,7 @@ export async function POST(request: NextRequest) {
     // Upload file to Supabase Storage with chatbot type in path
     const fileBuffer = await file.arrayBuffer();
     const fileName = `${Date.now()}-${sanitiseFilename(file.name)}`;
-    const filePath = `chatbot-documents/${venueId}/${tourId}/${fileName}`;
+    const filePath = `chatbot-documents/${venueId}/${isWebsiteConfig ? `website-${chatbotConfigId}` : tourId}/${fileName}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('venue-documents')
@@ -168,7 +177,7 @@ export async function POST(request: NextRequest) {
       .insert([{
         chatbot_config_id: chatbotConfigId,
         venue_id: venueId,
-        tour_id: tourId,
+        tour_id: isWebsiteConfig ? null : tourId,
         original_filename: file.name,
         file_type: file.type,
         file_size: file.size,
@@ -211,7 +220,7 @@ export async function POST(request: NextRequest) {
           .eq('id', venueId)
           .single();
 
-        const vectorStoreName = `${venueRow?.name || 'Venue'} - Virtual Tour Chatbot`;
+        const vectorStoreName = `${venueRow?.name || 'Venue'} - ${isWebsiteConfig ? 'Website Chatbot' : 'Virtual Tour Chatbot'}`;
         const vectorStore = await openAIService.createVectorStore(vectorStoreName);
         vectorStoreId = vectorStore.id;
 

@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
     });
     if (session instanceof NextResponse) return session;
 
-    const sections = await getScopedTourInformationSections(session.venueId, session.tourId);
+    const sections = await getScopedTourInformationSections(
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
     return NextResponse.json({
       sections,
       scope: {
@@ -50,7 +54,8 @@ export async function PUT(request: NextRequest) {
     const sections = await updateScopedTourInformationSections(
       session.venueId,
       session.tourId,
-      payload.sections
+      payload.sections,
+      session.chatbotConfigId
     );
 
     return NextResponse.json({ sections });

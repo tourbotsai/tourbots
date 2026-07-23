@@ -12,16 +12,16 @@ export function PlatformShowcase() {
       id: "tours",
       title: "Tour Management",
       mobileTitle: "Tour",
-      description: "Manage all your spaces from one place and launch AI-guided experiences without rebuilding your tour stack.",
+      description: "Manage all your bots from one place and launch AI-guided experiences without rebuilding your tour stack.",
       image: "/tourbots/screenshots/Tours.png",
       icon: Eye,
       iconBg: "bg-brand-blue/15",
       iconColor: "text-brand-blue",
       stats: "Easy deployment",
-      highlight: "Keep setup simple while scaling from one space to many",
+      highlight: "Keep setup simple while scaling from one bot to many",
       benefits: [
         "Matterport-ready workflow",
-        "Space-level rollout",
+        "Bot-level rollout",
         "Mobile-optimised experience",
         "Low-friction website integration"
       ]
@@ -69,12 +69,12 @@ export function PlatformShowcase() {
       icon: BarChart3,
       iconBg: "bg-warning-orange/15",
       iconColor: "text-warning-orange",
-      stats: "Space insights",
+      stats: "Bot insights",
       highlight: "Understand what is working and where to improve next",
       benefits: [
-        "Per-space engagement metrics",
+        "Per-bot engagement metrics",
         "Trigger and conversion tracking",
-        "Cross-space comparison views",
+        "Cross-bot comparison views",
         "Clear reporting dashboard"
       ]
     }

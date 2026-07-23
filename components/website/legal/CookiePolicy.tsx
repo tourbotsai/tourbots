@@ -1,73 +1,134 @@
-export function CookiePolicy() {
-  const sections = [
-    {
-      title: "What cookies are",
-      points: [
-        "Cookies are small files stored on your device by your browser.",
-        "They help websites remember settings, maintain sessions, and understand usage patterns.",
-      ],
-    },
-    {
-      title: "How TourBots AI uses cookies",
-      points: [
-        "Essential cookies for authentication, security, and core website operation.",
-        "Performance and analytics cookies to improve reliability and user experience.",
-        "Optional preference cookies where applicable to remember non-essential settings.",
-      ],
-    },
-    {
-      title: "Third-party technologies",
-      points: [
-        "Some cookies may be set by approved service providers used for hosting, analytics, payments, or communications.",
-        "Where third-party tools are used, processing is subject to supplier terms and applicable law.",
-      ],
-    },
-    {
-      title: "Your controls",
-      points: [
-        "You can manage cookie preferences through browser settings and any site-level controls provided.",
-        "Disabling specific cookies may affect functionality, sign-in persistence, or analytics accuracy.",
-      ],
-    },
-    {
-      title: "Updates",
-      points: [
-        "We may update this policy when technology, legal requirements, or service design changes.",
-        "For cookie or privacy enquiries, contact privacy@tourbots.ai.",
-      ],
-    },
-  ];
+import {
+  LegalInfoGrid,
+  LegalInternalLink,
+  LegalIntro,
+  LegalList,
+  LegalMailLink,
+  LegalP,
+  LegalSection,
+  LegalTable,
+} from "./LegalDocumentParts";
 
+export function CookiePolicy() {
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-5">
-        <p className="text-sm leading-relaxed text-slate-300">
-          This page summarises how TourBots AI uses cookies and similar technologies across the
-          website and platform.
-        </p>
-      </div>
+      <LegalIntro>
+        <LegalP>How TourBots AI Ltd uses cookies and similar technologies.</LegalP>
+        <LegalP>
+          TourBots AI Ltd, 10-12 Mulberry Green, Harlow, England, CM17 0ET
+        </LegalP>
+      </LegalIntro>
 
-      {sections.map((section) => (
-        <div
-          key={section.title}
-          className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-5"
-        >
-          <h3 className="mb-3 text-lg font-semibold text-white">{section.title}</h3>
-          <ul className="space-y-2">
-            {section.points.map((point) => (
-              <li key={point} className="text-sm leading-relaxed text-slate-300">
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+      <LegalSection number={1} title="Introduction">
+        <LegalP>
+          This Cookie Policy explains how TourBots AI Ltd (&quot;TourBots&quot;, &quot;we&quot;,
+          &quot;us&quot;) uses cookies and similar tracking technologies on tourbots.ai and within
+          the TourBots platform and embedded widgets. It should be read alongside our Privacy
+          Policy, available at{" "}
+          <LegalInternalLink href="/legal?section=privacy">
+            tourbots.ai/legal?section=privacy
+          </LegalInternalLink>
+          .
+        </LegalP>
+      </LegalSection>
 
-      <div className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-5">
-        <p className="text-xs text-slate-400">
-          This summary is for transparency and does not replace technical cookie notices shown in-product.
-        </p>
-      </div>
+      <LegalSection number={2} title="What Are Cookies">
+        <LegalP>
+          Cookies are small text files placed on your device when you visit a website. They are
+          widely used to make websites work more efficiently, to remember your preferences, and to
+          provide information to website owners. Similar technologies include local storage and
+          tracking pixels, which we refer to collectively as &quot;cookies&quot; in this Policy.
+        </LegalP>
+      </LegalSection>
+
+      <LegalSection number={3} title="How We Use Cookies">
+        <LegalP>We use cookies for the following purposes:</LegalP>
+        <LegalList
+          items={[
+            "To keep you signed in to your Account",
+            "To remember your preferences and settings",
+            "To understand how visitors use our website and Service, so we can improve it",
+            "To measure the performance of our marketing and identify how visitors found our website",
+          ]}
+        />
+      </LegalSection>
+
+      <LegalSection number={4} title="Types of Cookies We Use">
+        <LegalTable
+          headers={["Category", "Purpose"]}
+          rows={[
+            [
+              "Strictly Necessary",
+              "Required for the website and Service to function, including authentication and session management. Cannot be disabled.",
+            ],
+            [
+              "Performance and Analytics",
+              "Help us understand how visitors interact with our website and Service, so we can improve performance and usability.",
+            ],
+            [
+              "Functionality",
+              "Remember choices you make, such as display preferences, to provide a more personalised experience.",
+            ],
+          ]}
+        />
+      </LegalSection>
+
+      <LegalSection number={5} title="Third-Party Cookies">
+        <LegalP>
+          Some cookies on our website are placed by third-party services we use to operate and
+          improve the Service, including analytics providers and, where applicable, our payment
+          processor Stripe. These third parties may use cookies in accordance with their own privacy
+          and cookie policies.
+        </LegalP>
+      </LegalSection>
+
+      <LegalSection number={6} title="Cookies Within Embedded Widgets">
+        <LegalP>
+          Where a Customer embeds a TourBots chatbot or tour widget on their own website, certain
+          functional cookies may be set to support session continuity within the widget. These are
+          limited to what is necessary to provide the embedded functionality.
+        </LegalP>
+      </LegalSection>
+
+      <LegalSection number={7} title="Managing Cookies">
+        <LegalP>You can control and manage cookies in a number of ways:</LegalP>
+        <LegalList
+          items={[
+            "Our cookie consent banner, which allows you to accept or reject non-essential cookies when you first visit our website",
+            "Your browser settings, which allow you to block or delete cookies — instructions vary by browser and are typically available in your browser's help section",
+            "Opt-out tools provided by individual third-party services, where available",
+          ]}
+        />
+        <LegalP>
+          Please note that blocking strictly necessary cookies may affect the functionality of our
+          website and Service.
+        </LegalP>
+      </LegalSection>
+
+      <LegalSection number={8} title="Changes to This Policy">
+        <LegalP>
+          We may update this Cookie Policy from time to time to reflect changes in the cookies we
+          use or for legal or regulatory reasons. The &quot;Effective date&quot; at the top of this
+          Policy indicates when it was last updated.
+        </LegalP>
+      </LegalSection>
+
+      <LegalSection number={9} title="Contact Us">
+        <LegalP>If you have questions about our use of cookies, please contact:</LegalP>
+        <LegalInfoGrid
+          rows={[
+            { label: "Company", value: "TourBots AI Ltd" },
+            {
+              label: "Registered Address",
+              value: "10-12 Mulberry Green, Harlow, England, CM17 0ET",
+            },
+            {
+              label: "Email",
+              value: <LegalMailLink email="legal@tourbots.ai" />,
+            },
+          ]}
+        />
+      </LegalSection>
     </div>
   );
-} 
+}

@@ -17,8 +17,8 @@ interface TourLocationsModalProps {
   activeModelId: string | null;
   onSelectModel: (model: Tour) => void | Promise<void>;
   onAddLocation: () => void;
-  spacesUsed: number;
-  spacesAllowed: number;
+  botsUsed: number;
+  botsAllowed: number;
 }
 
 export function TourLocationsModal({
@@ -29,13 +29,13 @@ export function TourLocationsModal({
   activeModelId,
   onSelectModel,
   onAddLocation,
-  spacesUsed,
-  spacesAllowed,
+  botsUsed,
+  botsAllowed,
 }: TourLocationsModalProps) {
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
   const [expandedLocationIds, setExpandedLocationIds] = useState<string[]>([]);
-  const canAddLocation = spacesUsed < spacesAllowed;
+  const canAddLocation = botsUsed < botsAllowed;
 
   const locations = useMemo(() => {
     const rows = allTours.length > 0 ? allTours : primaryTour ? [primaryTour] : [];
@@ -102,10 +102,10 @@ export function TourLocationsModal({
           <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-input dark:bg-background">
             <div className="space-y-1">
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Each location represents one space. Expand a location to manage its linked Matterport models.
+                Each location represents one bot. Expand a location to manage its linked Matterport models.
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Locations used: <span className="font-semibold text-slate-700 dark:text-slate-200">{spacesUsed}/{spacesAllowed}</span>
+                Locations used: <span className="font-semibold text-slate-700 dark:text-slate-200">{botsUsed}/{botsAllowed}</span>
               </p>
             </div>
             <Button
@@ -123,7 +123,7 @@ export function TourLocationsModal({
 
           {!canAddLocation && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              You have used all available spaces. Upgrade your plan or purchase extra space add-ons to create another tour location.
+              You have used all available bots. Upgrade your plan or purchase extra bot add-ons to create another tour location.
             </div>
           )}
 

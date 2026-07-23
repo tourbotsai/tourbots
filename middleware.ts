@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getClientIp } from '@/lib/request-client-ip';
 
 const REQUEST_ID_HEADER = 'x-request-id';
 const DISALLOWED_METHODS = new Set(['TRACE', 'CONNECT']);
@@ -55,6 +56,12 @@ const RATE_LIMIT_RULES: RateLimitRule[] = [
     windowMs: 60 * 1000,
   },
   {
+    pathPrefix: '/api/public/embed/track-menu-event',
+    methods: ['POST'],
+    limit: 60,
+    windowMs: 60 * 1000,
+  },
+  {
     pathPrefix: '/api/public/contact',
     methods: ['POST'],
     limit: 30,
@@ -87,7 +94,7 @@ const ROUTE_METHOD_ALLOWLIST: Array<{ pattern: RegExp; methods: Set<string> }> =
 
 const PUBLIC_CORS_RULES: PublicCorsRule[] = [
   {
-    pattern: /^\/api\/public\/tour-chatbot\/[^/]+$/,
+    pattern: /^\/api\/public\/tour-chatbot\/[^/]+(?:\/leads)?$/,
     methods: ['POST', 'OPTIONS'],
     allowedHeaders: [...DEFAULT_PUBLIC_HEADERS],
     allowWildcardOrigin: true,
@@ -111,14 +118,8 @@ const PUBLIC_CORS_RULES: PublicCorsRule[] = [
     allowWildcardOrigin: true,
   },
   {
-    pattern: /^\/api\/public\/embed\/track-pixel$/,
-    methods: ['GET', 'OPTIONS'],
-    allowedHeaders: [...DEFAULT_PUBLIC_HEADERS],
-    allowWildcardOrigin: true,
-  },
-  {
-    pattern: /^\/api\/public\/ebooks$/,
-    methods: ['GET', 'OPTIONS'],
+    pattern: /^\/api\/public\/embed\/track-menu-event$/,
+    methods: ['POST', 'OPTIONS'],
     allowedHeaders: [...DEFAULT_PUBLIC_HEADERS],
     allowWildcardOrigin: true,
   },
@@ -129,15 +130,6 @@ const PUBLIC_CORS_RULES: PublicCorsRule[] = [
     allowWildcardOrigin: false,
   },
 ];
-
-function getClientIp(request: NextRequest): string {
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0]?.trim() || 'unknown';
-  }
-
-  return request.headers.get('x-real-ip') || 'unknown';
-}
 
 function getAllowedPublicOrigins(): Set<string> {
   const values = new Set<string>([

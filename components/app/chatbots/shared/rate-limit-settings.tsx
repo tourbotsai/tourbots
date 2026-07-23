@@ -22,7 +22,7 @@ interface RateLimitConfig {
 
 interface RateLimitSettingsProps {
   venueId: string;
-  chatbotType: 'tour';
+  chatbotType: 'tour' | 'website';
   currentConfig: RateLimitConfig;
   onSave: (config: RateLimitConfig) => Promise<void>;
 }

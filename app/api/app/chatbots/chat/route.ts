@@ -13,22 +13,7 @@ import {
   ensureVenueScope,
   getScopedVenueId,
 } from '@/lib/chatbot-route-auth';
-
-// Helper function to get client IP
-function getClientIP(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  const realIP = request.headers.get('x-real-ip');
-  
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  
-  if (realIP) {
-    return realIP;
-  }
-  
-  return 'unknown';
-}
+import { getClientIp } from '@/lib/request-client-ip';
 
 async function resolveAppTourChatbotConfig(venueId: string) {
   const botType = 'tour' as const;
@@ -125,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Tour chatbot only; legacy clients may still send chatbotType
     const botType = 'tour' as const;
-    const clientIP = getClientIP(request);
+    const clientIP = getClientIp(request);
 
     // 🚀 SPEED: Run non-mutating checks/config fetch in parallel first.
     const [rateLimitResult, billingUsageResult, resolvedConfig] = await Promise.all([
@@ -313,7 +298,7 @@ You also have access to a file search tool as they may have uploaded documents t
       });
     }
 
-    // Create response using OpenAI Responses API with lead capture if needed
+    // Create response using OpenAI Responses API
     const responseArgs: any = {
       input: inputItems,
       instructions,

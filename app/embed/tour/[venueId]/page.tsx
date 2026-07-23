@@ -4,21 +4,7 @@ import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { TourEmbedClient } from './tour-embed-client';
 import { NestedTourShell } from './nested-tour-shell';
 import { isCanonicalEmbedHost, getCanonicalEmbedOrigin } from '@/lib/embed-host';
-import { createHmac } from 'crypto';
-
-function createPublicEmbedToken(venueId: string, embedId: string): string | null {
-  const secret = process.env.PUBLIC_CHATBOT_EMBED_TOKEN_SECRET;
-  if (!secret) return null;
-
-  const payload = {
-    v: venueId,
-    e: embedId,
-    exp: Math.floor(Date.now() / 1000) + (12 * 60 * 60), // 12 hours
-  };
-  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = createHmac('sha256', secret).update(payloadBase64).digest('hex');
-  return `${payloadBase64}.${signature}`;
-}
+import { createPublicEmbedToken } from '@/lib/public-embed-token';
 
 // Tour menu (settings + blocks) for instant first-paint of the overlay. Fetched server-side
 // so the embed no longer needs a client round trip after hydration.

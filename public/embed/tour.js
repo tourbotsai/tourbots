@@ -67,77 +67,7 @@
       }
     }
     
-    // Track tour embed view from parent page context
-    trackTourView(embedId, venueId, options);
-    
     tourWidgets[embedId] = container;
-  }
-  
-  function trackTourView(embedId, venueId, options) {
-    try {
-      // Get parent domain directly (we're running on the parent page)
-      var parentDomain = window.location.hostname;
-      var parentUrl = window.location.href;
-      
-      console.log('🚀 Tracking tour view from parent page:', { 
-        embedId, 
-        venueId, 
-        domain: parentDomain, 
-        pageUrl: parentUrl
-      });
-
-      fetch(TOUR_EMBED_ORIGIN + '/api/public/embed/track', {
-        method: 'POST',
-        mode: 'cors',           // Required for cross-origin requests
-        credentials: 'omit',    // Required for wildcard CORS origins
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          embedId: embedId,
-          venueId: venueId,
-          type: 'tour',
-          domain: parentDomain,  // Direct parent domain
-          pageUrl: parentUrl,    // Direct parent URL
-          tourId: options && options.tourId ? options.tourId : undefined,
-          // Additional debugging info
-          debugInfo: {
-            trackingContext: 'parent-page',
-            currentDomain: window.location.hostname,
-            currentUrl: window.location.href,
-            userAgent: navigator.userAgent
-          }
-        })
-      })
-      .then(response => {
-        console.log('📡 Response status:', response.status);
-        if (response.ok) {
-          console.log('✅ Tour view tracked successfully');
-          return response.json().catch(() => ({ success: true }));
-        } else {
-          throw new Error('Tracking failed with status: ' + response.status);
-        }
-      })
-      .catch(error => {
-        console.warn('⚠️ Primary tracking failed, trying fallback:', error);
-        
-        // Fallback tracking using image pixel
-        var img = new Image();
-        img.onload = function() { console.log('✅ Fallback tracking successful'); };
-        img.onerror = function() { console.error('❌ Fallback tracking failed'); };
-        img.src = TOUR_EMBED_ORIGIN + '/api/public/embed/track-pixel?' + 
-                  'embedId=' + encodeURIComponent(embedId) +
-                  '&venueId=' + encodeURIComponent(venueId) +
-                  '&type=tour' +
-                  '&domain=' + encodeURIComponent(parentDomain) +
-                  '&pageUrl=' + encodeURIComponent(parentUrl) +
-                  (options && options.tourId ? '&tourId=' + encodeURIComponent(options.tourId) : '') +
-                  '&t=' + Date.now();
-      });
-    } catch (error) {
-      console.error('❌ Error in trackTourView:', error);
-    }
   }
   
   // Process queued commands
@@ -200,10 +130,6 @@
         container.appendChild(iframe);
         script.parentNode.insertBefore(container, script);
         
-        trackTourView(embedId, venueId, {
-          showTitle: showTitle,
-          showChat: showChat
-        });
         break; // Only init first one found
       }
     }

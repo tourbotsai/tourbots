@@ -19,15 +19,15 @@ const checkoutSchema = z.object({
 });
 
 const ADDON_CODES = [
-  'extra_space',
+  'extra_bot',
   'message_block',
   'white_label',
-  'agency_extra_space',
+  'agency_extra_bot',
   'agency_message_block',
 ] as const;
 
 // Core add-ons scale the Pro allowance; agency add-ons scale the Agency pool.
-const AGENCY_ADDON_CODES = ['agency_extra_space', 'agency_message_block'];
+const AGENCY_ADDON_CODES = ['agency_extra_bot', 'agency_message_block'];
 const SINGLE_QUANTITY_ADDON_CODES = ['white_label'];
 
 function getStripe() {

@@ -2,24 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-// import { Button } from "@/components/ui/button"; // Temporarily commented out - not needed without back button
-// import { ArrowLeft } from "lucide-react"; // Temporarily commented out - not needed without back button
-// import { AppTitle } from "@/components/app/shared/app-title"; // Temporarily commented out - title now in parent page
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TourChatbotSettings } from "./tour/chatbot-settings";
+import { TourChatbotActions } from "./tour/chatbot-actions";
 import { TourChatbotCustomisation } from "./tour/chatbot-customisation";
 import { TourChatbotAnalytics } from "./tour/chatbot-analytics";
 import { TourChatbotPlayground } from "./tour/chatbot-playground";
 import { TourChatbotShare } from "./tour/chatbot-share";
 
-const CHATBOT_TAB_VALUES = new Set(["settings", "customisation", "playground", "share", "analytics"]);
+const CHATBOT_TAB_VALUES = new Set(["settings", "actions", "customisation", "playground", "share", "analytics"]);
 
 interface TourChatbotManagementProps {
   onBack: () => void;
   selectedTourId?: string | null;
+  chatbotConfigId?: string | null;
+  onChatbotDeleted?: () => void | Promise<void>;
 }
 
-export function TourChatbotManagement({ onBack, selectedTourId }: TourChatbotManagementProps) {
+export function TourChatbotManagement({ onBack, selectedTourId, chatbotConfigId, onChatbotDeleted }: TourChatbotManagementProps) {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("settings");
   const mobileTabsScrollRef = useRef<HTMLDivElement>(null);
@@ -62,12 +62,18 @@ export function TourChatbotManagement({ onBack, selectedTourId }: TourChatbotMan
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <div ref={mobileTabsScrollRef} className="overflow-x-auto md:overflow-visible">
-          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-5">
+          <TabsList className="flex h-10 w-max min-w-full items-stretch gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-input dark:bg-background md:grid md:w-full md:grid-cols-6">
             <TabsTrigger
               value="settings"
               className="h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
             >
               Settings
+            </TabsTrigger>
+            <TabsTrigger
+              value="actions"
+              className="h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-neutral-800 dark:data-[state=active]:text-slate-100"
+            >
+              Actions
             </TabsTrigger>
             <TabsTrigger
               value="customisation"
@@ -97,23 +103,31 @@ export function TourChatbotManagement({ onBack, selectedTourId }: TourChatbotMan
         </div>
 
         <TabsContent value="settings" className="space-y-6">
-          <TourChatbotSettings selectedTourId={selectedTourId} />
+          <TourChatbotSettings
+            selectedTourId={selectedTourId}
+            chatbotConfigId={chatbotConfigId}
+            onDeleted={onChatbotDeleted}
+          />
+        </TabsContent>
+
+        <TabsContent value="actions" className="space-y-6">
+          <TourChatbotActions selectedTourId={selectedTourId} chatbotConfigId={chatbotConfigId} />
         </TabsContent>
 
         <TabsContent value="customisation" className="space-y-6">
-          <TourChatbotCustomisation onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} />
+          <TourChatbotCustomisation onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} chatbotConfigId={chatbotConfigId} />
         </TabsContent>
 
         <TabsContent value="playground" className="space-y-6">
-          <TourChatbotPlayground onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} />
+          <TourChatbotPlayground onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} chatbotConfigId={chatbotConfigId} />
         </TabsContent>
 
         <TabsContent value="share" className="space-y-6">
-          <TourChatbotShare onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} />
+          <TourChatbotShare onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} chatbotConfigId={chatbotConfigId} />
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          <TourChatbotAnalytics onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} />
+          <TourChatbotAnalytics onSwitchToSettings={switchToSettings} selectedTourId={selectedTourId} chatbotConfigId={chatbotConfigId} />
         </TabsContent>
       </Tabs>
     </div>

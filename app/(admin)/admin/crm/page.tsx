@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
+  Ban,
   CheckCircle2,
   Contact2,
   ListChecks,
@@ -54,7 +55,26 @@ interface CrmCompany {
   phone: string | null;
   region: string;
   status: CrmCompanyStatus;
+  is_stopped?: boolean;
+  stopped_at?: string | null;
+  stopped_reason?: "manual" | "inbound_reply" | null;
   last_activity_date: string | null;
+}
+
+function stoppedTooltip(company: Pick<CrmCompany, "stopped_reason" | "stopped_at">) {
+  const when = company.stopped_at
+    ? new Date(company.stopped_at).toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : "an unknown time";
+  return company.stopped_reason === "inbound_reply"
+    ? `Stopped automatically — a reply was detected on ${when}`
+    : `Stopped manually on ${when}`;
 }
 
 interface CrmSequence {
@@ -505,10 +525,19 @@ export default function AdminCrmPage() {
                             </Link>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/admin/crm/${company.id}`} className="block">
+                            <Link href={`/admin/crm/${company.id}`} className="flex flex-wrap items-center gap-1.5">
                               <Badge className={STATUS_BADGE_CLASSES[company.status]}>
                                 {STATUS_LABELS[company.status]}
                               </Badge>
+                              {company.is_stopped ? (
+                                <Badge
+                                  title={stoppedTooltip(company)}
+                                  className="bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200"
+                                >
+                                  <Ban className="mr-1 h-3 w-3" />
+                                  Stopped
+                                </Badge>
+                              ) : null}
                             </Link>
                           </TableCell>
                           <TableCell>
@@ -542,9 +571,20 @@ export default function AdminCrmPage() {
                               <p className="font-medium text-slate-900">{company.company_name}</p>
                               <p className="text-xs text-slate-500">{contactName(company)}</p>
                             </div>
-                            <Badge className={STATUS_BADGE_CLASSES[company.status]}>
-                              {STATUS_LABELS[company.status]}
-                            </Badge>
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              <Badge className={STATUS_BADGE_CLASSES[company.status]}>
+                                {STATUS_LABELS[company.status]}
+                              </Badge>
+                              {company.is_stopped ? (
+                                <Badge
+                                  title={stoppedTooltip(company)}
+                                  className="bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200"
+                                >
+                                  <Ban className="mr-1 h-3 w-3" />
+                                  Stopped
+                                </Badge>
+                              ) : null}
+                            </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                             <span>{company.region || "Unknown region"}</span>

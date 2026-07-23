@@ -18,7 +18,7 @@ export function ContactHero() {
         </p>
 
         <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:flex sm:max-w-none sm:w-auto sm:flex-row sm:justify-center sm:gap-4">
-          <a href="mailto:hello@tourbots.ai" className="w-full">
+          <a href="mailto:info@tourbots.ai" className="w-full">
             <Button
               size="lg"
               className="group h-11 w-full border border-brand-primary/30 bg-white px-4 text-slate-900 transition-colors duration-200 hover:border-brand-primary/45 hover:bg-slate-200 sm:min-w-[190px] sm:px-8"

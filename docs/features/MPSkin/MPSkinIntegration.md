@@ -57,7 +57,7 @@ On a Level 2 tour, **MPskin owns the Matterport iframe and the live `mpSdk` conn
 
 Two consequences:
 1. Our chatbot's `matterport_navigate` window events have no listener on MPskin's page (our `MatterportSDKWrapper` isn't there). We need a small **bridge** that hands navigation to MPskin's `mpSdk`.
-2. A widget injected on MPskin's domain would make **cross-origin** calls to our public APIs. Those APIs currently have **no CORS support** (the existing `tour.js` only works cross-origin via a GET image-pixel fallback; the JSON POST routes have no `Access-Control-Allow-Origin` and no `OPTIONS` handler). This pushes us toward hosting the chat UI in a **tourbots-served iframe** (same-origin to our APIs) rather than mounting raw DOM that calls our APIs directly (Section 6).
+2. A widget injected on MPskin's domain would make **cross-origin** calls to our public APIs. Embed telemetry must carry a signed capability issued to a TourBots-served iframe, so the host page cannot write analytics directly. This pushes us toward hosting the chat UI in a **TourBots-served iframe** (same-origin to our APIs) rather than mounting raw DOM that calls our APIs directly (Section 6).
 
 ## 6. Chosen architecture
 

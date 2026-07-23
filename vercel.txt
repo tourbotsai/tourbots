@@ -5,11 +5,11 @@
       "schedule": "*/15 * * * *"
     },
     {
-      "path": "/api/cron/send-outbound-sequence-emails",
+      "path": "/api/cron/send-crm-sequence-emails",
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cron/send-crm-sequence-emails",
+      "path": "/api/cron/poll-crm-inbound-emails",
       "schedule": "*/5 * * * *"
     },
     {

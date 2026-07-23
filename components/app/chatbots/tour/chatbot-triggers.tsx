@@ -42,11 +42,13 @@ interface EditableTrigger {
 
 interface ChatbotTriggersProps {
   chatbotConfigId?: string | null;
+  chatbotType?: 'tour' | 'website';
   initialTriggers?: ChatbotTrigger[];
   initialTourPoints?: ChatbotTriggerTourPointOption[];
   initialTourModels?: ChatbotTriggerTourModelOption[];
   readOnly?: boolean;
   hideHeader?: boolean;
+  defaultExpanded?: boolean;
 }
 
 function createEmptyTrigger(index: number): EditableTrigger {
@@ -78,12 +80,15 @@ function parseKeywordTokens(input: string): string[] {
 
 export function ChatbotTriggers({
   chatbotConfigId,
+  chatbotType = 'tour',
   initialTriggers = [],
   initialTourPoints = [],
   initialTourModels = [],
   readOnly = false,
   hideHeader = false,
+  defaultExpanded = false,
 }: ChatbotTriggersProps) {
+  const isWebsiteChatbot = chatbotType === 'website';
   const { toast } = useToast();
   const useInitialData =
     readOnly && (initialTriggers.length > 0 || initialTourPoints.length > 0 || initialTourModels.length > 0);
@@ -93,7 +98,7 @@ export function ChatbotTriggers({
     initialTourPoints,
     initialTourModels,
   });
-  const [isExpanded, setIsExpanded] = useState(hideHeader);
+  const [isExpanded, setIsExpanded] = useState(hideHeader || defaultExpanded);
   const [draftTriggers, setDraftTriggers] = useState<EditableTrigger[]>([]);
   const [expandedTriggerCards, setExpandedTriggerCards] = useState<Record<string, boolean>>({});
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
@@ -346,8 +351,12 @@ export function ChatbotTriggers({
                     <SelectContent>
                       <SelectItem value="ai_message">Hardcoded AI Response</SelectItem>
                       <SelectItem value="open_url">AI Response + URL</SelectItem>
-                      <SelectItem value="navigate_tour_point">Navigate to tour point</SelectItem>
-                      <SelectItem value="switch_tour_model">Load different tour model</SelectItem>
+                      {!isWebsiteChatbot ? (
+                        <>
+                          <SelectItem value="navigate_tour_point">Navigate to tour point</SelectItem>
+                          <SelectItem value="switch_tour_model">Load different tour model</SelectItem>
+                        </>
+                      ) : null}
                     </SelectContent>
                   </Select>
                 </div>

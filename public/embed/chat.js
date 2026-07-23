@@ -47,10 +47,13 @@
   if (!venueId) return;
 
   var tourId = attr('data-tour-id', '');
+  var chatbotConfigId = attr('data-chatbot-config-id', '');
   var embedId = attr('data-embed-id', 'chatbot-widget-' + venueId);
   var mode = attr('data-mode', 'embed');
   var navAttr = attr('data-nav', 'on');
-  var navigationEnabled = !(navAttr === 'off' || navAttr === '0' || navAttr === 'false');
+  // Website chatbots (identified by data-chatbot-config-id) have no Matterport
+  // tour to navigate, so navigation is always forced off regardless of data-nav.
+  var navigationEnabled = !chatbotConfigId && !(navAttr === 'off' || navAttr === '0' || navAttr === 'false');
 
   // Guard against double-injection (e.g. the snippet pasted twice).
   if (window.__tourbotsChatLoaded) return;
@@ -62,7 +65,11 @@
     'mode=' + encodeURIComponent(mode),
     'nav=' + (navigationEnabled ? 'on' : 'off'),
   ];
-  if (tourId) params.push('tourId=' + encodeURIComponent(tourId));
+  if (chatbotConfigId) {
+    params.push('chatbotConfigId=' + encodeURIComponent(chatbotConfigId));
+  } else if (tourId) {
+    params.push('tourId=' + encodeURIComponent(tourId));
+  }
   try {
     params.push('domain=' + encodeURIComponent(window.location.hostname));
     params.push('pageUrl=' + encodeURIComponent(window.location.href));

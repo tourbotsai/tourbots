@@ -51,7 +51,7 @@ interface IconSelectorProps {
   onCustomImageChange?: (url: string | null) => void;
   fieldKey?: string;
   venueId?: string;
-  chatbotType?: 'tour';
+  chatbotType?: 'tour' | 'website';
   iconSize?: number;
   onIconSizeChange?: (size: number) => void;
   headerIconSize?: number;

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
-import { trackEmbedView } from '@/lib/embed-analytics';
 
 export async function GET(
   request: NextRequest, 
@@ -8,9 +7,6 @@ export async function GET(
 ) {
   try {
     const { searchParams } = new URL(request.url);
-    const embedId = searchParams.get('id');
-    const domain = searchParams.get('domain');
-    const pageUrl = searchParams.get('pageUrl');
     // Optional: load a specific tour (e.g. an agency-portal client's shared tour)
     // rather than defaulting to the venue's primary tour. Scoped to this venue below.
     const requestedTourId = searchParams.get('tourId');
@@ -53,11 +49,6 @@ export async function GET(
         : null) ||
       tours.find((candidate) => candidate.tour_type === 'primary') ||
       tours[0];
-
-    // Track view if embedId provided
-    if (embedId) {
-      await trackEmbedView(embedId, params.venueId, 'tour', domain || undefined, pageUrl || undefined);
-    }
 
     return NextResponse.json({
       tour,

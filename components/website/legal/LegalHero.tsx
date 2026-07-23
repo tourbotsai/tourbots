@@ -6,8 +6,7 @@ export function LegalHero() {
           Legal and compliance information
         </h1>
         <p className="max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
-          Review TourBots AI privacy, terms, and cookie policies in a clean, structured format.
-          These documents are written for operational clarity, not legal complexity.
+          Privacy Policy, Terms and Conditions, and Cookie Policy for TourBots AI Ltd.
         </p>
       </div>
     </section>

@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
       .update({
         plan_code: targetPlan,
         billing_status: 'active',
-        addon_extra_spaces: 0,
+        addon_extra_bots: 0,
         addon_message_blocks: 0,
         addon_white_label: false,
       })

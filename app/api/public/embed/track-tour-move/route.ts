@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { trackEmbedTourMove } from '@/lib/embed-analytics';
-import {
-  getMarketingSiteMoveGateConfig,
-  isMarketingSiteTourMoveOriginAllowed,
-} from '@/lib/marketing-site-tour-move-request';
+import { verifyPublicEmbedRequest } from '@/lib/public-embed-token';
 
 export const dynamic = 'force-dynamic';
 
 const bodySchema = z.object({
   embedId: z.string().min(1),
+  embedToken: z.string().optional().nullable(),
   venueId: z.string().uuid(),
   tourId: z.string().uuid().optional().nullable(),
   sweepId: z.string().min(1).max(256),
@@ -50,6 +48,7 @@ export async function POST(request: NextRequest) {
 
     const {
       embedId,
+      embedToken,
       venueId,
       tourId,
       sweepId,
@@ -62,14 +61,8 @@ export async function POST(request: NextRequest) {
 
     const userAgent = request.headers.get('user-agent') || undefined;
 
-    const gate = getMarketingSiteMoveGateConfig();
-    if (gate && embedId === gate.embedId) {
-      if (venueId !== gate.venueId || tourId !== gate.tourId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-      if (!isMarketingSiteTourMoveOriginAllowed(request)) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    if (!verifyPublicEmbedRequest({ request, token: embedToken, venueId, embedId })) {
+      return NextResponse.json({ error: 'Invalid or missing embed token' }, { status: 403 });
     }
 
     await trackEmbedTourMove({

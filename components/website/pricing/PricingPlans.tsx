@@ -13,7 +13,7 @@ export function PricingPlans() {
       subLabel: "get started free",
       href: "/login",
       bullets: [
-        "One test tour",
+        "1 free bot to try",
         "AI setup and training tools",
         "Up to 25 total messages",
         "No card required to start",
@@ -30,12 +30,13 @@ export function PricingPlans() {
       name: "Pro",
       description: "For live tours and growing commercial use.",
       priceLabel: "£19.99",
-      subLabel: "per month, first space included",
+      subLabel: "per month, first bot included",
       href: "/demo",
       bullets: [
-        "1 active space included",
+        "1 bot included",
+        "Works on a tour, your website, or both",
         "1,000 chatbot messages included",
-        "AI Q&A and guided navigation",
+        "AI Q&A, guided tour navigation when used with a tour, and website embed",
         "Lead capture and engagement tracking",
         "Dashboard analytics",
         "Standard support",
@@ -46,14 +47,15 @@ export function PricingPlans() {
     },
     {
       name: "Agency",
-      description: "For agencies managing tours.",
+      description: "For agencies managing tours and website chatbots.",
       priceLabel: "£49.99",
       subLabel: "per month, white-label included",
       href: "/demo",
       bullets: [
-        "3 active spaces included",
+        "3 bots included",
+        "Mix tours and website bots across your clients",
         "3,000 chatbot messages included",
-        "Branded client portals",
+        "Branded client portals (tour or website chatbot)",
         "White-label included as standard",
         "Priority account support",
         "Centralised client management",
@@ -67,16 +69,17 @@ export function PricingPlans() {
 
   const addOns = [
     {
-      title: "Additional space",
+      title: "Extra bot",
       price: "£14.99",
-      detail: "per extra space, per month",
-      description: "Each additional space includes 1,000 chatbot messages per month.",
+      detail: "per extra bot, per month",
+      description:
+        "Each extra bot adds one more tour location or website chatbot, plus 1,000 chatbot messages per month.",
     },
     {
       title: "Message top-up block",
       price: "£9.99",
       detail: "per + 1,000 messages, per month",
-      description: "Add extra 1000 message credits to your account, shared by all spaces.",
+      description: "Add extra 1000 message credits to your account, shared by all bots.",
     },
     {
       title: "White-label add-on",
@@ -90,10 +93,11 @@ export function PricingPlans() {
     <section className="container pb-8 pt-8 md:pb-10 md:pt-10 lg:pb-12 lg:pt-12">
       <div className="mx-auto mb-8 flex max-w-4xl flex-col items-center space-y-4 text-center md:mb-10">
         <h2 className="text-3xl font-semibold leading-tight text-white md:text-4xl lg:text-5xl">
-          Start free, then scale by space
+          Start free, then scale by bot
         </h2>
-        <p className="max-w-5xl text-base leading-relaxed text-slate-300 md:text-lg lg:whitespace-nowrap">
-          Keep pricing straightforward: Free for testing, Pro for live use, and add-ons as your footprint grows.
+        <p className="max-w-5xl text-base leading-relaxed text-slate-300 md:text-lg">
+          One bot, one job: answer questions and guide your visitors. Use it on a tour, your website,
+          or swap between the two as your needs change.
         </p>
       </div>
 
@@ -152,7 +156,9 @@ export function PricingPlans() {
         <div className="border-b border-white/10 p-6 text-center md:p-8">
           <h3 className="text-2xl font-semibold text-white md:text-3xl">Pro add-ons</h3>
           <p className="mt-2 text-sm text-slate-300 md:text-base">
-            Expand capacity and branding control without changing your core plan. Agency plans can add extra spaces and message blocks at £9.99 each per month.
+            Expand capacity and branding control without changing your core plan. Agency plans can add
+            extra bots and message blocks at £9.99 each per month — each extra bot can be a tour
+            or a website chatbot.
           </p>
         </div>
         <div className="grid lg:grid-cols-3">

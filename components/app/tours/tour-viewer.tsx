@@ -30,6 +30,7 @@ import { useTourManagement } from "@/hooks/app/useTourManagement";
 import { Tour, ChatbotCustomisation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
+import { usePreviewEmbedToken } from "@/hooks/app/usePreviewEmbedToken";
 
 interface TourViewerProps {
   onTourChange?: (tourId: string | null) => void;
@@ -39,6 +40,7 @@ interface TourViewerProps {
   openTourLocationsManagerSignal?: number;
   forcedVenueId?: string;
   forcedVenueName?: string;
+  agencyShareSlug?: string;
 }
 
 function isAgencyPortalPath(): boolean {
@@ -64,6 +66,7 @@ export function TourViewer({
   openTourLocationsManagerSignal,
   forcedVenueId,
   forcedVenueName,
+  agencyShareSlug,
 }: TourViewerProps = {}) {
   const router = useRouter();
   const { user } = useUser();
@@ -84,6 +87,8 @@ export function TourViewer({
   const [tourLoaded, setTourLoaded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [chatExternalPrompt, setChatExternalPrompt] = useState<string | null>(null);
+  const [chatExternalAutoSend, setChatExternalAutoSend] = useState(false);
   
   // Matterport SDK state
   const [mpSdk, setMpSdk] = useState<any>(null);
@@ -100,13 +105,19 @@ export function TourViewer({
   const activeVenueId = forcedVenueId || user?.venue?.id;
   const activeVenueName = forcedVenueName || user?.venue?.name || "Venue";
   const isAgencyPortal = isAgencyPortalPath();
+  const previewEmbedId = activeVenueId ? `tour-widget-${activeVenueId}` : null;
+  const previewEmbedToken = usePreviewEmbedToken(
+    activeVenueId,
+    previewEmbedId,
+    agencyShareSlug
+  );
 
   const locationTours = useMemo(
     () => allTours.filter((t) => t.tour_type === "primary" || !t.tour_type),
     [allTours]
   );
-  const spacesUsed = locationTours.length;
-  const spacesAllowed = Math.max(spacesUsed, Number(limits?.totalSpaces || 0));
+  const botsUsed = locationTours.length;
+  const botsAllowed = Math.max(botsUsed, Number(limits?.totalBots || 0));
 
   const resolveLocationTourId = useCallback(
     (tourRow: Tour | null): string | null => {
@@ -756,7 +767,13 @@ export function TourViewer({
                       tourId={menuScopeTourId} 
                       isPreviewMode={true} 
                       isTourReady={tourLoaded}
-                      onOpenChat={() => setIsChatExpanded(true)}
+                      onOpenChat={(opts) => {
+                        setIsChatExpanded(true);
+                        if (opts?.prompt) {
+                          setChatExternalPrompt(opts.prompt);
+                          setChatExternalAutoSend(Boolean(opts.autoSend));
+                        }
+                      }}
                       isChatAvailable={true}
                       currentModelId={currentViewingModelId || tour.matterport_tour_id}
                     />
@@ -786,6 +803,14 @@ export function TourViewer({
                     isFullscreen={false}
                     isExpanded={isChatExpanded}
                     onToggle={setIsChatExpanded}
+                    externalPrompt={chatExternalPrompt}
+                    externalAutoSend={chatExternalAutoSend}
+                    embedId={previewEmbedId || undefined}
+                    embedToken={previewEmbedToken || undefined}
+                    onExternalPromptConsumed={() => {
+                      setChatExternalPrompt(null);
+                      setChatExternalAutoSend(false);
+                    }}
                   />
                 )}
               </div>
@@ -848,8 +873,8 @@ export function TourViewer({
             activeModelId={currentViewingModelId || tour.matterport_tour_id}
             onSelectModel={handleSwitchModel}
             onAddLocation={openCreateLocationModal}
-            spacesUsed={spacesUsed}
-            spacesAllowed={spacesAllowed}
+            botsUsed={botsUsed}
+            botsAllowed={botsAllowed}
           />
         </div>
       )}
@@ -875,7 +900,13 @@ export function TourViewer({
                 tourId={menuScopeTourId} 
                 isPreviewMode={true} 
                 isTourReady={tourLoaded}
-                onOpenChat={() => setIsChatExpanded(true)}
+                onOpenChat={(opts) => {
+                  setIsChatExpanded(true);
+                  if (opts?.prompt) {
+                    setChatExternalPrompt(opts.prompt);
+                    setChatExternalAutoSend(Boolean(opts.autoSend));
+                  }
+                }}
                 isChatAvailable={true}
                 currentModelId={currentViewingModelId || tour.matterport_tour_id}
               />
@@ -912,6 +943,14 @@ export function TourViewer({
                 isFullscreen={true}
                 isExpanded={isChatExpanded}
                 onToggle={setIsChatExpanded}
+                externalPrompt={chatExternalPrompt}
+                externalAutoSend={chatExternalAutoSend}
+                embedId={previewEmbedId || undefined}
+                embedToken={previewEmbedToken || undefined}
+                onExternalPromptConsumed={() => {
+                  setChatExternalPrompt(null);
+                  setChatExternalAutoSend(false);
+                }}
               />
             )}
           </div>

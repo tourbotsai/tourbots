@@ -6,16 +6,12 @@ import { MatterportSDKWrapper } from "@/components/matterport/matterport-sdk-wra
 import { TourChatWidget } from "@/components/app/tours/tour-chat-widget";
 import { TourMenuOverlay } from "@/components/embed/tour-menu-overlay";
 import { ChatbotCustomisation, Tour } from "@/lib/types";
-import { useMarketingSiteTourMoveTracking } from "@/hooks/useMarketingSiteTourMoveTracking";
-import { useMarketingSiteTourViewTracking } from "@/hooks/useMarketingSiteTourViewTracking";
 
 interface TourDemoProps {
   modelId?: string;
   demoVenueId: string;
   demoTourId?: string;
   demoVenueName: string;
-  /** When set with server env allowlist, sweep changes post to embed_tour_moves (marketing homepage only). */
-  marketingSiteEmbedId?: string;
   onModelChange?: (modelId: string) => void;
   onFullscreenToggle: () => void;
   onConnectionChange: (connected: boolean) => void;
@@ -35,21 +31,32 @@ export function TourDemo({
   isConnected,
   isChatOpen,
   onChatToggle,
-  marketingSiteEmbedId,
 }: TourDemoProps) {
   const [customisation, setCustomisation] = useState<ChatbotCustomisation | null>(null);
   const [tour, setTour] = useState<Tour | null>(null);
   const [isLoadingCustomisation, setIsLoadingCustomisation] = useState(true);
   const [mpSdk, setMpSdk] = useState<any>(null);
-  const [currentPosition, setCurrentPosition] = useState<any>(null);
-  const [currentSweep, setCurrentSweep] = useState<any>(null);
   const [tourLoaded, setTourLoaded] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(modelId || "");
   const [isModelSwitching, setIsModelSwitching] = useState(false);
+  const [chatExternalPrompt, setChatExternalPrompt] = useState<string | null>(null);
+  const [chatExternalAutoSend, setChatExternalAutoSend] = useState(false);
+  const [embedToken, setEmbedToken] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentModelId(modelId || "");
   }, [modelId]);
+
+  useEffect(() => {
+    void fetch('/api/public/demo/embed-token')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data?.venueId === demoVenueId && typeof data.embedToken === 'string') {
+          setEmbedToken(data.embedToken);
+        }
+      })
+      .catch(() => setEmbedToken(null));
+  }, [demoVenueId]);
 
   // Fetch customisation and tour data when component mounts
   useEffect(() => {
@@ -97,39 +104,10 @@ export function TourDemo({
     }
   }, []); // Empty deps - onConnectionChange called directly
 
+  const handlePositionChange = useCallback(() => {}, []);
+  const handleSweepChange = useCallback(() => {}, []);
+
   const menuScopeTourId = tour?.parent_tour_id || tour?.id || demoTourId;
-
-  const { onPoseChange: onMarketingMovePose, onUserEngaged: onMarketingTourUserEngaged } =
-    useMarketingSiteTourMoveTracking({
-      embedId: marketingSiteEmbedId,
-      venueId: demoVenueId,
-      scopeTourId: menuScopeTourId,
-      currentSweep,
-      currentModelId,
-      enabled: Boolean(marketingSiteEmbedId && menuScopeTourId),
-    });
-
-  useMarketingSiteTourViewTracking({
-    embedId: marketingSiteEmbedId,
-    venueId: demoVenueId,
-    scopeTourId: menuScopeTourId,
-    currentModelId,
-    enabled: Boolean(
-      marketingSiteEmbedId && menuScopeTourId && tourLoaded && currentModelId
-    ),
-  });
-
-  const handlePositionChange = useCallback(
-    (pose: any) => {
-      onMarketingMovePose(pose);
-      setCurrentPosition(pose);
-    },
-    [onMarketingMovePose]
-  );
-
-  const handleSweepChange = useCallback((sweep: any) => {
-    setCurrentSweep(sweep);
-  }, []);
 
   useEffect(() => {
     const handleModelSwitch = (event: CustomEvent) => {
@@ -176,11 +154,6 @@ export function TourDemo({
                   onSDKReady={handleSDKReady}
                   onPositionChange={handlePositionChange}
                   onSweepChange={handleSweepChange}
-                  onUserEngaged={
-                    marketingSiteEmbedId && menuScopeTourId
-                      ? onMarketingTourUserEngaged
-                      : undefined
-                  }
                   className="w-full h-full rounded-lg"
                 />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
@@ -217,7 +190,13 @@ export function TourDemo({
               key={menuScopeTourId}
               tourId={menuScopeTourId}
               isTourReady={tourLoaded}
-              onOpenChat={() => onChatToggle(true)}
+              onOpenChat={(opts) => {
+                onChatToggle(true);
+                if (opts?.prompt) {
+                  setChatExternalPrompt(opts.prompt);
+                  setChatExternalAutoSend(Boolean(opts.autoSend));
+                }
+              }}
               isChatAvailable={true}
               currentModelId={currentModelId}
             />
@@ -234,6 +213,14 @@ export function TourDemo({
               onToggle={onChatToggle}
               isFullscreen={false}
               forcePublic
+              embedId={`tour-widget-${demoVenueId}`}
+              embedToken={embedToken || undefined}
+              externalPrompt={chatExternalPrompt}
+              externalAutoSend={chatExternalAutoSend}
+              onExternalPromptConsumed={() => {
+                setChatExternalPrompt(null);
+                setChatExternalAutoSend(false);
+              }}
             />
           )}
 

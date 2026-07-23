@@ -12,7 +12,7 @@ interface ImageUploadProps {
   value?: string | null;
   onChange: (imageUrl: string | null) => void;
   venueId: string;
-  chatbotType: 'tour';
+  chatbotType: 'tour' | 'website';
   fieldKey?: string;
   label?: string;
   className?: string;

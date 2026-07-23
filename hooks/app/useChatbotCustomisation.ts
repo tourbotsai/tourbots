@@ -16,7 +16,12 @@ interface PresetHookState {
   presetError: string | null;
 }
 
-export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTourId?: string | null) => {
+export const useChatbotCustomisation = (
+  chatbotType: 'tour' | 'website' = 'tour',
+  selectedTourId?: string | null,
+  chatbotConfigId?: string | null
+) => {
+  const scopeId = chatbotType === 'website' ? chatbotConfigId : selectedTourId;
   const [customisation, setCustomisation] = useState<ChatbotCustomisation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +48,7 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
   );
 
   const fetchCustomisation = useCallback(async () => {
-    if (!user?.venue?.id || !selectedTourId) {
+    if (!user?.venue?.id || !scopeId) {
       setError('No venue found for user');
       return;
     }
@@ -51,8 +56,11 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
     setIsLoading(true);
     setError(null);
     try {
+      const scopeParam = chatbotType === 'website'
+        ? `chatbotConfigId=${encodeURIComponent(scopeId)}`
+        : `tourId=${encodeURIComponent(scopeId)}`;
       const response = await fetch(
-        `/api/app/chatbots/customisation?venueId=${encodeURIComponent(user.venue.id)}&chatbotType=${encodeURIComponent(chatbotType)}&tourId=${encodeURIComponent(selectedTourId)}`,
+        `/api/app/chatbots/customisation?venueId=${encodeURIComponent(user.venue.id)}&chatbotType=${encodeURIComponent(chatbotType)}&${scopeParam}`,
         { headers: await getAuthHeaders() }
       );
       if (!response.ok) {
@@ -68,7 +76,8 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
           headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             venueId: user.venue.id,
-            tourId: selectedTourId,
+            tourId: chatbotType === 'website' ? undefined : scopeId,
+            chatbotConfigId: chatbotType === 'website' ? scopeId : undefined,
             chatbotType,
             customisation: advancedDefaultCustomisation,
           }),
@@ -88,19 +97,19 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
     } finally {
       setIsLoading(false);
     }
-  }, [user?.venue?.id, chatbotType, selectedTourId, advancedDefaultCustomisation, getAuthHeaders]);
+  }, [user?.venue?.id, chatbotType, scopeId, advancedDefaultCustomisation, getAuthHeaders]);
 
   // Auto-fetch customisation when user/venue is available
   useEffect(() => {
-    if (user?.venue?.id && selectedTourId) {
+    if (user?.venue?.id && scopeId) {
       fetchCustomisation();
     }
-  }, [fetchCustomisation, user?.venue?.id, selectedTourId]);
+  }, [fetchCustomisation, user?.venue?.id, scopeId]);
 
   const updateCustomisation = useCallback(async (
     updates: Partial<Omit<ChatbotCustomisation, 'id' | 'venue_id' | 'chatbot_type' | 'created_at' | 'updated_at'>>
   ) => {
-    if (!user?.venue?.id || !selectedTourId) {
+    if (!user?.venue?.id || !scopeId) {
       throw new Error('No venue found for user');
     }
 
@@ -120,7 +129,8 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
         headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           venueId: user.venue.id,
-          tourId: selectedTourId,
+          tourId: chatbotType === 'website' ? undefined : scopeId,
+          chatbotConfigId: chatbotType === 'website' ? scopeId : undefined,
           chatbotType,
           customisation: updates,
         }),
@@ -140,7 +150,7 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
     } finally {
       setIsLoading(false);
     }
-  }, [user?.venue?.id, chatbotType, selectedTourId, getAuthHeaders]);
+  }, [user?.venue?.id, chatbotType, scopeId, getAuthHeaders]);
 
   const updateCustomisationLocal = useCallback((
     updates: Partial<Omit<ChatbotCustomisation, 'id' | 'venue_id' | 'chatbot_type' | 'created_at' | 'updated_at'>>
@@ -173,20 +183,20 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
   }, [fetchCustomisation]);
 
   const resetToDefaults = useCallback(async () => {
-    if (!user?.venue?.id || !selectedTourId) {
+    if (!user?.venue?.id || !scopeId) {
       throw new Error('No venue found for user');
     }
 
     return updateCustomisation(advancedDefaultCustomisation);
-  }, [user?.venue?.id, selectedTourId, advancedDefaultCustomisation, updateCustomisation]);
+  }, [user?.venue?.id, scopeId, advancedDefaultCustomisation, updateCustomisation]);
 
   const resetToLegacyDefaults = useCallback(async () => {
-    if (!user?.venue?.id || !selectedTourId) {
+    if (!user?.venue?.id || !scopeId) {
       throw new Error('No venue found for user');
     }
 
     return updateCustomisation(defaultCustomisation);
-  }, [user?.venue?.id, selectedTourId, defaultCustomisation, updateCustomisation]);
+  }, [user?.venue?.id, scopeId, defaultCustomisation, updateCustomisation]);
 
   // PRESET MANAGEMENT
 
@@ -378,14 +388,15 @@ export const useChatbotCustomisation = (chatbotType: 'tour' = 'tour', selectedTo
         ...advancedDefaultCustomisation,
         id: '',
         venue_id: user?.venue?.id || '',
-        tour_id: selectedTourId || null,
+        tour_id: chatbotType === 'website' ? null : (selectedTourId || null),
+        chatbot_config_id: chatbotType === 'website' ? (chatbotConfigId || null) : null,
         chatbot_type: chatbotType,
         created_at: '',
         updated_at: '',
       } as ChatbotCustomisation;
     }
     return customisation;
-  }, [customisation, advancedDefaultCustomisation, user?.venue?.id, selectedTourId, chatbotType]);
+  }, [customisation, advancedDefaultCustomisation, user?.venue?.id, selectedTourId, chatbotConfigId, chatbotType]);
 
   // Helper to check if a field has been customised from defaults
   const isFieldCustomised = useCallback((fieldName: keyof ChatbotCustomisation) => {

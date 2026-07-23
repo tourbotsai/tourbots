@@ -12,7 +12,7 @@ import { CookiePolicy } from "./CookiePolicy";
 export function LegalContent() {
   const [activeTab, setActiveTab] = useState("privacy");
   const searchParams = useSearchParams();
-  const lastUpdated = "26/03/2026";
+  const lastUpdated = "14/07/2026";
 
   useEffect(() => {
     if (searchParams) {
@@ -54,12 +54,8 @@ export function LegalContent() {
           <TabsContent value="privacy">
             <Card className="rounded-2xl border border-slate-700/70 bg-slate-900/50 shadow-[0_18px_44px_rgba(2,6,23,0.28)]">
               <CardHeader className="pb-6 text-center">
-                <CardTitle className="text-2xl text-white">
-                  Our privacy policy
-                </CardTitle>
-                <p className="text-slate-300">
-                  Last updated: {lastUpdated}
-                </p>
+                <CardTitle className="text-2xl text-white">Privacy Policy</CardTitle>
+                <p className="text-slate-300">Effective date: {lastUpdated}</p>
               </CardHeader>
               <CardContent>
                 <PrivacyPolicy />
@@ -70,12 +66,8 @@ export function LegalContent() {
           <TabsContent value="terms">
             <Card className="rounded-2xl border border-slate-700/70 bg-slate-900/50 shadow-[0_18px_44px_rgba(2,6,23,0.28)]">
               <CardHeader className="pb-6 text-center">
-                <CardTitle className="text-2xl text-white">
-                  Our service agreement
-                </CardTitle>
-                <p className="text-slate-300">
-                  Last updated: {lastUpdated}
-                </p>
+                <CardTitle className="text-2xl text-white">Terms and Conditions</CardTitle>
+                <p className="text-slate-300">Effective date: {lastUpdated}</p>
               </CardHeader>
               <CardContent>
                 <TermsOfService />
@@ -86,12 +78,8 @@ export function LegalContent() {
           <TabsContent value="cookies">
             <Card className="rounded-2xl border border-slate-700/70 bg-slate-900/50 shadow-[0_18px_44px_rgba(2,6,23,0.28)]">
               <CardHeader className="pb-6 text-center">
-                <CardTitle className="text-2xl text-white">
-                  How we use cookies
-                </CardTitle>
-                <p className="text-slate-300">
-                  Last updated: {lastUpdated}
-                </p>
+                <CardTitle className="text-2xl text-white">Cookie Policy</CardTitle>
+                <p className="text-slate-300">Effective date: {lastUpdated}</p>
               </CardHeader>
               <CardContent>
                 <CookiePolicy />

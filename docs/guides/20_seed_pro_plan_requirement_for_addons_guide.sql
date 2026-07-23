@@ -46,14 +46,14 @@ In the current app billing flow, add-on purchase controls are available once the
 
 Add-ons in Billing include:
 
-- `extra_space`
+- `extra_bot`
 - `message_block`
 - `white_label`
 - `agency_portal`
 
 Operational behaviour:
 
-- Quantity-based inputs are used for `extra_space` and `message_block`.
+- Quantity-based inputs are used for `extra_bot` and `message_block`.
 - Single-account purchases are used for `white_label` and `agency_portal`.
 
 ## 3) Run upgrade-first workflow

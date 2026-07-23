@@ -18,9 +18,9 @@ interface AddonSubscriptionDetail {
 }
 
 interface BillingLimits {
-  baseSpaces: number;
+  baseBots: number;
   baseMessages: number;
-  totalSpaces: number;
+  totalBots: number;
   totalMessages: number;
 }
 
@@ -170,16 +170,16 @@ export function BillingOverviewPanel({ data }: { data: BillingOverviewData }) {
             }`}
           >
             <div>
-              <p className="text-xs text-slate-500">Base spaces</p>
-              <p className="text-lg font-semibold text-slate-900">{limits.baseSpaces}</p>
+              <p className="text-xs text-slate-500">Base bots</p>
+              <p className="text-lg font-semibold text-slate-900">{limits.baseBots}</p>
             </div>
             <div>
               <p className="text-xs text-slate-500">Base messages</p>
               <p className="text-lg font-semibold text-slate-900">{limits.baseMessages.toLocaleString("en-GB")}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Total spaces</p>
-              <p className="text-lg font-semibold text-slate-900">{limits.totalSpaces}</p>
+              <p className="text-xs text-slate-500">Total bots</p>
+              <p className="text-lg font-semibold text-slate-900">{limits.totalBots}</p>
             </div>
             <div>
               <p className="text-xs text-slate-500">Message credits (this month)</p>

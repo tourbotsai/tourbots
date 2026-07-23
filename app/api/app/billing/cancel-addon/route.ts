@@ -12,10 +12,10 @@ const auth = getAuth();
 
 const cancelAddonSchema = z.object({
   addonCode: z.enum([
-    'extra_space',
+    'extra_bot',
     'message_block',
     'white_label',
-    'agency_extra_space',
+    'agency_extra_bot',
     'agency_message_block',
   ]),
 });

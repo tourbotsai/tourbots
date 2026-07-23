@@ -1,7 +1,7 @@
 import { supabaseServiceRole as supabase } from './supabase-service-role';
 import { User, Venue, UserWithVenue } from './types';
 
-const PLATFORM_ADMIN_EMAIL = 'hello@tourbots.ai';
+const PLATFORM_ADMIN_EMAIL = 'info@tourbots.ai';
 
 // Create a user in the users table
 export async function createUser({

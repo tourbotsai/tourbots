@@ -1,75 +1,60 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Save, Monitor, Smartphone, Loader2, Eye, Camera, ArrowLeft, LayoutList, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Save,
+  Monitor,
+  Smartphone,
+  Loader2,
+  Eye,
+  Camera,
+  ArrowLeft,
+} from "lucide-react";
 import { GlobalSettingsPanel } from "./global-settings-panel";
 import { BlocksList } from "./blocks-list";
 import { TourMenuPreview } from "./tour-menu-preview";
 import { useTourMenu } from "@/hooks/app/useTourMenu";
 import { useToast } from "@/components/ui/use-toast";
 import { TourMenuSettings } from "@/lib/types";
+import { DEFAULT_NEW_MENU_SETTINGS } from "@/lib/tour-menu";
+import { cn } from "@/lib/utils";
 
 interface TourMenuBuilderProps {
   tourId?: string;
   venueId?: string;
-  layoutMode?: 'split' | 'stacked';
+  layoutMode?: "split" | "stacked";
   onSwitchToViewer?: () => void;
 }
 
-const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = {
-  enabled: false,
-  position: 'center',
-  max_width: 600,
-  padding: 24,
-  padding_vertical: 0,
-  border_radius: 16,
-  menu_background_color: '#FFFFFF',
-  backdrop_blur: true,
-  entrance_animation: 'fade-scale',
-  show_reopen_widget: true,
-  widget_position: 'bottom-left',
-  widget_icon: 'HelpCircle',
-  widget_size: 'small',
-  widget_color: '#FFFFFF',
-  widget_hover_color: '#F0F0F0',
-  widget_icon_color: '#FF0000',
-  widget_x_offset: 24,
-  widget_y_offset: 24,
-  widget_tooltip_text: 'Reopen Tour Menu',
-  widget_border_radius: 24,
-  widget_shadow_intensity: 'none',
-};
+const DEFAULT_MENU_SETTINGS: Partial<TourMenuSettings> = DEFAULT_NEW_MENU_SETTINGS;
 
-export function TourMenuBuilder({ tourId, venueId, layoutMode = 'split', onSwitchToViewer }: TourMenuBuilderProps = {}) {
+export function TourMenuBuilder({
+  tourId,
+  venueId,
+  layoutMode = "split",
+  onSwitchToViewer,
+}: TourMenuBuilderProps = {}) {
   const { toast } = useToast();
-  const isStackedLayout = layoutMode === 'stacked';
-  
-  // Tour ID is currently provided by parent pages (app/admin); keep fallback for defensive rendering.
-  const activeTourId = tourId || '';
-  
+  const isStackedLayout = layoutMode === "stacked";
+  const activeTourId = tourId || "";
+
   const {
     settings: savedSettings,
     blocks: savedBlocks,
     isLoading,
-    error,
-    saveMenu
+    saveMenu,
   } = useTourMenu(activeTourId);
 
-  // Local state for editing
   const [settings, setSettings] = useState<Partial<TourMenuSettings>>(DEFAULT_MENU_SETTINGS);
-
   const [blocks, setBlocks] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeDevice, setActiveDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [activeDevice, setActiveDevice] = useState<"desktop" | "mobile">("desktop");
   const [showPreview, setShowPreview] = useState(true);
-  const [contentBlocksOpen, setContentBlocksOpen] = useState(false);
+  const [contentDefaultOpen, setContentDefaultOpen] = useState(false);
+  const hasSetInitialBlocksOpenRef = useRef(false);
 
-  // Sync saved data to local state
   useEffect(() => {
     if (savedSettings) {
       setSettings({ ...DEFAULT_MENU_SETTINGS, ...savedSettings });
@@ -79,6 +64,12 @@ export function TourMenuBuilder({ tourId, venueId, layoutMode = 'split', onSwitc
   useEffect(() => {
     if (savedBlocks) {
       setBlocks(savedBlocks);
+      if (!hasSetInitialBlocksOpenRef.current) {
+        hasSetInitialBlocksOpenRef.current = true;
+        if (savedBlocks.length > 0) {
+          setContentDefaultOpen(true);
+        }
+      }
     }
   }, [savedBlocks]);
 
@@ -87,7 +78,7 @@ export function TourMenuBuilder({ tourId, venueId, layoutMode = 'split', onSwitc
       toast({
         title: "Error",
         description: "No tour selected",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -96,14 +87,14 @@ export function TourMenuBuilder({ tourId, venueId, layoutMode = 'split', onSwitc
     try {
       await saveMenu(settings, blocks);
       toast({
-        title: "Tour menu saved!",
-        description: "Your tour menu has been updated successfully."
+        title: "Tour menu saved",
+        description: "Your changes are live on the tour.",
       });
     } catch (error) {
       toast({
         title: "Error saving tour menu",
         description: "Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsSaving(false);
@@ -112,241 +103,176 @@ export function TourMenuBuilder({ tourId, venueId, layoutMode = 'split', onSwitc
 
   if (isLoading) {
     return (
-      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-        <div className="p-12 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-blue" />
-            <p className="text-sm text-slate-600 dark:text-slate-400">Loading menu...</p>
-          </div>
+      <div className="flex items-center justify-center rounded-2xl border border-slate-200/90 bg-white py-16 dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="text-center space-y-3">
+          <Loader2 className="mx-auto h-7 w-7 animate-spin text-slate-400" />
+          <p className="text-sm text-slate-500">Loading menu builder…</p>
         </div>
-      </Card>
+      </div>
     );
   }
 
-  // Show friendly message if no tour selected
   if (!activeTourId) {
     return (
-      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-        <CardContent className="flex flex-col items-center justify-center py-16">
-          <div className="mb-6 rounded-full bg-slate-100 p-6 dark:border dark:border-input dark:bg-background">
-            <Camera className="h-12 w-12 text-slate-500" />
-          </div>
-          <h3 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
-            No tour selected
-          </h3>
-          <p className="mb-6 max-w-md text-center text-slate-600 dark:text-slate-400">
-            Set up your tour first to customise its menu.
-          </p>
-          <Button
-            onClick={() => {
-              if (onSwitchToViewer) {
-                onSwitchToViewer();
-              }
-            }}
-            className="bg-slate-900 text-white hover:bg-slate-800 dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Go to Tour Setup
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/90 bg-white px-6 py-16 dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 dark:bg-neutral-800">
+          <Camera className="h-7 w-7 text-slate-500" />
+        </div>
+        <h3 className="mb-1.5 text-lg font-semibold text-slate-900 dark:text-slate-100">
+          No tour selected
+        </h3>
+        <p className="mb-5 max-w-sm text-center text-sm text-slate-500">
+          Set up your tour first to customise its menu.
+        </p>
+        <Button
+          onClick={() => onSwitchToViewer?.()}
+          className="rounded-lg bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Go to Tour Setup
+        </Button>
+      </div>
     );
   }
 
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Tour Menu Builder</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Create a customisable welcome menu for your virtual tour.
-              </p>
-            </div>
+  const contentSummary =
+    blocks.length > 0
+      ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}`
+      : "Templates & layers";
 
-            <div className="grid w-full grid-cols-2 gap-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-1.5 sm:flex sm:w-auto sm:flex-wrap sm:items-center dark:border-input dark:bg-background">
-              <div className="col-span-2 grid grid-cols-2 gap-1 sm:col-span-1 sm:flex sm:items-center sm:gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveDevice('desktop')}
-                  className={`h-8 rounded-md border-slate-300 bg-white px-3 text-xs font-medium hover:bg-slate-100 dark:border-input dark:bg-background dark:hover:bg-neutral-800 ${
-                    activeDevice === 'desktop' ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <Monitor className="mr-1.5 h-3.5 w-3.5" />
-                  Desktop
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveDevice('mobile')}
-                  className={`h-8 rounded-md border-slate-300 bg-white px-3 text-xs font-medium hover:bg-slate-100 dark:border-input dark:bg-background dark:hover:bg-neutral-800 ${
-                    activeDevice === 'mobile' ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <Smartphone className="mr-1.5 h-3.5 w-3.5" />
-                  Mobile
-                </Button>
-              </div>
-
-              <div className="col-span-2 hidden h-4 w-px bg-slate-200 dark:bg-neutral-700 sm:block" />
-
-              <div className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 dark:border-input dark:bg-background sm:h-auto sm:gap-2 sm:border-0 sm:bg-transparent sm:px-2">
-                <Switch
-                  checked={showPreview}
-                  onCheckedChange={setShowPreview}
-                  className="scale-90 sm:scale-100"
-                />
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                  <span className="sm:hidden">Preview</span>
-                  <span className="hidden sm:inline">Show Preview</span>
-                </span>
-              </div>
-
-              <div className="col-span-2 hidden h-4 w-px bg-slate-200 dark:bg-neutral-700 sm:block" />
-
-              <Button
-                onClick={handleSave}
-                size="sm"
-                disabled={isSaving}
-                className="h-8 w-full rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-800 sm:w-auto dark:border dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save & Publish
-                  </>
-                )}
-              </Button>
-            </div>
+  const previewPane = showPreview ? (
+    <div className={cn(isStackedLayout ? "sticky top-20 z-[5]" : "h-fit xl:sticky xl:top-24")}>
+      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-neutral-800">
+          <div className="flex items-center gap-2">
+            <Eye className="h-3.5 w-3.5 text-slate-400" />
+            <h3 className="text-[13px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              Live preview
+            </h3>
           </div>
-        </CardContent>
-      </Card>
+          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-neutral-800 dark:text-slate-300">
+            {activeDevice === "desktop" ? "Desktop" : "Mobile"}
+          </span>
+        </div>
+        <div className="bg-slate-50/60 p-3 dark:bg-neutral-900/40">
+          <TourMenuPreview
+            settings={settings}
+            blocks={blocks}
+            mode={activeDevice}
+            isPreviewMode={true}
+          />
+        </div>
+      </div>
+    </div>
+  ) : null;
 
-      {/* Main Layout */}
+  return (
+    <div className="space-y-4">
+      {/* Editor chrome */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-neutral-800 dark:bg-neutral-950 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+            Menu builder
+          </h1>
+          <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+            Style on the left · preview updates live on the right
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg bg-slate-100/90 p-0.5 dark:bg-neutral-900">
+            <button
+              type="button"
+              onClick={() => setActiveDevice("desktop")}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium transition-all",
+                activeDevice === "desktop"
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-neutral-800 dark:text-white"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400"
+              )}
+            >
+              <Monitor className="h-3.5 w-3.5" />
+              Desktop
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveDevice("mobile")}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium transition-all",
+                activeDevice === "mobile"
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-neutral-800 dark:text-white"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400"
+              )}
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              Mobile
+            </button>
+          </div>
+
+          <div className="inline-flex h-8 items-center gap-2 rounded-lg border border-slate-200 px-2.5 dark:border-neutral-800">
+            <Switch
+              checked={showPreview}
+              onCheckedChange={setShowPreview}
+              className="scale-90"
+            />
+            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+              Preview
+            </span>
+          </div>
+
+          <Button
+            onClick={handleSave}
+            size="sm"
+            disabled={isSaving}
+            className="h-8 rounded-lg bg-slate-900 px-3 text-[11px] font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                Save & publish
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
       <div
         className={
           showPreview
             ? isStackedLayout
-              ? "space-y-5"
-              : "grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(500px,620px)]"
-            : "space-y-5"
+              ? "space-y-4"
+              : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,560px)]"
+            : "space-y-4"
         }
       >
-        {showPreview && isStackedLayout ? (
-          <div className="sticky top-20 z-[5]">
-            <Card className="border-0 bg-transparent shadow-none md:rounded-xl md:border md:border-slate-200 md:bg-white md:shadow-sm md:dark:border-input md:dark:bg-background">
-              <CardContent className="p-0 md:p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Live Preview</h3>
-                  </div>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-input dark:bg-background dark:text-slate-300">
-                    {activeDevice === "desktop" ? "Desktop view" : "Mobile view"}
-                  </span>
-                </div>
-                <div className="rounded-none border-0 bg-transparent p-0 md:rounded-lg md:border md:border-slate-200 md:bg-slate-50/50 md:p-3 md:dark:border-input md:dark:bg-background">
-                  <TourMenuPreview
-                    settings={settings}
-                    blocks={blocks}
-                    mode={activeDevice}
-                    isPreviewMode={true}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        ) : null}
+        {showPreview && isStackedLayout ? previewPane : null}
 
-        {/* Left - Editor Sections */}
-        <div className="space-y-5">
-          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
-            <CardContent className="space-y-4 p-4">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Menu Settings</h3>
-
-              <GlobalSettingsPanel
-                settings={settings}
-                onSettingsChange={setSettings}
-                contentBlocksSlot={
-                  <Card className="overflow-hidden">
-                    <Collapsible open={contentBlocksOpen} onOpenChange={setContentBlocksOpen}>
-                      <CollapsibleTrigger asChild>
-                        <CardContent className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="text-gray-600 dark:text-gray-400">
-                                <LayoutList className="h-4 w-4" />
-                              </div>
-                              <div>
-                                <h3 className="font-medium text-sm dark:text-white">Content Blocks</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Build and arrange the menu content</p>
-                              </div>
-                            </div>
-                            {contentBlocksOpen ? (
-                              <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                            )}
-                          </div>
-                        </CardContent>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <Separator />
-                        <CardContent className="p-4">
-                          <BlocksList
-                            blocks={blocks}
-                            onBlocksChange={setBlocks}
-                            tourId={activeTourId}
-                            venueId={venueId}
-                            activeDevice={activeDevice}
-                          />
-                        </CardContent>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </Card>
-                }
+        <div className="min-w-0">
+          <GlobalSettingsPanel
+            settings={settings}
+            onSettingsChange={setSettings}
+            activeDevice={activeDevice}
+            contentSummary={contentSummary}
+            contentDefaultOpen={contentDefaultOpen}
+            contentBlocksSlot={
+              <BlocksList
+                blocks={blocks}
+                onBlocksChange={setBlocks}
+                tourId={activeTourId}
+                venueId={venueId}
+                activeDevice={activeDevice}
               />
-            </CardContent>
-          </Card>
+            }
+          />
         </div>
 
-        {/* Right - Live Preview */}
-        {showPreview && !isStackedLayout && (
-          <div className="h-fit xl:sticky xl:top-24">
-            <Card className="border-0 bg-transparent shadow-none md:rounded-xl md:border md:border-slate-200 md:bg-white md:shadow-sm md:dark:border-input md:dark:bg-background">
-              <CardContent className="p-0 md:p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Live Preview</h3>
-                  </div>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-input dark:bg-background dark:text-slate-300">
-                    {activeDevice === "desktop" ? "Desktop view" : "Mobile view"}
-                  </span>
-                </div>
-                <div className="rounded-none border-0 bg-transparent p-0 md:rounded-lg md:border md:border-slate-200 md:bg-slate-50/50 md:p-3 md:dark:border-input md:dark:bg-background">
-                  <TourMenuPreview 
-                  settings={settings}
-                  blocks={blocks}
-                  mode={activeDevice}
-                  isPreviewMode={true}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {showPreview && !isStackedLayout ? previewPane : null}
       </div>
     </div>
   );
 }
-

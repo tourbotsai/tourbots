@@ -30,6 +30,7 @@ type ModuleName = 'tour' | 'settings' | 'customisation' | 'analytics' | 'share';
 interface AgencyPortalShellProps {
   shareSlug: string;
   tourId?: string | null;
+  chatbotConfigId?: string | null;
   shareActive: boolean;
   agencyName: string;
   agencyLogoUrl?: string | null;
@@ -131,6 +132,7 @@ interface InformationSection {
 export function AgencyPortalShell({
   shareSlug,
   tourId,
+  chatbotConfigId = null,
   shareActive,
   agencyName,
   agencyLogoUrl,
@@ -159,6 +161,9 @@ export function AgencyPortalShell({
   previewAnalyticsConversations = [],
 }: AgencyPortalShellProps) {
   const { user: appUser } = useUser();
+  const resolvedTourId = tourId || null;
+  const resolvedChatbotConfigId = chatbotConfigId || null;
+  const isWebsitePortal = Boolean(resolvedChatbotConfigId) && !resolvedTourId;
   const [session, setSession] = useState<SessionState>(initialSession ?? { authenticated: false });
   const [loadingSession, setLoadingSession] = useState(!previewOnly && !initialSession);
   const [email, setEmail] = useState('');
@@ -166,7 +171,9 @@ export function AgencyPortalShell({
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [selectedModule, setSelectedModule] = useState<ModuleName>('tour');
+  const [selectedModule, setSelectedModule] = useState<ModuleName>(
+    isWebsitePortal ? 'settings' : 'tour'
+  );
   const [selectedTourTab, setSelectedTourTab] = useState<'setup' | 'menu'>('setup');
 
   // The advanced (script) embed disables the iframe's internal scroll and
@@ -222,7 +229,6 @@ export function AgencyPortalShell({
       return true;
     });
   }, [modules, shareTourBlock, shareChatbotBlock]);
-  const resolvedTourId = tourId || null;
   // White-label: only emit the agency's own domain in the embed code once it is
   // verified end-to-end; otherwise the generator falls back to tourbots.ai.
   const shareBaseUrlOverride = useMemo(() => {
@@ -911,6 +917,7 @@ export function AgencyPortalShell({
                               selectedTourIdOverride={resolvedTourId}
                               forcedVenueId={venueId || appUser?.venue?.id}
                               forcedVenueName={venueName || appUser?.venue?.name}
+                              agencyShareSlug={shareSlug}
                             />
                           </TabsContent>
                         )}
@@ -1159,6 +1166,7 @@ export function AgencyPortalShell({
                               <PortalChatbotShare
                                 venueId={venueId || appUser?.venue?.id}
                                 tourId={resolvedTourId}
+                                chatbotConfigId={resolvedChatbotConfigId}
                                 baseUrlOverride={shareBaseUrlOverride}
                               />
                             </AccordionContent>

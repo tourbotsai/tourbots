@@ -1,21 +1,28 @@
 "use client";
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 export function PricingFAQ() {
   const faqs = [
     {
       question: "What does Free include?",
       answer:
-        "Free includes one test tour, setup access, and up to 25 messages so you can validate everything before launch.",
+        "Free includes one bot to test, setup tools, and up to 25 messages so you can try a tour or website chatbot before going live.",
     },
     {
       question: "What does Pro include?",
       answer:
-        "Pro includes one active space, 1,000 chatbot messages each month, AI guidance, custom triggers, and analytics.",
+        "Pro includes one bot, 1,000 chatbot messages per month, AI Q&A, optional tour navigation, website embed, lead capture, and analytics.",
     },
     {
-      question: "How much are extra spaces?",
+      question: "How much are extra bots?",
       answer:
-        "Each additional active space is £14.99 per month and includes another 1,000 chatbot messages.",
+        "Pro: £14.99 per month per bot (includes another 1,000 messages). Agency: £9.99 per month. Each extra bot is another tour or website chatbot.",
+    },
+    {
+      question: "Can I put the chatbot on my website?",
+      answer:
+        "Yes. Bots can be embedded on a tour with navigation on or off, or used as website-only chat embeds with no Matterport required.",
     },
     {
       question: "Can I add message top-ups?",
@@ -25,12 +32,12 @@ export function PricingFAQ() {
     {
       question: "Is white-label available?",
       answer:
-        "Yes. White-label is a £19.99 per month add-on that removes TourBots branding from the client experience.",
+        "Yes. White-label is a £19.99 per month add-on that removes TourBots branding from the client experience. It is included on the Agency plan.",
     },
     {
       question: "What is the Agency plan?",
       answer:
-        "It allows you to provide clients secure branded portal access to manage their tour, chatbot, and analytics.",
+        "Three bots, branded client portals, and white-label. Give each client a tour portal or a website-only chatbot portal.",
     },
   ];
 
@@ -45,20 +52,23 @@ export function PricingFAQ() {
         </p>
       </div>
 
-      <div className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/50 shadow-[0_18px_44px_rgba(2,6,23,0.28)]">
-        <div className="grid md:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto max-w-4xl rounded-2xl border border-slate-700/70 bg-slate-900/50 p-2 shadow-[0_18px_44px_rgba(2,6,23,0.28)] sm:p-3">
+        <Accordion type="single" collapsible defaultValue="pricing-faq-0" className="w-full">
           {faqs.map((faq, index) => (
-            <article
+            <AccordionItem
               key={faq.question}
-              className={`p-6 md:p-8 ${
-                index < faqs.length - 1 ? "border-b border-white/10" : ""
-              }`}
+              value={`pricing-faq-${index}`}
+              className="border-slate-700/70 px-4 first:rounded-t-xl last:rounded-b-xl hover:bg-white/[0.03] sm:px-5"
             >
-              <h3 className="text-lg font-semibold text-white">{faq.question}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-300 md:text-base">{faq.answer}</p>
-            </article>
+              <AccordionTrigger className="py-5 text-base font-semibold text-white no-underline hover:text-brand-primary hover:no-underline md:text-lg">
+                {faq.question}
+              </AccordionTrigger>
+              <AccordionContent className="max-w-3xl pb-5 text-sm leading-relaxed text-slate-300 md:text-base">
+                {faq.answer}
+              </AccordionContent>
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       </div>
     </section>
   );

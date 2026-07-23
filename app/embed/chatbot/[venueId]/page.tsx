@@ -1,24 +1,7 @@
 import { notFound } from 'next/navigation';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { ChatbotEmbedClient } from './chatbot-embed-client';
-import { createHmac } from 'crypto';
-
-// Mirrors the HMAC embed token minted by the tour embed page so the public
-// chatbot route accepts requests from this iframe regardless of the host page
-// it is framed on (e.g. an MPskin tour).
-function createPublicEmbedToken(venueId: string, embedId: string): string | null {
-  const secret = process.env.PUBLIC_CHATBOT_EMBED_TOKEN_SECRET;
-  if (!secret) return null;
-
-  const payload = {
-    v: venueId,
-    e: embedId,
-    exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60, // 12 hours
-  };
-  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = createHmac('sha256', secret).update(payloadBase64).digest('hex');
-  return `${payloadBase64}.${signature}`;
-}
+import { createPublicEmbedToken } from '@/lib/public-embed-token';
 
 // Minimal chatbot config (name / welcome / active) so the widget renders immediately
 // without its own client config fetch. Returns null when no active config exists, in
@@ -45,6 +28,48 @@ async function getChatbotConfigData(venueId: string, locationTourId: string, ven
     chatbot_name: config.chatbot_name,
     welcome_message: welcomeMessage,
     is_active: true,
+  };
+}
+
+// Website chatbots have no Matterport tour. Resolves the venue + active
+// website config + its customisation, keyed only by chatbotConfigId.
+async function getWebsiteChatbotEmbedData(venueId: string, chatbotConfigId: string) {
+  const { data: config } = await supabase
+    .from('chatbot_configs')
+    .select('*, venues (id, name, city, country, logo_url)')
+    .eq('venue_id', venueId)
+    .eq('id', chatbotConfigId)
+    .eq('chatbot_type', 'website')
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!config) {
+    return null;
+  }
+
+  const venue = config.venues;
+
+  const { data: customisation } = await supabase
+    .from('chatbot_customisations')
+    .select('*')
+    .eq('chatbot_config_id', chatbotConfigId)
+    .eq('chatbot_type', 'website')
+    .eq('is_active', true)
+    .maybeSingle();
+
+  const welcomeMessage =
+    config.welcome_message ||
+    `Hello! I'm ${config.chatbot_name}, the assistant${venue?.name ? ` for ${venue.name}` : ''}. What would you like to know?`;
+
+  return {
+    tour: null,
+    venue,
+    customisation: customisation || null,
+    chatbotConfig: {
+      chatbot_name: config.chatbot_name,
+      welcome_message: welcomeMessage,
+      is_active: true,
+    },
   };
 }
 
@@ -118,24 +143,32 @@ export default async function ChatbotEmbedPage({
   searchParams: {
     id?: string;
     tourId?: string;
+    chatbotConfigId?: string;
     nav?: string;
     mode?: string;
     domain?: string;
     pageUrl?: string;
   };
 }) {
-  const data = await getChatbotEmbedData(params.venueId, searchParams.tourId);
+  const isWebsiteChatbot = Boolean(searchParams.chatbotConfigId);
+
+  const data = isWebsiteChatbot
+    ? await getWebsiteChatbotEmbedData(params.venueId, searchParams.chatbotConfigId as string)
+    : await getChatbotEmbedData(params.venueId, searchParams.tourId);
 
   if (!data) {
     notFound();
   }
 
-  // Navigation defaults ON; only the explicit "off" forms disable it.
-  const navigationEnabled = !(
-    searchParams.nav === '0' ||
-    searchParams.nav === 'false' ||
-    searchParams.nav === 'off'
-  );
+  // Navigation defaults ON for tour chatbots; only the explicit "off" forms
+  // disable it. Website chatbots have no tour, so navigation is always off.
+  const navigationEnabled = isWebsiteChatbot
+    ? false
+    : !(
+        searchParams.nav === '0' ||
+        searchParams.nav === 'false' ||
+        searchParams.nav === 'off'
+      );
 
   const resolvedEmbedId = searchParams.id || `chatbot-widget-${params.venueId}`;
   const embedToken = createPublicEmbedToken(params.venueId, resolvedEmbedId);
@@ -146,6 +179,7 @@ export default async function ChatbotEmbedPage({
       venue={data.venue}
       customisation={data.customisation}
       chatbotConfig={data.chatbotConfig}
+      chatbotConfigId={isWebsiteChatbot ? (searchParams.chatbotConfigId as string) : null}
       embedId={resolvedEmbedId}
       embedToken={embedToken}
       navigationEnabled={navigationEnabled}

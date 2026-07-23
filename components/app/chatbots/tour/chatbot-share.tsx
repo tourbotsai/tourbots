@@ -12,33 +12,43 @@ import { useToast } from "@/components/ui/use-toast";
 import { useTourChatbotConfig } from "@/hooks/app/useTourChatbotConfig";
 import { useChatbotCustomisation } from "@/hooks/app/useChatbotCustomisation";
 import { useBilling } from "@/hooks/app/useBilling";
-import { generateTourChatbotEmbed, ChatbotEmbedOptions } from "@/lib/embed-generator";
+import { generateTourChatbotEmbed, generateWebsiteChatbotEmbed, ChatbotEmbedOptions } from "@/lib/embed-generator";
 
 interface TourChatbotShareProps {
   onSwitchToSettings?: () => void;
   selectedTourId?: string | null;
+  chatbotConfigId?: string | null;
 }
 
-export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourChatbotShareProps) {
+export function TourChatbotShare({ onSwitchToSettings, selectedTourId, chatbotConfigId }: TourChatbotShareProps) {
+  const isWebsiteMode = Boolean(chatbotConfigId);
   const { user } = useUser();
   const { toast } = useToast();
-  const { tourConfig, isLoading } = useTourChatbotConfig(selectedTourId);
-  const { customisation, fetchCustomisation, isLoading: customisationLoading } = useChatbotCustomisation('tour', selectedTourId);
+  const { tourConfig, isLoading } = useTourChatbotConfig(
+    isWebsiteMode ? null : selectedTourId,
+    undefined,
+    isWebsiteMode ? chatbotConfigId : undefined
+  );
+  const { customisation, fetchCustomisation, isLoading: customisationLoading } = useChatbotCustomisation(
+    isWebsiteMode ? 'website' : 'tour',
+    selectedTourId,
+    chatbotConfigId
+  );
   const { billingRecord, fetchBilling, isLoading: billingLoading } = useBilling();
   const [options, setOptions] = useState<ChatbotEmbedOptions>({
     position: 'bottom-right',
     primaryColor: '#1E40AF',
-    title: 'Tour Assistant',
-    navigationEnabled: true,
+    title: isWebsiteMode ? 'Website Assistant' : 'Tour Assistant',
+    navigationEnabled: !isWebsiteMode,
   });
   const [embedCode, setEmbedCode] = useState<any>(null);
   const [billingReady, setBillingReady] = useState(false);
 
   useEffect(() => {
-    if (user?.venue?.id && selectedTourId) {
+    if (user?.venue?.id && (selectedTourId || chatbotConfigId)) {
       fetchCustomisation();
     }
-  }, [user?.venue?.id, selectedTourId, fetchCustomisation]);
+  }, [user?.venue?.id, selectedTourId, chatbotConfigId, fetchCustomisation]);
 
   useEffect(() => {
     if (!user?.venue_id) return;
@@ -67,7 +77,9 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
 
   const generateCode = () => {
     if (!user?.venue?.id || !tourConfig) return;
-    const code = generateTourChatbotEmbed(user.venue.id, customisation, options, selectedTourId || undefined);
+    const code = isWebsiteMode
+      ? generateWebsiteChatbotEmbed(user.venue.id, tourConfig.id, customisation, options)
+      : generateTourChatbotEmbed(user.venue.id, customisation, options, selectedTourId || undefined);
     setEmbedCode(code);
   };
 
@@ -76,7 +88,7 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
       await navigator.clipboard.writeText(text);
       toast({
         title: "Copied!",
-        description: "Tour chatbot embed code copied to clipboard",
+        description: `${isWebsiteMode ? "Website" : "Tour"} chatbot embed code copied to clipboard`,
       });
     } catch (error) {
       toast({
@@ -120,7 +132,7 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
     );
   }
 
-  if (!selectedTourId) {
+  if (!selectedTourId && !chatbotConfigId) {
     return (
       <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
         <CardContent className="py-10 text-center text-slate-600 dark:text-slate-400">
@@ -138,10 +150,10 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
             <Settings className="h-12 w-12 text-slate-500" />
           </div>
           <h3 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
-            No tour chatbot configured yet
+            No {isWebsiteMode ? "website" : "tour"} chatbot configured yet
           </h3>
           <p className="mb-6 max-w-md text-center text-slate-600 dark:text-slate-400">
-            Configure your tour chatbot first, then generate embed code for your website.
+            Configure your {isWebsiteMode ? "website" : "tour"} chatbot first, then generate embed code for your website.
           </p>
           <Button 
             onClick={onSwitchToSettings}
@@ -155,9 +167,9 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
     );
   }
 
-  const navParam = options.navigationEnabled === false ? "off" : "on";
+  const navParam = isWebsiteMode || options.navigationEnabled === false ? "off" : "on";
   const previewUrl = embedCode
-    ? `/embed/chatbot/${user?.venue?.id}?id=${embedCode.embedId}&tourId=${selectedTourId}&nav=${navParam}`
+    ? `/embed/chatbot/${user?.venue?.id}?id=${embedCode.embedId}&${isWebsiteMode ? `chatbotConfigId=${tourConfig.id}` : `tourId=${selectedTourId}`}&nav=${navParam}`
     : "#";
 
   return (
@@ -172,22 +184,37 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
               Add your chatbot widget to any page with one line of code, or use advanced embed options for extra control.
             </p>
 
-            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-input dark:bg-background">
-              <div>
-                <Label htmlFor="enable-tour-navigation" className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
-                  <Navigation className="h-4 w-4" />
-                  Enable tour navigation
-                </Label>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  Let the assistant move the virtual tour for visitors. Turn off for a question-and-answer assistant only.
-                </p>
+            {isWebsiteMode ? (
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-input dark:bg-background">
+                <div>
+                  <Label className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                    <Navigation className="h-4 w-4" />
+                    Tour navigation
+                  </Label>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    Website chatbots have no virtual tour to navigate, so this assistant is question-and-answer only.
+                  </p>
+                </div>
+                <Switch id="enable-tour-navigation" checked={false} disabled />
               </div>
-              <Switch
-                id="enable-tour-navigation"
-                checked={options.navigationEnabled ?? true}
-                onCheckedChange={(checked) => setOptions({ ...options, navigationEnabled: checked })}
-              />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-input dark:bg-background">
+                <div>
+                  <Label htmlFor="enable-tour-navigation" className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                    <Navigation className="h-4 w-4" />
+                    Enable tour navigation
+                  </Label>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    Let the assistant move the virtual tour for visitors. Turn off for a question-and-answer assistant only.
+                  </p>
+                </div>
+                <Switch
+                  id="enable-tour-navigation"
+                  checked={options.navigationEnabled ?? true}
+                  onCheckedChange={(checked) => setOptions({ ...options, navigationEnabled: checked })}
+                />
+              </div>
+            )}
 
             <div className="h-px bg-slate-200 dark:bg-slate-700" />
 
@@ -231,7 +258,9 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId }: TourCha
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Advanced Embed</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                A floating chat bubble that can drive the virtual tour. Use this when the chatbot sits on the same page as your tour.
+                {isWebsiteMode
+                  ? "A floating chat bubble for your website. Use this for more control over placement and styling."
+                  : "A floating chat bubble that can drive the virtual tour. Use this when the chatbot sits on the same page as your tour."}
               </p>
               <Textarea
                 value={embedCode.advanced}

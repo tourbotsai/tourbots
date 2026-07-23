@@ -20,32 +20,45 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const requestedVenueId = searchParams.get('venueId');
     const tourId = searchParams.get('tourId');
+    const chatbotConfigId = searchParams.get('chatbotConfigId');
     const rawType = searchParams.get('chatbotType');
-    if (rawType && rawType !== 'tour') {
+    if (rawType && rawType !== 'tour' && rawType !== 'website') {
       return NextResponse.json(
-        { error: 'chatbotType must be "tour" or omitted' },
+        { error: 'chatbotType must be "tour", "website" or omitted' },
         { status: 400 }
       );
     }
-    const chatbotType = 'tour' as const;
+    const chatbotType = rawType === 'website' ? ('website' as const) : ('tour' as const);
     const venueScopeError = ensureVenueScope(authResult, requestedVenueId);
     if (venueScopeError) return venueScopeError;
     const venueId = getScopedVenueId(authResult, requestedVenueId);
-    if (tourId) {
-      const tourScopeError = await ensureTourScope(venueId, tourId);
-      if (tourScopeError) return tourScopeError;
+
+    let scopeId: string | null;
+    if (chatbotType === 'website') {
+      if (!chatbotConfigId) {
+        return NextResponse.json(
+          { error: 'chatbotConfigId is required for website chatbots' },
+          { status: 400 }
+        );
+      }
+      scopeId = chatbotConfigId;
+    } else {
+      if (tourId) {
+        const tourScopeError = await ensureTourScope(venueId, tourId);
+        if (tourScopeError) return tourScopeError;
+      }
+
+      scopeId = await hardLimitService.resolveScopedTourId(venueId, tourId || undefined);
+      if (!scopeId) {
+        return NextResponse.json(
+          { error: 'No active tour found for venue' },
+          { status: 404 }
+        );
+      }
     }
 
-    const scopedTourId = await hardLimitService.resolveScopedTourId(venueId, tourId || undefined);
-    if (!scopedTourId) {
-      return NextResponse.json(
-        { error: 'No active tour found for venue' },
-        { status: 404 }
-      );
-    }
-
-    // Get hard limit configuration for the same resolved tour scope used by service usage checks.
-    const configQuery = supabase
+    // Get hard limit configuration for the same resolved scope used by service usage checks.
+    let configQuery = supabase
       .from('chatbot_configs')
       .select(`
         hard_limits_enabled,
@@ -55,8 +68,8 @@ export async function GET(request: NextRequest) {
         hard_limit_yearly_messages
       `)
       .eq('venue_id', venueId)
-      .eq('chatbot_type', chatbotType)
-      .eq('tour_id', scopedTourId);
+      .eq('chatbot_type', chatbotType);
+    configQuery = chatbotType === 'website' ? configQuery.eq('id', scopeId) : configQuery.eq('tour_id', scopeId);
 
     const { data: configRows, error: configError } = await configQuery.limit(1);
     const configData = configRows && configRows.length > 0 ? configRows[0] : null;
@@ -77,8 +90,10 @@ export async function GET(request: NextRequest) {
     };
 
     // Get current usage
-    const usage = await hardLimitService.getCurrentUsage(venueId, chatbotType, scopedTourId);
-    
+    const usage = chatbotType === 'website'
+      ? await hardLimitService.getCurrentUsage(venueId, chatbotType, undefined, scopeId)
+      : await hardLimitService.getCurrentUsage(venueId, chatbotType, scopeId);
+
     // Create comprehensive status
     const status = createHardLimitStatus(usage, config);
 
@@ -112,19 +127,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { venueId: requestedVenueId, chatbotType, resetType, tourId } = await request.json();
+    const { venueId: requestedVenueId, chatbotType, resetType, tourId, chatbotConfigId } = await request.json();
 
     const venueScopeError = ensureVenueScope(authResult, requestedVenueId);
     if (venueScopeError) return venueScopeError;
     const venueId = getScopedVenueId(authResult, requestedVenueId);
 
-    if (chatbotType !== undefined && chatbotType !== 'tour') {
+    if (chatbotType !== undefined && chatbotType !== 'tour' && chatbotType !== 'website') {
       return NextResponse.json(
-        { error: 'chatbotType must be "tour" or omitted' },
+        { error: 'chatbotType must be "tour", "website" or omitted' },
         { status: 400 }
       );
     }
-    const resolvedChatbotType = 'tour' as const;
+    const resolvedChatbotType = chatbotType === 'website' ? ('website' as const) : ('tour' as const);
 
     // Validate resetType
     const validResetTypes = ['daily', 'weekly', 'monthly', 'yearly', 'all'];
@@ -140,7 +155,8 @@ export async function POST(request: NextRequest) {
       venueId,
       resolvedChatbotType,
       resetType || 'all',
-      tourId || undefined
+      tourId || undefined,
+      chatbotConfigId || undefined
     );
 
     if (!success) {
@@ -151,7 +167,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get updated usage
-    const usage = await hardLimitService.getCurrentUsage(venueId, resolvedChatbotType, tourId || undefined);
+    const usage = resolvedChatbotType === 'website'
+      ? await hardLimitService.getCurrentUsage(venueId, resolvedChatbotType, undefined, chatbotConfigId || undefined)
+      : await hardLimitService.getCurrentUsage(venueId, resolvedChatbotType, tourId || undefined);
     logChatbotAudit('chatbot_hard_limit_reset', authResult, { reset_type: resetType || 'all' });
 
     return NextResponse.json({

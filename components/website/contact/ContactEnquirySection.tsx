@@ -96,12 +96,12 @@ export function ContactEnquirySection() {
     {
       question: "How is pricing structured?",
       answer:
-        "You can start free for testing, then move to Pro for live use. You can add extra spaces, message top-ups, and white-label as needed.",
+        "You can start free for testing, then move to Pro for live use. You can add extra bots, message top-ups, and white-label as needed.",
     },
     {
-      question: "Can I use across multiple spaces?",
+      question: "Can I use across multiple bots?",
       answer:
-        "Yes. You can manage one or many spaces from a single account, with separate setup and reporting at space level.",
+        "Yes. You can manage one or many bots from a single account, with separate setup and reporting at bot level.",
     },
   ];
 
@@ -263,9 +263,9 @@ export function ContactEnquirySection() {
               <p className="mt-2 text-sm text-slate-300">
                 Send your enquiry context directly and we will route it to the right person.
               </p>
-              <a href="mailto:hello@tourbots.ai" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-primary hover:underline">
+              <a href="mailto:info@tourbots.ai" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-primary hover:underline">
                 <Mail className="h-4 w-4" />
-                hello@tourbots.ai
+                info@tourbots.ai
               </a>
             </CardContent>
           </Card>

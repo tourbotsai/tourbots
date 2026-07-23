@@ -8,7 +8,8 @@ import type {
   VisitorAnalytics,
   ActivityItem,
   PerformanceMetrics,
-  ActionItem
+  ActionItem,
+  MenuAnalytics
 } from '@/lib/dashboard-service';
 
 interface DashboardData {
@@ -19,6 +20,7 @@ interface DashboardData {
   recentActivity: ActivityItem[];
   performanceMetrics: PerformanceMetrics | null;
   actionItems: ActionItem[];
+  menuAnalytics: MenuAnalytics | null;
 }
 
 interface DashboardLoadingState {
@@ -53,7 +55,8 @@ export function useDashboard() {
     visitorAnalytics: null,
     recentActivity: [],
     performanceMetrics: null,
-    actionItems: []
+    actionItems: [],
+    menuAnalytics: null
   });
 
   // Loading state
@@ -132,6 +135,7 @@ export function useDashboard() {
         recentActivity: payload.recentActivity || [],
         performanceMetrics: payload.performanceMetrics || null,
         actionItems: payload.actionItems || [],
+        menuAnalytics: payload.menuAnalytics || null,
       });
     } catch (error: any) {
       const message = error?.message || 'Failed to fetch dashboard data';

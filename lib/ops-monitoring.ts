@@ -14,7 +14,7 @@ interface AlertPayload {
 
 const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
 const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO || process.env.SUPPORT_NOTIFICATION_EMAIL;
-const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || process.env.RESEND_FROM_EMAIL || 'alerts@tourbots.ai';
+const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || process.env.RESEND_FROM_EMAIL || 'info@tourbots.ai';
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const APP_ENV = process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown';
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;

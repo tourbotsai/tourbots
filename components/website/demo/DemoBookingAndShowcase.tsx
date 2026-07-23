@@ -75,11 +75,11 @@ export function DemoBookingAndShowcase() {
   const demoTopics = [
     {
       title: "Tour setup and AI training",
-      description: "How to connect your space, train the assistant, and go live quickly.",
+      description: "How to connect your bot, train the assistant, and go live quickly.",
     },
     {
       title: "Pricing and scaling model",
-      description: "How Pro, additional spaces, and white-label add-ons fit your rollout.",
+      description: "How Pro, additional bots, and white-label add-ons fit your rollout.",
     },
     {
       title: "Operational best practice",
@@ -275,7 +275,7 @@ export function DemoBookingAndShowcase() {
                       id="additionalInfo"
                       value={formData.additionalInfo}
                       onChange={(e) => handleChange("additionalInfo", e.target.value)}
-                      placeholder="Space type, target audience, rollout questions, or anything you want us to cover"
+                      placeholder="Bot type, target audience, rollout questions, or anything you want us to cover"
                       className="border-slate-700/70 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus-visible:border-brand-primary"
                       disabled={status === 'loading'}
                     />

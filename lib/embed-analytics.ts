@@ -49,7 +49,7 @@ export async function trackEmbedView(
   type: string,
   domain?: string,
   pageUrl?: string,
-  chatbotType?: 'tour',
+  chatbotType?: 'tour' | 'website',
   userAgent?: string,
   tourId?: string
 ) {
@@ -177,6 +177,93 @@ export async function trackEmbedTourMove(params: {
     }
   } catch (error) {
     console.error('Error tracking embed tour move:', error);
+  }
+}
+
+export type EmbedMenuEventType =
+  | 'menu_opened'
+  | 'menu_closed'
+  | 'menu_item_clicked'
+  | 'menu_ai_prompt_sent';
+
+export async function trackEmbedMenuEvent(params: {
+  embedId: string;
+  venueId: string;
+  tourId?: string | null;
+  eventType: EmbedMenuEventType;
+  menuStyle?: string | null;
+  triggerSource?: string | null;
+  itemId?: string | null;
+  itemLabel?: string | null;
+  itemType?: string | null;
+  actionType?: string | null;
+  targetRef?: string | null;
+  domain?: string | null;
+  pageUrl?: string | null;
+  userAgent?: string | null;
+  ipAddress?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  try {
+    const {
+      embedId,
+      venueId,
+      tourId,
+      eventType,
+      menuStyle,
+      triggerSource,
+      itemId,
+      itemLabel,
+      itemType,
+      actionType,
+      targetRef,
+      domain,
+      pageUrl,
+      userAgent,
+      ipAddress,
+      metadata,
+    } = params;
+
+    if (pageUrl && isInternalDashboardPage(pageUrl)) {
+      return;
+    }
+
+    if (isInternalEmbedId(embedId)) {
+      return;
+    }
+
+    if (
+      !['menu_opened', 'menu_closed', 'menu_item_clicked', 'menu_ai_prompt_sent'].includes(
+        eventType
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase.from('embed_menu_events').insert({
+      embed_id: embedId,
+      venue_id: venueId,
+      tour_id: tourId || null,
+      event_type: eventType,
+      menu_style: menuStyle || null,
+      trigger_source: triggerSource || null,
+      item_id: itemId || null,
+      item_label: itemLabel || null,
+      item_type: itemType || null,
+      action_type: actionType || null,
+      target_ref: targetRef || null,
+      domain: domain || null,
+      page_url: pageUrl || null,
+      user_agent: userAgent || null,
+      ip_address: ipAddress || null,
+      metadata: metadata && typeof metadata === 'object' ? metadata : {},
+    });
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error tracking embed menu event:', error);
   }
 }
 

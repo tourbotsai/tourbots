@@ -31,7 +31,7 @@ async function getPlatformRecurringMonthlyRevenueGbp(): Promise<number> {
         .eq('is_active', true),
       supabase
         .from('venue_billing_records')
-        .select('venue_id, plan_code, billing_override_enabled, override_plan_code, addon_extra_spaces, addon_message_blocks, addon_white_label'),
+        .select('venue_id, plan_code, billing_override_enabled, override_plan_code, addon_extra_bots, addon_message_blocks, addon_white_label'),
       supabase
         .from('billing_plans')
         .select('code, monthly_price_gbp')
@@ -59,7 +59,7 @@ async function getPlatformRecurringMonthlyRevenueGbp(): Promise<number> {
     (billingAddons || []).map((addon: any) => [addon.code, Number(addon.monthly_price_gbp || 0)])
   );
 
-  const extraSpacePrice = Number(addonPriceByCode.get('extra_space') || 0);
+  const extraBotPrice = Number(addonPriceByCode.get('extra_bot') || 0);
   const messageBlockPrice = Number(addonPriceByCode.get('message_block') || 0);
   const whiteLabelPrice = Number(addonPriceByCode.get('white_label') || 0);
 
@@ -73,13 +73,13 @@ async function getPlatformRecurringMonthlyRevenueGbp(): Promise<number> {
         : (record?.plan_code || 'free');
 
     const planMonthly = Number(planPriceByCode.get(resolvedPlanCode) || 0);
-    const extraSpacesQty = Number(record?.addon_extra_spaces || 0);
+    const extraBotsQty = Number(record?.addon_extra_bots || 0);
     const messageBlocksQty = Number(record?.addon_message_blocks || 0);
     const whiteLabelQty = record?.addon_white_label ? 1 : 0;
 
     total +=
       planMonthly +
-      (extraSpacesQty * extraSpacePrice) +
+      (extraBotsQty * extraBotPrice) +
       (messageBlocksQty * messageBlockPrice) +
       (whiteLabelQty * whiteLabelPrice);
   }
@@ -524,8 +524,10 @@ function describeBillingEvent(event: any): { title: string; description: string 
   const payload = event?.event_payload || {};
 
   const addonLabels: Record<string, string> = {
-    extra_space: 'Extra space',
+    extra_bot: 'Extra bot',
+    agency_extra_bot: 'Agency extra bot',
     message_block: 'Message block',
+    agency_message_block: 'Agency message block',
     white_label: 'White-label',
   };
   const addonLabel = (code: string) => addonLabels[code] || code || 'add-on';

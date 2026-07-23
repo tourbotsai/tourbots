@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
     });
     if (session instanceof NextResponse) return session;
 
-    const payload = await getScopedTourTriggers(session.venueId, session.tourId);
+    const payload = await getScopedTourTriggers(
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
     return NextResponse.json({
       ...payload,
       scope: {

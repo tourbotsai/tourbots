@@ -28,9 +28,9 @@ export interface VenueBillingOverview {
   billingRecord: any;
   activePlan: any | null;
   limits: {
-    baseSpaces: number;
+    baseBots: number;
     baseMessages: number;
-    totalSpaces: number;
+    totalBots: number;
     totalMessages: number;
   };
   addonSubscriptions: Record<string, AddonSubscriptionState>;
@@ -144,20 +144,23 @@ export async function ensureVenueBillingRecord(venueId: string) {
 
 function deriveLimits(record: any, activePlan: any) {
   const planCode = activePlan?.code || record?.plan_code || 'free';
-  const baseSpacesFromPlan = Number(activePlan?.included_spaces || 0);
-  const baseSpaces = Math.max(baseSpacesFromPlan, planCode === 'free' ? 1 : 0);
+  const baseBotsFromPlan = Number(activePlan?.included_bots || 0);
+  const baseBots = Math.max(baseBotsFromPlan, planCode === 'free' ? 1 : 0);
   const baseMessages = activePlan?.included_messages || 0;
-  const extraSpaces = record.addon_extra_spaces || 0;
+  const extraBots = record.addon_extra_bots || 0;
   const messageBlocks = record.addon_message_blocks || 0;
 
-  const totalSpaces = record.effective_space_limit ?? (baseSpaces + extraSpaces);
-  // Each extra space includes +1,000 message credits.
-  const totalMessages = record.effective_message_limit ?? (baseMessages + (extraSpaces * 1000) + (messageBlocks * 1000));
+  const totalBots = Math.max(
+    Number(record.effective_bot_limit ?? (baseBots + extraBots)),
+    1
+  );
+  // Each extra bot includes +1,000 message credits.
+  const totalMessages = record.effective_message_limit ?? (baseMessages + (extraBots * 1000) + (messageBlocks * 1000));
 
   return {
-    baseSpaces,
+    baseBots,
     baseMessages,
-    totalSpaces,
+    totalBots,
     totalMessages,
   };
 }

@@ -14,6 +14,7 @@ async function getAgencyPreviewData(shareSlug: string) {
       id,
       venue_id,
       tour_id,
+      chatbot_config_id,
       share_slug,
       is_active,
       enabled_modules,
@@ -79,16 +80,17 @@ export default async function AgencyEmbedPreviewPage({
 
   const tour = Array.isArray(share.tours) ? share.tours[0] : share.tours;
   const venue = Array.isArray(share.venues) ? share.venues[0] : share.venues;
+  const isWebsiteShare = Boolean(share.chatbot_config_id) && !share.tour_id;
   const modules = {
-    tour: share.enabled_modules?.tour !== false,
+    tour: isWebsiteShare ? false : share.enabled_modules?.tour !== false,
     settings: share.enabled_modules?.settings !== false,
     customisation: share.enabled_modules?.customisation !== false,
     analytics: share.enabled_modules?.analytics !== false,
     share: share.enabled_modules?.share !== false,
   };
   const tourBlocks = {
-    setup: share.enabled_modules?.tour_blocks?.setup !== false,
-    menu: share.enabled_modules?.tour_blocks?.menu !== false,
+    setup: isWebsiteShare ? false : share.enabled_modules?.tour_blocks?.setup !== false,
+    menu: isWebsiteShare ? false : share.enabled_modules?.tour_blocks?.menu !== false,
   };
   const settingsBlocks = {
     config: share.enabled_modules?.settings_blocks?.config !== false,
@@ -97,7 +99,7 @@ export default async function AgencyEmbedPreviewPage({
     triggers: share.enabled_modules?.settings_blocks?.triggers !== false,
   };
   const shareBlocks = {
-    tour: share.enabled_modules?.share_blocks?.tour !== false,
+    tour: isWebsiteShare ? false : share.enabled_modules?.share_blocks?.tour !== false,
     chatbot: share.enabled_modules?.share_blocks?.chatbot !== false,
   };
 
@@ -109,11 +111,12 @@ export default async function AgencyEmbedPreviewPage({
   return (
     <AgencyPortalShell
       shareSlug={share.share_slug}
-      tourId={tour?.id || null}
+      tourId={tour?.id || share.tour_id || null}
+      chatbotConfigId={share.chatbot_config_id || null}
       shareActive={Boolean(share.is_active)}
       agencyName={agencyName}
       agencyLogoUrl={settings?.logo_url || null}
-      tourTitle={tour?.title || 'Tour'}
+      tourTitle={tour?.title || (isWebsiteShare ? 'Website chatbot' : 'Tour')}
       showHeader={showHeader}
       primaryColour={primaryColour}
       secondaryColour={secondaryColour}

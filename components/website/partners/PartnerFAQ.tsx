@@ -73,8 +73,8 @@ export function PartnerFAQ() {
           <p className="mt-2 text-sm text-slate-300">
             If you are unsure about fit, send us your business model and audience profile.
           </p>
-          <a href="mailto:partners@tourbots.ai" className="mt-4 inline-block text-sm font-semibold text-brand-primary hover:underline">
-            partners@tourbots.ai
+          <a href="mailto:info@tourbots.ai" className="mt-4 inline-block text-sm font-semibold text-brand-primary hover:underline">
+            info@tourbots.ai
           </a>
         </CardContent>
       </Card>

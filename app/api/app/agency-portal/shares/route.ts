@@ -37,7 +37,8 @@ const enabledModulesSchema = z.object({
 const upsertShareSchema = z.object({
   action: z.literal('upsert_share'),
   shareId: z.string().uuid().optional(),
-  tourId: z.string().uuid(),
+  tourId: z.string().uuid().optional(),
+  chatbotConfigId: z.string().uuid().optional(),
   shareSlug: z.string().min(3).max(120),
   isActive: z.boolean().optional(),
   enabledModules: enabledModulesSchema.optional(),
@@ -129,7 +130,7 @@ async function getAgencyPool(venueId: string): Promise<{ used: number; limit: nu
 
   const { data: billingRecord } = await supabase
     .from('venue_billing_records')
-    .select('plan_code, billing_override_enabled, override_plan_code, addon_extra_spaces, addon_message_blocks, effective_message_limit')
+    .select('plan_code, billing_override_enabled, override_plan_code, addon_extra_bots, addon_message_blocks, effective_message_limit')
     .eq('venue_id', venueId)
     .maybeSingle();
 
@@ -144,18 +145,18 @@ async function getAgencyPool(venueId: string): Promise<{ used: number; limit: nu
     .maybeSingle();
 
   const baseMessages = Number(planRow?.included_messages || 0);
-  const extraSpaces = Number(billingRecord?.addon_extra_spaces || 0);
+  const extraBots = Number(billingRecord?.addon_extra_bots || 0);
   const messageBlocks = Number(billingRecord?.addon_message_blocks || 0);
   const limit = Number(
     billingRecord?.effective_message_limit ??
-    (baseMessages + extraSpaces * 1000 + messageBlocks * 1000)
+    (baseMessages + extraBots * 1000 + messageBlocks * 1000)
   );
 
   const { count } = await supabase
     .from('conversations')
     .select('*', { count: 'exact', head: true })
     .eq('venue_id', venueId)
-    .eq('chatbot_type', 'tour')
+    .in('chatbot_type', ['tour', 'website'])
     .eq('message_type', 'visitor')
     .gte('created_at', periodStart);
 
@@ -175,6 +176,22 @@ async function getTourMessagesThisMonth(venueId: string, tourId: string, periodS
   return Number(count || 0);
 }
 
+async function getWebsiteMessagesThisMonth(
+  venueId: string,
+  chatbotConfigId: string,
+  periodStart: string
+): Promise<number> {
+  const { count } = await supabase
+    .from('conversations')
+    .select('*', { count: 'exact', head: true })
+    .eq('venue_id', venueId)
+    .eq('chatbot_config_id', chatbotConfigId)
+    .eq('chatbot_type', 'website')
+    .eq('message_type', 'visitor')
+    .gte('created_at', periodStart);
+  return Number(count || 0);
+}
+
 async function assertTourInVenue(venueId: string, tourId: string) {
   const { data } = await supabase
     .from('tours')
@@ -182,6 +199,17 @@ async function assertTourInVenue(venueId: string, tourId: string) {
     .eq('id', tourId)
     .eq('venue_id', venueId)
     .eq('is_active', true)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+async function assertWebsiteConfigInVenue(venueId: string, chatbotConfigId: string) {
+  const { data } = await supabase
+    .from('chatbot_configs')
+    .select('id')
+    .eq('id', chatbotConfigId)
+    .eq('venue_id', venueId)
+    .eq('chatbot_type', 'website')
     .maybeSingle();
   return Boolean(data);
 }
@@ -343,9 +371,21 @@ export async function GET(request: NextRequest) {
     const usageByShareId: Record<string, number> = {};
     await Promise.all(
       (shares || []).map(async (share) => {
-        usageByShareId[share.id] = share.tour_id
-          ? await getTourMessagesThisMonth(venueId, share.tour_id, periodStart)
-          : 0;
+        if (share.tour_id) {
+          usageByShareId[share.id] = await getTourMessagesThisMonth(
+            venueId,
+            share.tour_id,
+            periodStart
+          );
+        } else if (share.chatbot_config_id) {
+          usageByShareId[share.id] = await getWebsiteMessagesThisMonth(
+            venueId,
+            share.chatbot_config_id,
+            periodStart
+          );
+        } else {
+          usageByShareId[share.id] = 0;
+        }
       })
     );
 
@@ -396,6 +436,17 @@ export async function POST(request: NextRequest) {
 
     const payload = parsed.data;
 
+    if (payload.action === 'upsert_share') {
+      const hasTour = Boolean(payload.tourId);
+      const hasWebsite = Boolean(payload.chatbotConfigId);
+      if (hasTour === hasWebsite) {
+        return NextResponse.json(
+          { error: 'Provide either tourId or chatbotConfigId, not both.' },
+          { status: 400 }
+        );
+      }
+    }
+
     if (payload.action === 'toggle_share') {
       const { data: updated, error } = await supabase
         .from('agency_portal_shares')
@@ -425,7 +476,7 @@ export async function POST(request: NextRequest) {
       // never another client, tour or model on the same account.
       const { data: share, error: shareLookupError } = await supabase
         .from('agency_portal_shares')
-        .select('id, tour_id')
+        .select('id, tour_id, chatbot_config_id')
         .eq('id', payload.shareId)
         .eq('venue_id', venueId)
         .maybeSingle();
@@ -449,8 +500,20 @@ export async function POST(request: NextRequest) {
         if (tourDeleteError) {
           return NextResponse.json({ error: tourDeleteError.message }, { status: 500 });
         }
+      } else if (share.chatbot_config_id) {
+        // Website client: delete the website chatbot config (cascades share via FK).
+        const { error: configDeleteError } = await supabase
+          .from('chatbot_configs')
+          .delete()
+          .eq('id', share.chatbot_config_id)
+          .eq('venue_id', venueId)
+          .eq('chatbot_type', 'website');
+
+        if (configDeleteError) {
+          return NextResponse.json({ error: configDeleteError.message }, { status: 500 });
+        }
       } else {
-        // Defensive fallback: a share with no tour can't cascade, so remove the
+        // Defensive fallback: a share with no tour/config can't cascade, so remove the
         // share row directly (its users/sessions still cascade off the share).
         const { error: shareDeleteError } = await supabase
           .from('agency_portal_shares')
@@ -547,9 +610,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const validTour = await assertTourInVenue(venueId, payload.tourId);
-    if (!validTour) {
-      return NextResponse.json({ error: 'Tour not found for venue' }, { status: 404 });
+    const isWebsiteShare = Boolean(payload.chatbotConfigId);
+    if (isWebsiteShare) {
+      const validConfig = await assertWebsiteConfigInVenue(venueId, payload.chatbotConfigId!);
+      if (!validConfig) {
+        return NextResponse.json({ error: 'Website chatbot not found for venue' }, { status: 404 });
+      }
+    } else {
+      const validTour = await assertTourInVenue(venueId, payload.tourId!);
+      if (!validTour) {
+        return NextResponse.json({ error: 'Tour not found for venue' }, { status: 404 });
+      }
     }
 
     const shareSlug = normaliseSlug(payload.shareSlug);
@@ -557,31 +628,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Share slug must be at least 3 characters.' }, { status: 400 });
     }
 
-    const enabledModules = {
-      tour: payload.enabledModules?.tour ?? true,
-      settings: payload.enabledModules?.settings ?? true,
-      customisation: payload.enabledModules?.customisation ?? true,
-      analytics: payload.enabledModules?.analytics ?? true,
-      share: payload.enabledModules?.share ?? true,
-      tour_blocks: {
-        setup: payload.enabledModules?.tour_blocks?.setup ?? true,
-        menu: payload.enabledModules?.tour_blocks?.menu ?? true,
-      },
-      settings_blocks: {
-        config: payload.enabledModules?.settings_blocks?.config ?? true,
-        information: payload.enabledModules?.settings_blocks?.information ?? true,
-        documents: payload.enabledModules?.settings_blocks?.documents ?? true,
-        triggers: payload.enabledModules?.settings_blocks?.triggers ?? true,
-      },
-      share_blocks: {
-        tour: payload.enabledModules?.share_blocks?.tour ?? true,
-        chatbot: payload.enabledModules?.share_blocks?.chatbot ?? true,
-      },
-    };
+    const enabledModules = isWebsiteShare
+      ? {
+          tour: false,
+          settings: payload.enabledModules?.settings ?? true,
+          customisation: payload.enabledModules?.customisation ?? true,
+          analytics: payload.enabledModules?.analytics ?? true,
+          share: payload.enabledModules?.share ?? true,
+          tour_blocks: {
+            setup: false,
+            menu: false,
+          },
+          settings_blocks: {
+            config: payload.enabledModules?.settings_blocks?.config ?? true,
+            information: payload.enabledModules?.settings_blocks?.information ?? true,
+            documents: payload.enabledModules?.settings_blocks?.documents ?? true,
+            triggers: payload.enabledModules?.settings_blocks?.triggers ?? true,
+          },
+          share_blocks: {
+            tour: false,
+            chatbot: payload.enabledModules?.share_blocks?.chatbot ?? true,
+          },
+        }
+      : {
+          tour: payload.enabledModules?.tour ?? true,
+          settings: payload.enabledModules?.settings ?? true,
+          customisation: payload.enabledModules?.customisation ?? true,
+          analytics: payload.enabledModules?.analytics ?? true,
+          share: payload.enabledModules?.share ?? true,
+          tour_blocks: {
+            setup: payload.enabledModules?.tour_blocks?.setup ?? true,
+            menu: payload.enabledModules?.tour_blocks?.menu ?? true,
+          },
+          settings_blocks: {
+            config: payload.enabledModules?.settings_blocks?.config ?? true,
+            information: payload.enabledModules?.settings_blocks?.information ?? true,
+            documents: payload.enabledModules?.settings_blocks?.documents ?? true,
+            triggers: payload.enabledModules?.settings_blocks?.triggers ?? true,
+          },
+          share_blocks: {
+            tour: payload.enabledModules?.share_blocks?.tour ?? true,
+            chatbot: payload.enabledModules?.share_blocks?.chatbot ?? true,
+          },
+        };
 
     const shareData = {
       venue_id: venueId,
-      tour_id: payload.tourId,
+      tour_id: isWebsiteShare ? null : payload.tourId!,
+      chatbot_config_id: isWebsiteShare ? payload.chatbotConfigId! : null,
       share_slug: shareSlug,
       is_active: payload.isActive ?? true,
       enabled_modules: enabledModules,
@@ -594,6 +688,7 @@ export async function POST(request: NextRequest) {
         .from('agency_portal_shares')
         .update({
           tour_id: shareData.tour_id,
+          chatbot_config_id: shareData.chatbot_config_id,
           share_slug: shareData.share_slug,
           is_active: shareData.is_active,
           enabled_modules: shareData.enabled_modules,

@@ -1,59 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
-import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
-import { requireAgencyPortalSession } from '@/lib/agency-portal-auth';
-
-interface MenuRouteAccessContext {
-  venueId: string;
-}
-
-async function resolveMenuRouteAccess(
-  request: NextRequest,
-  tourId: string,
-  options?: { requireCsrf?: boolean }
-): Promise<MenuRouteAccessContext | NextResponse> {
-  const authHeader = request.headers.get('authorization');
-  const hasBearer = Boolean(authHeader && authHeader.startsWith('Bearer '));
-
-  if (hasBearer) {
-    const authResult = await authenticateAndGetVenue(request);
-    if (authResult instanceof NextResponse) return authResult;
-
-    // Platform admins may manage any account's tour menu, so scope to the
-    // tour's own venue. Everyone else is restricted to their own venue.
-    const isPlatformAdmin = authResult.role === 'platform_admin';
-    let tourQuery = supabase
-      .from('tours')
-      .select('venue_id')
-      .eq('id', tourId);
-    if (!isPlatformAdmin) {
-      tourQuery = tourQuery.eq('venue_id', authResult.venueId);
-    }
-
-    const { data: scopedTour, error: scopedTourError } = await tourQuery.maybeSingle();
-
-    if (scopedTourError) {
-      return NextResponse.json({ error: scopedTourError.message }, { status: 500 });
-    }
-    if (!scopedTour) {
-      return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
-    }
-
-    return { venueId: scopedTour.venue_id };
-  }
-
-  const portalSession = await requireAgencyPortalSession(request, {
-    requiredModule: 'tour',
-    requireCsrf: options?.requireCsrf,
-  });
-  if (portalSession instanceof NextResponse) return portalSession;
-
-  if (portalSession.tourId !== tourId) {
-    return NextResponse.json({ error: 'Tour not available for this share' }, { status: 403 });
-  }
-
-  return { venueId: portalSession.venueId };
-}
+import { resolveMenuRouteAccess } from '@/lib/tour-menu/route-access';
+import {
+  CLOSE_BUTTON_DEFAULTS,
+  DEFAULT_NEW_MENU_SETTINGS,
+  MENU_FONT_OPTIONS,
+  WIDGET_DEFAULTS,
+} from '@/lib/tour-menu';
 
 // GET - Fetch menu settings and blocks for a tour
 export async function GET(
@@ -124,6 +77,30 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid position value' }, { status: 400 });
     }
 
+    // Validate chrome enums
+    if (settings.menu_style && !['modal', 'drawer'].includes(settings.menu_style)) {
+      return NextResponse.json({ error: 'Invalid menu_style' }, { status: 400 });
+    }
+
+    if (settings.anchor_side && !['left', 'right'].includes(settings.anchor_side)) {
+      return NextResponse.json({ error: 'Invalid anchor_side' }, { status: 400 });
+    }
+
+    if (
+      settings.mobile_widget_position &&
+      !['bottom-left', 'bottom-right', 'top-left', 'top-right'].includes(settings.mobile_widget_position)
+    ) {
+      return NextResponse.json({ error: 'Invalid mobile_widget_position' }, { status: 400 });
+    }
+
+    if (settings.mobile_widget_size && !['small', 'medium', 'large'].includes(settings.mobile_widget_size)) {
+      return NextResponse.json({ error: 'Invalid mobile_widget_size' }, { status: 400 });
+    }
+
+    if (settings.drawer_width !== undefined && (settings.drawer_width < 240 || settings.drawer_width > 560)) {
+      return NextResponse.json({ error: 'Drawer width must be between 240-560px' }, { status: 400 });
+    }
+
     // Validate animation enum
     if (settings.entrance_animation && !['fade-scale', 'slide-up', 'slide-down', 'none'].includes(settings.entrance_animation)) {
       return NextResponse.json({ error: 'Invalid animation value' }, { status: 400 });
@@ -146,6 +123,27 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid widget_shadow_intensity' }, { status: 400 });
     }
 
+    if (settings.close_button_size && !['small', 'medium', 'large'].includes(settings.close_button_size)) {
+      return NextResponse.json({ error: 'Invalid close_button_size' }, { status: 400 });
+    }
+
+    if (settings.close_button_position && !['top-right', 'top-left'].includes(settings.close_button_position)) {
+      return NextResponse.json({ error: 'Invalid close_button_position' }, { status: 400 });
+    }
+
+    if (settings.close_button_style && !['ghost', 'filled'].includes(settings.close_button_style)) {
+      return NextResponse.json({ error: 'Invalid close_button_style' }, { status: 400 });
+    }
+
+    if (settings.panel_shadow && !['none', 'light', 'medium', 'heavy'].includes(settings.panel_shadow)) {
+      return NextResponse.json({ error: 'Invalid panel_shadow' }, { status: 400 });
+    }
+
+    const allowedFonts = new Set(MENU_FONT_OPTIONS.map((font) => font.id as string));
+    if (settings.menu_font_family && !allowedFonts.has(settings.menu_font_family)) {
+      return NextResponse.json({ error: 'Invalid menu_font_family' }, { status: 400 });
+    }
+
     // Validate hex colors
     const hexPattern = /^#[0-9A-F]{6}$/i;
     if (settings.widget_color && !hexPattern.test(settings.widget_color)) {
@@ -158,6 +156,10 @@ export async function POST(
 
     if (settings.widget_icon_color && !hexPattern.test(settings.widget_icon_color)) {
       return NextResponse.json({ error: 'Invalid widget_icon_color' }, { status: 400 });
+    }
+
+    if (settings.close_button_color && !hexPattern.test(settings.close_button_color)) {
+      return NextResponse.json({ error: 'Invalid close_button_color' }, { status: 400 });
     }
 
     // Validate widget offsets
@@ -189,7 +191,7 @@ export async function POST(
     // Validate blocks if provided
     if (blocks && Array.isArray(blocks)) {
       for (const block of blocks) {
-        if (!block.block_type || !['text', 'buttons', 'logo', 'table', 'spacer'].includes(block.block_type)) {
+        if (!block.block_type || !['text', 'buttons', 'logo', 'table', 'spacer', 'nav_list'].includes(block.block_type)) {
           return NextResponse.json({ error: 'Invalid block type' }, { status: 400 });
         }
         
@@ -228,27 +230,50 @@ export async function POST(
         venue_id: venueId,
         tour_id: tourId,
         enabled: settings.enabled,
+        show_close_button: settings.show_close_button !== undefined ? settings.show_close_button : DEFAULT_NEW_MENU_SETTINGS.show_close_button,
+        close_button_size: settings.close_button_size || CLOSE_BUTTON_DEFAULTS.size,
+        close_button_position: settings.close_button_position || CLOSE_BUTTON_DEFAULTS.position,
+        close_button_color: settings.close_button_color || CLOSE_BUTTON_DEFAULTS.color,
+        close_button_style: settings.close_button_style || CLOSE_BUTTON_DEFAULTS.style,
+        // Chrome / style — fallbacks all come from DEFAULT_NEW_MENU_SETTINGS /
+        // WIDGET_DEFAULTS (lib/tour-menu) so this route can never disagree with the
+        // client's "new menu" defaults or the render-time resolver's fallbacks.
+        menu_style: settings.menu_style || DEFAULT_NEW_MENU_SETTINGS.menu_style,
+        anchor_side: settings.anchor_side || DEFAULT_NEW_MENU_SETTINGS.anchor_side,
+        start_open: settings.start_open !== undefined ? settings.start_open : DEFAULT_NEW_MENU_SETTINGS.start_open,
+        avoid_chat_launcher: settings.avoid_chat_launcher !== undefined ? settings.avoid_chat_launcher : true,
         position: settings.position,
         max_width: settings.max_width,
+        drawer_width: settings.drawer_width !== undefined ? settings.drawer_width : DEFAULT_NEW_MENU_SETTINGS.drawer_width,
         padding: settings.padding,
-        padding_vertical: settings.padding_vertical !== undefined ? settings.padding_vertical : 0,
+        padding_vertical: settings.padding_vertical !== undefined ? settings.padding_vertical : DEFAULT_NEW_MENU_SETTINGS.padding_vertical,
         border_radius: settings.border_radius,
+        // Mobile-scoped layout overrides
+        mobile_max_width: settings.mobile_max_width ?? null,
+        mobile_drawer_width: settings.mobile_drawer_width ?? null,
+        mobile_padding: settings.mobile_padding ?? null,
+        mobile_padding_vertical: settings.mobile_padding_vertical ?? null,
         menu_background_color: settings.menu_background_color,
+        menu_font_family: settings.menu_font_family || DEFAULT_NEW_MENU_SETTINGS.menu_font_family,
+        panel_shadow: settings.panel_shadow || DEFAULT_NEW_MENU_SETTINGS.panel_shadow,
         backdrop_blur: settings.backdrop_blur,
         entrance_animation: settings.entrance_animation,
         // Widget fields
         show_reopen_widget: settings.show_reopen_widget !== undefined ? settings.show_reopen_widget : true,
-        widget_position: settings.widget_position || 'bottom-left',
-        widget_icon: settings.widget_icon || 'HelpCircle',
-        widget_size: settings.widget_size || 'small',
-        widget_color: settings.widget_color || '#FFFFFF',
-        widget_hover_color: settings.widget_hover_color || '#F0F0F0',
-        widget_icon_color: settings.widget_icon_color || '#FF0000',
-        widget_x_offset: settings.widget_x_offset !== undefined ? settings.widget_x_offset : 24,
-        widget_y_offset: settings.widget_y_offset !== undefined ? settings.widget_y_offset : 24,
-        widget_tooltip_text: settings.widget_tooltip_text || 'Reopen Tour Menu',
-        widget_border_radius: settings.widget_border_radius !== undefined ? settings.widget_border_radius : 50,
-        widget_shadow_intensity: settings.widget_shadow_intensity || 'medium',
+        widget_position: settings.widget_position || WIDGET_DEFAULTS.position,
+        widget_icon: settings.widget_icon || WIDGET_DEFAULTS.icon,
+        widget_size: settings.widget_size || WIDGET_DEFAULTS.size,
+        widget_color: settings.widget_color || WIDGET_DEFAULTS.color,
+        widget_hover_color: settings.widget_hover_color || WIDGET_DEFAULTS.hoverColor,
+        widget_icon_color: settings.widget_icon_color || WIDGET_DEFAULTS.iconColor,
+        widget_x_offset: settings.widget_x_offset !== undefined ? settings.widget_x_offset : WIDGET_DEFAULTS.xOffset,
+        widget_y_offset: settings.widget_y_offset !== undefined ? settings.widget_y_offset : WIDGET_DEFAULTS.yOffset,
+        widget_tooltip_text: settings.widget_tooltip_text || WIDGET_DEFAULTS.tooltipText,
+        widget_border_radius: settings.widget_border_radius !== undefined ? settings.widget_border_radius : WIDGET_DEFAULTS.borderRadius,
+        widget_shadow_intensity: settings.widget_shadow_intensity || WIDGET_DEFAULTS.shadowIntensity,
+        // Mobile-scoped widget overrides
+        mobile_widget_position: settings.mobile_widget_position ?? null,
+        mobile_widget_size: settings.mobile_widget_size ?? null,
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'tour_id'
@@ -310,13 +335,18 @@ export async function PUT(
 
     // Update settings - only allow specific fields
     const allowedFields = [
-      'enabled', 'position', 'max_width', 'padding', 'padding_vertical', 'border_radius',
-      'menu_background_color', 'backdrop_blur', 'entrance_animation',
+      'enabled', 'show_close_button', 'position', 'max_width', 'padding', 'padding_vertical', 'border_radius',
+      'menu_background_color', 'menu_font_family', 'panel_shadow', 'backdrop_blur', 'entrance_animation',
+      'close_button_size', 'close_button_position', 'close_button_color', 'close_button_style',
+      // Chrome / style
+      'menu_style', 'anchor_side', 'start_open', 'drawer_width', 'avoid_chat_launcher',
+      'mobile_max_width', 'mobile_drawer_width', 'mobile_padding', 'mobile_padding_vertical',
       // Widget fields
       'show_reopen_widget', 'widget_position', 'widget_icon', 'widget_size',
       'widget_color', 'widget_hover_color', 'widget_icon_color',
       'widget_x_offset', 'widget_y_offset', 'widget_tooltip_text',
-      'widget_border_radius', 'widget_shadow_intensity'
+      'widget_border_radius', 'widget_shadow_intensity',
+      'mobile_widget_position', 'mobile_widget_size'
     ];
     
     const updates: any = { updated_at: new Date().toISOString() };

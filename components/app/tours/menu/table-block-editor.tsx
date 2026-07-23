@@ -3,8 +3,14 @@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { ColorPicker } from "@/components/app/chatbots/shared/color-picker";
+import {
+  AlignmentToggle,
+  denseFieldClass,
+  denseLabelClass,
+  inspectorGroupLabelClass,
+} from "./menu-editor-primitives";
 
 interface TableBlockEditorProps {
   block: any;
@@ -141,63 +147,53 @@ export function TableBlockEditor({ block, onUpdate }: TableBlockEditorProps) {
       </div>
 
       {/* Styling */}
-      <div className="pt-4 border-t space-y-3">
-        <Label className="text-sm font-semibold">Table Styling</Label>
-        
-        <ColorPicker
-          label="Header Background"
-          value={block.content.header_background}
-          onChange={(value) => updateContent('header_background', value)}
-        />
+      <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-neutral-800">
+        <p className={inspectorGroupLabelClass}>Styling</p>
 
-        <ColorPicker
-          label="Border Colour"
-          value={block.content.border_color}
-          onChange={(value) => updateContent('border_color', value)}
-        />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className={denseLabelClass}>Header fill</Label>
+            <div className="flex h-8 items-center rounded-md border border-input bg-white px-1 dark:border-neutral-700 dark:bg-background">
+              <ColorPicker
+                compact
+                label=""
+                value={block.content.header_background}
+                onChange={(value) => updateContent('header_background', value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className={denseLabelClass}>Border</Label>
+            <div className="flex h-8 items-center rounded-md border border-input bg-white px-1 dark:border-neutral-700 dark:bg-background">
+              <ColorPicker
+                compact
+                label=""
+                value={block.content.border_color}
+                onChange={(value) => updateContent('border_color', value)}
+              />
+            </div>
+          </div>
+        </div>
 
-        <div>
-          <Label className="text-xs">Text Size (px)</Label>
+        <div className="space-y-1">
+          <Label className={denseLabelClass}>Text size (px)</Label>
           <Input
             type="number"
             value={block.content.text_size}
             onChange={(e) => updateContent('text_size', parseInt(e.target.value))}
             min={10}
             max={24}
-            className="mt-1"
+            className={denseFieldClass}
           />
         </div>
       </div>
 
-      {/* Alignment */}
-      <div className="pt-4 border-t">
-        <Label className="text-sm mb-2 block">Block Alignment</Label>
-        <div className="flex gap-2">
-          <Button
-            variant={block.alignment === 'left' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateAlignment('left')}
-            className="flex-1"
-          >
-            <AlignLeft className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={block.alignment === 'center' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateAlignment('center')}
-            className="flex-1"
-          >
-            <AlignCenter className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={block.alignment === 'right' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateAlignment('right')}
-            className="flex-1"
-          >
-            <AlignRight className="w-4 h-4" />
-          </Button>
-        </div>
+      <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-neutral-800">
+        <Label className={denseLabelClass}>Align</Label>
+        <AlignmentToggle
+          value={block.alignment}
+          onChange={(alignment) => updateAlignment(alignment)}
+        />
       </div>
     </div>
   );

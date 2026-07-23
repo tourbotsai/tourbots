@@ -95,7 +95,8 @@ interface ShareUser {
 interface ShareRow {
   id: string;
   venue_id: string;
-  tour_id: string;
+  tour_id: string | null;
+  chatbot_config_id?: string | null;
   share_slug: string;
   is_active: boolean;
   enabled_modules: {
@@ -231,21 +232,25 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
   const [addClientStep, setAddClientStep] = useState<"form" | "success">("form");
   const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [acClientType, setAcClientType] = useState<"tour" | "website">("tour");
   const [acClientName, setAcClientName] = useState("");
   const [acTourName, setAcTourName] = useState("");
   const [acTourNameEdited, setAcTourNameEdited] = useState(false);
   const [acMatterportUrl, setAcMatterportUrl] = useState("");
+  const [websiteConfigsCount, setWebsiteConfigsCount] = useState(0);
   const [acDescription, setAcDescription] = useState("");
   const [acSlug, setAcSlug] = useState("");
   const [acSlugEdited, setAcSlugEdited] = useState(false);
   const [acClientEmail, setAcClientEmail] = useState("");
   const [acClientPassword, setAcClientPassword] = useState("");
   const [createdClient, setCreatedClient] = useState<{
-    tourId: string;
+    tourId: string | null;
+    chatbotConfigId: string | null;
     tourName: string;
     slug: string;
     email: string;
     password: string | null;
+    kind: "tour" | "website";
   } | null>(null);
 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -253,7 +258,11 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
   const [selectedShare, setSelectedShare] = useState<ShareRow | null>(null);
   // Holds the single client targeted for deletion. Keeping the exact tour + share
   // here (rather than an id list) guarantees a delete only ever touches that one client.
-  const [clientToDelete, setClientToDelete] = useState<{ tour: TourRow; share: ShareRow } | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<{
+    tour: TourRow | null;
+    share: ShareRow;
+    label: string;
+  } | null>(null);
   const [shareSlug, setShareSlug] = useState("");
   const [shareActive, setShareActive] = useState(true);
   const [enabledModules, setEnabledModules] = useState(defaultModules);
@@ -270,10 +279,17 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
 
   const shareByTourId = useMemo(() => {
     return shares.reduce((acc, share) => {
-      acc[share.tour_id] = share;
+      if (share.tour_id) {
+        acc[share.tour_id] = share;
+      }
       return acc;
     }, {} as Record<string, ShareRow>);
   }, [shares]);
+
+  const websiteShares = useMemo(
+    () => shares.filter((share) => Boolean(share.chatbot_config_id) && !share.tour_id),
+    [shares]
+  );
 
   const embedCodes = useMemo(() => {
     const persistedSlug = selectedShare?.share_slug || null;
@@ -372,13 +388,15 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
     try {
       const headers = await getAuthHeaders();
 
-      const [settingsRes, sharesRes] = await Promise.all([
+      const [settingsRes, sharesRes, websiteConfigsRes] = await Promise.all([
         fetch(withVenue("/api/app/agency-portal/settings"), { headers }),
         fetch(withVenue("/api/app/agency-portal/shares"), { headers }),
+        fetch(withVenue("/api/app/chatbots/config?chatbotType=website"), { headers }),
       ]);
 
       const settingsJson = await settingsRes.json();
       const sharesJson = await sharesRes.json();
+      const websiteConfigsJson = websiteConfigsRes.ok ? await websiteConfigsRes.json() : [];
 
       if (!settingsRes.ok) {
         throw new Error(settingsJson.error || "Failed to fetch agency settings");
@@ -393,6 +411,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
       hydrateTourEmbedDomain(settingsJson.settings?.tour_embed_domain || null);
       setTours(sharesJson.tours || []);
       setShares(sharesJson.shares || []);
+      setWebsiteConfigsCount(Array.isArray(websiteConfigsJson) ? websiteConfigsJson.length : 0);
       setPool(sharesJson.pool || null);
       setAllocations(
         (sharesJson.shares || []).reduce((acc: Record<string, number>, share: ShareRow) => {
@@ -421,15 +440,18 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
     }
   }, [user?.venue_id, fetchBilling]);
 
-  const primarySpacesUsed = useMemo(
-    () => tours.filter((tour) => tour.tour_type === "primary" || !tour.tour_type).length,
-    [tours]
+  const primaryBotsUsed = useMemo(
+    () =>
+      tours.filter((tour) => tour.tour_type === "primary" || !tour.tour_type).length +
+      websiteConfigsCount,
+    [tours, websiteConfigsCount]
   );
-  const totalSpaces = limits?.totalSpaces ?? null;
-  const canAddClient = totalSpaces == null ? true : primarySpacesUsed < totalSpaces;
+  const totalBots = limits?.totalBots ?? null;
+  const canAddClient = totalBots == null ? true : primaryBotsUsed < totalBots;
 
   const resetAddClientForm = () => {
     setAddClientStep("form");
+    setAcClientType("tour");
     setAcClientName("");
     setAcTourName("");
     setAcTourNameEdited(false);
@@ -464,12 +486,13 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
     const matterportUrl = acMatterportUrl.trim();
     const matterportId = extractMatterportId(matterportUrl);
     const email = acClientEmail.trim();
+    const isWebsiteClient = acClientType === "website";
 
     if (!clientName) {
       toast({ title: "Client name required", description: "Enter the client or business name.", variant: "destructive" });
       return;
     }
-    if (!matterportUrl || !matterportId) {
+    if (!isWebsiteClient && (!matterportUrl || !matterportId)) {
       toast({ title: "Matterport URL required", description: "Enter a valid Matterport tour URL (it should contain ?m=...).", variant: "destructive" });
       return;
     }
@@ -486,24 +509,46 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
     try {
       const headers = await getAuthHeaders({ "Content-Type": "application/json" });
 
-      const tourResponse = await fetch("/api/app/tours", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          venueId,
-          title: tourName || clientName,
-          description: acDescription.trim() || null,
-          matterportTourId: matterportId,
-          matterportUrl,
-          tourType: "primary",
-        }),
-      });
-      const tourData = await tourResponse.json();
-      if (!tourResponse.ok) {
-        throw new Error(tourData.error || "Failed to create the client tour.");
+      let newTourId: string | null = null;
+      let newChatbotConfigId: string | null = null;
+
+      if (isWebsiteClient) {
+        const configResponse = await fetch("/api/app/chatbots/config", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            venueId,
+            chatbotType: "website",
+            config: {
+              chatbot_name: tourName || clientName,
+            },
+          }),
+        });
+        const configData = await configResponse.json();
+        if (!configResponse.ok) {
+          throw new Error(configData.error || "Failed to create the website chatbot.");
+        }
+        newChatbotConfigId = configData.id as string;
+      } else {
+        const tourResponse = await fetch("/api/app/tours", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            venueId,
+            title: tourName || clientName,
+            description: acDescription.trim() || null,
+            matterportTourId: matterportId,
+            matterportUrl,
+            tourType: "primary",
+          }),
+        });
+        const tourData = await tourResponse.json();
+        if (!tourResponse.ok) {
+          throw new Error(tourData.error || "Failed to create the client tour.");
+        }
+        newTourId = tourData.id as string;
       }
 
-      const newTourId = tourData.id as string;
       const slug = normaliseShareSlug(acSlug || `${tourName || clientName}-chatbot`);
 
       const shareResponse = await fetch("/api/app/agency-portal/shares", {
@@ -511,14 +556,19 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
         headers,
         body: JSON.stringify(withVenueBody({
           action: "upsert_share",
-          tourId: newTourId,
+          ...(isWebsiteClient
+            ? { chatbotConfigId: newChatbotConfigId }
+            : { tourId: newTourId }),
           shareSlug: slug,
           isActive: true,
           enabledModules: {
             ...defaultModules,
-            tour_blocks: defaultTourBlocks,
+            tour: !isWebsiteClient,
+            tour_blocks: isWebsiteClient ? { setup: false, menu: false } : defaultTourBlocks,
             settings_blocks: defaultSettingsBlocks,
-            share_blocks: defaultShareBlocks,
+            share_blocks: isWebsiteClient
+              ? { tour: false, chatbot: true }
+              : defaultShareBlocks,
           },
           clientEmail: email,
           clientPassword: acClientPassword || undefined,
@@ -532,16 +582,20 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
       if (!shareResponse.ok) {
         throw new Error(
           shareData.error ||
-            "The tour was created, but the client portal could not be set up. Finish it from the list below."
+            (isWebsiteClient
+              ? "The website chatbot was created, but the client portal could not be set up. Finish it from the list below."
+              : "The tour was created, but the client portal could not be set up. Finish it from the list below.")
         );
       }
 
       setCreatedClient({
         tourId: newTourId,
+        chatbotConfigId: newChatbotConfigId,
         tourName: tourName || clientName,
         slug: shareData.share?.share_slug || slug,
         email,
         password: acClientPassword || shareData.temporaryPassword || null,
+        kind: isWebsiteClient ? "website" : "tour",
       });
       setAddClientStep("success");
     } catch (error: any) {
@@ -565,7 +619,13 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
   };
 
   const goPositionCreatedTour = () => {
-    if (!createdClient) return;
+    if (!createdClient?.tourId) {
+      handleAddClientOpenChange(false);
+      if (createdClient?.kind === "website") {
+        router.push("/app/chatbots");
+      }
+      return;
+    }
     const tourId = createdClient.tourId;
     handleAddClientOpenChange(false);
     router.push(`/app/tours?tab=viewer&tourId=${encodeURIComponent(tourId)}`);
@@ -1561,9 +1621,9 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                 <div className="flex items-end justify-between gap-4">
                   <div className="flex items-end gap-6">
                     <div>
-                      <p className="text-sm text-muted-foreground">Active spaces</p>
+                      <p className="text-sm text-muted-foreground">Active bots</p>
                       <p className="text-2xl font-semibold">
-                        {primarySpacesUsed} / {totalSpaces ?? 0}
+                        {primaryBotsUsed} / {totalBots ?? 0}
                       </p>
                     </div>
                     <div>
@@ -1629,7 +1689,9 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => {
-                        const tourTitle = tours.find((tour) => tour.id === share.tour_id)?.title || "Untitled space";
+                        const tourTitle = share.chatbot_config_id && !share.tour_id
+                          ? share.users[0]?.display_name || share.share_slug || "Website chatbot"
+                          : tours.find((tour) => tour.id === share.tour_id)?.title || "Untitled bot";
                         const clientLabel = share.users[0]?.display_name || share.users[0]?.email || share.share_slug;
                         const usedThisMonth = Number(share.messages_used_this_month || 0);
                         return (
@@ -1970,9 +2032,9 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Manage client portals</CardTitle>
-                {totalSpaces != null ? (
+                {totalBots != null ? (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Spaces used: <span className="font-semibold text-foreground">{primarySpacesUsed}/{totalSpaces}</span>
+                    Bots used: <span className="font-semibold text-foreground">{primaryBotsUsed}/{totalBots}</span>
                   </p>
                 ) : null}
               </div>
@@ -1985,13 +2047,14 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
           <CardContent className="space-y-3">
             {!canAddClient ? (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                You have used all available spaces. Buy an agency additional space in Billing to add another client.
+                You have used all available bots. Buy an agency additional bot in Billing to add another client.
               </div>
             ) : null}
-            {tours.length === 0 ? (
+            {tours.length === 0 && websiteShares.length === 0 ? (
               <p className="text-sm text-muted-foreground">No clients yet. Use &quot;Add client&quot; to set up your first client portal.</p>
             ) : (
-              tours.map((tour) => {
+              <>
+              {tours.map((tour) => {
                 const share = shareByTourId[tour.id];
                 return (
                   <div key={tour.id} className="rounded-lg border p-3 dark:border-input dark:bg-background">
@@ -2023,7 +2086,13 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => setClientToDelete({ tour, share })}
+                            onClick={() =>
+                              setClientToDelete({
+                                tour,
+                                share,
+                                label: tour.title,
+                              })
+                            }
                             disabled={!entitled}
                             aria-label={`Delete client ${tour.title}`}
                             title="Delete client"
@@ -2036,7 +2105,62 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                     </div>
                   </div>
                 );
-              })
+              })}
+              {websiteShares.map((share) => {
+                const label =
+                  share.users[0]?.display_name ||
+                  share.users[0]?.email ||
+                  share.share_slug ||
+                  "Website chatbot";
+                return (
+                  <div key={share.id} className="rounded-lg border p-3 dark:border-input dark:bg-background">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{label}</p>
+                        <p className="text-xs text-muted-foreground">Website chatbot</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={share.is_active ? "default" : "outline"}>
+                          {share.is_active ? "Shared" : "Disabled"}
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedTour(null);
+                            setSelectedShare(share);
+                            setShareSlug(share.share_slug);
+                            setShareActive(share.is_active);
+                            setIsShareModalOpen(true);
+                          }}
+                          disabled={!entitled}
+                        >
+                          <Share2 className="mr-2 h-4 w-4" />
+                          <span className="sm:hidden">Manage</span>
+                          <span className="hidden sm:inline">Manage client</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() =>
+                            setClientToDelete({
+                              tour: null,
+                              share,
+                              label,
+                            })
+                          }
+                          disabled={!entitled}
+                          aria-label={`Delete client ${label}`}
+                          title="Delete client"
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              </>
             )}
           </CardContent>
         </Card>
@@ -2088,7 +2212,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
         onOpenChange={(open) => {
           if (!open) setClientToDelete(null);
         }}
-        title={clientToDelete ? `Delete ${clientToDelete.tour.title}?` : "Delete client?"}
+        title={clientToDelete ? `Delete ${clientToDelete.label}?` : "Delete client?"}
         destructive
         confirmText="Delete client"
         cancelText="Cancel"
@@ -2098,7 +2222,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
               This permanently deletes this client and everything belonging to them:
             </span>
             <span className="block">
-              • their tour and its points, menu and chatbot settings
+              • their tour or website chatbot and related settings
               <br />
               • the client&apos;s portal login and any active sessions
               <br />
@@ -2128,8 +2252,25 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
           {addClientStep === "form" ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Set up a new client tour and their branded portal in one step. After creating, you&apos;ll be taken to the tour viewer to check and position the tour.
+                Set up a new client with either a Matterport tour or a website-only chatbot, plus their branded portal.
               </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={acClientType === "tour" ? "default" : "outline"}
+                  onClick={() => setAcClientType("tour")}
+                >
+                  Tour client
+                </Button>
+                <Button
+                  type="button"
+                  variant={acClientType === "website" ? "default" : "outline"}
+                  onClick={() => setAcClientType("website")}
+                >
+                  Website chatbot
+                </Button>
+              </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
@@ -2146,7 +2287,9 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="ac-tour-name">Tour name</Label>
+                  <Label htmlFor="ac-tour-name">
+                    {acClientType === "website" ? "Chatbot name" : "Tour name"}
+                  </Label>
                   <Input
                     id="ac-tour-name"
                     value={acTourName}
@@ -2154,24 +2297,31 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                       setAcTourName(event.target.value);
                       setAcTourNameEdited(true);
                     }}
-                    placeholder="Main Venue Tour"
+                    placeholder={acClientType === "website" ? "Website Assistant" : "Main Venue Tour"}
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="ac-matterport-url">Matterport tour URL</Label>
-                <Input
-                  id="ac-matterport-url"
-                  value={acMatterportUrl}
-                  onChange={(event) => setAcMatterportUrl(event.target.value)}
-                  placeholder="https://my.matterport.com/show/?m=XXXXXXXXXXX"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Paste the full share URL - the model ID is detected automatically.
+              {acClientType === "tour" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ac-matterport-url">Matterport tour URL</Label>
+                  <Input
+                    id="ac-matterport-url"
+                    value={acMatterportUrl}
+                    onChange={(event) => setAcMatterportUrl(event.target.value)}
+                    placeholder="https://my.matterport.com/show/?m=XXXXXXXXXXX"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Paste the full share URL - the model ID is detected automatically.
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  No Matterport tour is required. This client gets a website-only chatbot that consumes one bot.
                 </p>
-              </div>
+              )}
 
+              {acClientType === "tour" ? (
               <div className="space-y-1.5">
                 <Label htmlFor="ac-description">Description (optional)</Label>
                 <Textarea
@@ -2182,6 +2332,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                   placeholder="A short description of this client's tour."
                 />
               </div>
+              ) : null}
 
               <div className="space-y-3 rounded-lg border p-3 dark:border-input dark:bg-background">
                 <p className="text-sm font-medium">Client portal login</p>
@@ -2281,7 +2432,9 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
               </div>
 
               <p className="text-sm text-muted-foreground">
-                Next, open the tour to check it. You can fine-tune the portal settings any time via &quot;Client Settings&quot;.
+                {createdClient.kind === "website"
+                  ? "Next, open Chatbots to configure the website assistant. You can fine-tune the portal settings any time via \"Client Settings\"."
+                  : "Next, open the tour to check it. You can fine-tune the portal settings any time via \"Client Settings\"."}
               </p>
 
               <div className="flex justify-end gap-2">
@@ -2290,7 +2443,7 @@ export function AgencySettings({ forcedVenueId }: AgencySettingsProps = {}) {
                 </Button>
                 <Button onClick={goPositionCreatedTour}>
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  Open tour
+                  {createdClient.kind === "website" ? "Open chatbots" : "Open tour"}
                 </Button>
               </div>
             </div>

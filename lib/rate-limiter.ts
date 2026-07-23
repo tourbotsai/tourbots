@@ -20,7 +20,7 @@ interface RateLimitResult {
 
 export class RateLimiter {
   // Get rate limit configuration for a specific venue/chatbot
-  private async getRateLimitConfig(venueId: string, chatbotType: 'tour'): Promise<RateLimitConfig> {
+  private async getRateLimitConfig(venueId: string, chatbotType: 'tour' | 'website'): Promise<RateLimitConfig> {
     console.log(`🔍 Getting rate limit config for venue: ${venueId}, type: ${chatbotType}`);
     
     const { data: rows, error } = await supabase
@@ -71,7 +71,7 @@ export class RateLimiter {
   // Check if request is allowed
   async checkRateLimit(
     venueId: string, 
-    chatbotType: 'tour', 
+    chatbotType: 'tour' | 'website',
     ipAddress: string
   ): Promise<RateLimitResult> {
     console.log(`🚦 Checking rate limit for venue: ${venueId}, type: ${chatbotType}, IP: ${ipAddress}`);
@@ -189,7 +189,7 @@ export class RateLimiter {
   // Log a request
   private async logRequest(
     venueId: string, 
-    chatbotType: 'tour', 
+    chatbotType: 'tour' | 'website',
     ipAddress: string, 
     timestamp: Date
   ): Promise<void> {
@@ -221,7 +221,7 @@ export class RateLimiter {
   // superset of every shorter window; we fetch them once and sum per window in memory.
   private async getWindowedRequestCounts(
     venueId: string,
-    chatbotType: 'tour',
+    chatbotType: 'tour' | 'website',
     ipAddress: string,
     now: Date,
     windows: { minuteStart: Date; hourStart: Date; dayStart: Date; weekStart: Date; monthStart: Date }

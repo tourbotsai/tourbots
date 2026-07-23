@@ -19,7 +19,7 @@ export function DemoFAQ() {
     },
     {
       question: "Will we discuss pricing and margins?",
-      answer: "Yes. We cover plan fit, likely operating costs, and how additional spaces and white-label can be priced."
+      answer: "Yes. We cover plan fit, likely operating costs, and how additional bots and white-label can be priced."
     },
     {
       question: "Can multiple team members join?",

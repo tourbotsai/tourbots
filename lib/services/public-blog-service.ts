@@ -3,8 +3,7 @@ import "server-only";
 import { Blog, ResourceFilters } from "@/lib/types";
 import { supabaseServiceRole } from "@/lib/supabase-service-role";
 
-const FRONTEND_BLOG_TABLE = "resource_blog_posts";
-const LEGACY_BLOG_TABLE = "blogs";
+const BLOG_TABLE = "blogs";
 
 type RawBlog = Record<string, any>;
 
@@ -33,34 +32,9 @@ function toBlog(raw: RawBlog): Blog {
   };
 }
 
-function isMissingTable(error: any): boolean {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    error?.code === "42P01" ||
-    message.includes("does not exist") ||
-    message.includes("relation") ||
-    message.includes("schema cache")
-  );
-}
-
-async function fetchFromPrimaryThenLegacy<T>(
-  primary: () => Promise<T>,
-  legacy: () => Promise<T>
-): Promise<T> {
-  try {
-    return await primary();
-  } catch (error) {
-    if (!isMissingTable(error)) throw error;
-    return legacy();
-  }
-}
-
-async function queryBlogsTable(
-  tableName: string,
-  filters: ResourceFilters = {}
-): Promise<RawBlog[]> {
+async function queryBlogsTable(filters: ResourceFilters = {}): Promise<RawBlog[]> {
   let query = supabaseServiceRole
-    .from(tableName)
+    .from(BLOG_TABLE)
     .select("*")
     .eq("is_published", true)
     .order("published_at", { ascending: false });
@@ -86,9 +60,14 @@ async function queryBlogsTable(
   return data || [];
 }
 
-async function queryBlogBySlug(tableName: string, slug: string): Promise<RawBlog | null> {
+export async function getPublicBlogs(filters: ResourceFilters = {}): Promise<Blog[]> {
+  const rows = await queryBlogsTable(filters);
+  return rows.map(toBlog);
+}
+
+export async function getPublicBlogBySlug(slug: string): Promise<Blog | null> {
   const { data, error } = await supabaseServiceRole
-    .from(tableName)
+    .from(BLOG_TABLE)
     .select("*")
     .eq("slug", slug)
     .eq("is_published", true)
@@ -99,47 +78,24 @@ async function queryBlogBySlug(tableName: string, slug: string): Promise<RawBlog
     throw error;
   }
 
-  return data;
-}
-
-export async function getPublicBlogs(filters: ResourceFilters = {}): Promise<Blog[]> {
-  const rows = await fetchFromPrimaryThenLegacy(
-    () => queryBlogsTable(FRONTEND_BLOG_TABLE, filters),
-    () => queryBlogsTable(LEGACY_BLOG_TABLE, filters)
-  );
-  return rows.map(toBlog);
-}
-
-export async function getPublicBlogBySlug(slug: string): Promise<Blog | null> {
-  const row = await fetchFromPrimaryThenLegacy(
-    () => queryBlogBySlug(FRONTEND_BLOG_TABLE, slug),
-    () => queryBlogBySlug(LEGACY_BLOG_TABLE, slug)
-  );
-  return row ? toBlog(row) : null;
+  return data ? toBlog(data) : null;
 }
 
 export async function getPublicBlogTags(): Promise<string[]> {
-  const fetchTags = async (tableName: string): Promise<string[]> => {
-    const { data, error } = await supabaseServiceRole
-      .from(tableName)
-      .select("tags")
-      .eq("is_published", true);
+  const { data, error } = await supabaseServiceRole
+    .from(BLOG_TABLE)
+    .select("tags")
+    .eq("is_published", true);
 
-    if (error) throw error;
-    const allTags = data?.flatMap((blog: any) => blog.tags || []) || [];
-    return Array.from(new Set(allTags)).sort();
-  };
-
-  return fetchFromPrimaryThenLegacy(
-    () => fetchTags(FRONTEND_BLOG_TABLE),
-    () => fetchTags(LEGACY_BLOG_TABLE)
-  );
+  if (error) throw error;
+  const allTags = data?.flatMap((blog: any) => blog.tags || []) || [];
+  return Array.from(new Set(allTags)).sort();
 }
 
 export async function incrementPublicBlogViews(blogId: string): Promise<void> {
-  const updateViews = async (tableName: string) => {
+  try {
     const { data: currentBlog, error: fetchError } = await supabaseServiceRole
-      .from(tableName)
+      .from(BLOG_TABLE)
       .select("view_count")
       .eq("id", blogId)
       .single();
@@ -148,18 +104,11 @@ export async function incrementPublicBlogViews(blogId: string): Promise<void> {
     if (!currentBlog) return;
 
     const { error: updateError } = await supabaseServiceRole
-      .from(tableName)
+      .from(BLOG_TABLE)
       .update({ view_count: (currentBlog.view_count || 0) + 1 })
       .eq("id", blogId);
 
     if (updateError) throw updateError;
-  };
-
-  try {
-    await fetchFromPrimaryThenLegacy(
-      () => updateViews(FRONTEND_BLOG_TABLE),
-      () => updateViews(LEGACY_BLOG_TABLE)
-    );
   } catch (error) {
     console.warn("incrementPublicBlogViews warning:", error);
   }

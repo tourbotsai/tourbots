@@ -82,10 +82,14 @@ export class HardLimitService {
   }
 
   // Get hard limit configuration for a specific venue/chatbot
-  private async getHardLimitConfig(venueId: string, chatbotType: 'tour', tourId: string): Promise<HardLimitConfig> {
+  private async getHardLimitConfig(
+    venueId: string,
+    chatbotType: 'tour' | 'website',
+    scopeId: string
+  ): Promise<HardLimitConfig> {
     console.log(`🔍 Getting hard limit config for venue: ${venueId}, type: ${chatbotType}`);
-    
-    const query = supabase
+
+    let query = supabase
       .from('chatbot_configs')
       .select(`
         hard_limits_enabled,
@@ -95,8 +99,9 @@ export class HardLimitService {
         hard_limit_yearly_messages
       `)
       .eq('venue_id', venueId)
-      .eq('chatbot_type', chatbotType)
-      .eq('tour_id', tourId);
+      .eq('chatbot_type', chatbotType);
+
+    query = chatbotType === 'website' ? query.eq('id', scopeId) : query.eq('tour_id', scopeId);
 
     const { data: rows, error } = await query.limit(1);
     const data = rows && rows.length > 0 ? rows[0] : null;
@@ -128,18 +133,28 @@ export class HardLimitService {
   // Check limits without mutating counters (used before expensive model calls)
   async checkHardLimitPreflight(
     venueId: string,
-    chatbotType: 'tour',
-    tourId?: string
+    chatbotType: 'tour' | 'website',
+    tourId?: string,
+    chatbotConfigId?: string
   ): Promise<HardLimitResult> {
     console.log(`🧪 Preflight hard limit check for venue: ${venueId}, type: ${chatbotType}`);
 
-    const scopedTourId = await this.resolveScopedTourId(venueId, tourId);
-    if (!scopedTourId) {
-      console.error(`❌ No active scoped tour found for venue: ${venueId}`);
-      return this.createFailClosedResult();
+    let scopeId: string | null;
+    if (chatbotType === 'website') {
+      scopeId = chatbotConfigId || null;
+      if (!scopeId) {
+        console.error(`❌ No chatbot config id provided for website hard limit check: ${venueId}`);
+        return this.createFailClosedResult();
+      }
+    } else {
+      scopeId = await this.resolveScopedTourId(venueId, tourId);
+      if (!scopeId) {
+        console.error(`❌ No active scoped tour found for venue: ${venueId}`);
+        return this.createFailClosedResult();
+      }
     }
 
-    const config = await this.getHardLimitConfig(venueId, chatbotType, scopedTourId);
+    const config = await this.getHardLimitConfig(venueId, chatbotType, scopeId);
 
     if (!config.enabled) {
       return {
@@ -153,7 +168,10 @@ export class HardLimitService {
       };
     }
 
-    const usage = await this.getCurrentUsage(venueId, chatbotType, scopedTourId);
+    const usage =
+      chatbotType === 'website'
+        ? await this.getCurrentUsage(venueId, chatbotType, undefined, scopeId)
+        : await this.getCurrentUsage(venueId, chatbotType, scopeId);
     const dailyUsed = usage?.daily_messages_used || 0;
     const weeklyUsed = usage?.weekly_messages_used || 0;
     const monthlyUsed = usage?.monthly_messages_used || 0;
@@ -225,19 +243,31 @@ export class HardLimitService {
 
   // Check if request is allowed and increment usage
   async checkHardLimit(
-    venueId: string, 
-    chatbotType: 'tour',
-    tourId?: string
+    venueId: string,
+    chatbotType: 'tour' | 'website',
+    tourId?: string,
+    chatbotConfigId?: string
   ): Promise<HardLimitResult> {
     console.log(`🚦 Checking hard limit for venue: ${venueId}, type: ${chatbotType}`);
-    
-    const scopedTourId = await this.resolveScopedTourId(venueId, tourId);
-    if (!scopedTourId) {
-      console.error(`❌ No active scoped tour found for venue: ${venueId}`);
-      return this.createFailClosedResult();
+
+    let scopedTourId: string | null = null;
+    let scopeId: string;
+    if (chatbotType === 'website') {
+      if (!chatbotConfigId) {
+        console.error(`❌ No chatbot config id provided for website hard limit check: ${venueId}`);
+        return this.createFailClosedResult();
+      }
+      scopeId = chatbotConfigId;
+    } else {
+      scopedTourId = await this.resolveScopedTourId(venueId, tourId);
+      if (!scopedTourId) {
+        console.error(`❌ No active scoped tour found for venue: ${venueId}`);
+        return this.createFailClosedResult();
+      }
+      scopeId = scopedTourId;
     }
 
-    const config = await this.getHardLimitConfig(venueId, chatbotType, scopedTourId);
+    const config = await this.getHardLimitConfig(venueId, chatbotType, scopeId);
 
     if (!config.enabled) {
       console.log(`🔓 Hard limits disabled, allowing request`);
@@ -257,7 +287,8 @@ export class HardLimitService {
       const { data, error } = await supabase.rpc('increment_hard_limit_usage', {
         p_venue_id: venueId,
         p_chatbot_type: chatbotType,
-        p_tour_id: scopedTourId
+        p_tour_id: chatbotType === 'website' ? null : scopedTourId,
+        p_chatbot_config_id: chatbotType === 'website' ? chatbotConfigId : null
       });
 
       if (error) {
@@ -357,33 +388,41 @@ export class HardLimitService {
   // Consume one hard-limit unit after successful completion.
   async consumeHardLimit(
     venueId: string,
-    chatbotType: 'tour',
-    tourId?: string
+    chatbotType: 'tour' | 'website',
+    tourId?: string,
+    chatbotConfigId?: string
   ): Promise<HardLimitResult> {
-    return this.checkHardLimit(venueId, chatbotType, tourId);
+    return this.checkHardLimit(venueId, chatbotType, tourId, chatbotConfigId);
   }
 
   // Get current usage without incrementing
   async getCurrentUsage(
-    venueId: string, 
-    chatbotType: 'tour',
-    tourId?: string
+    venueId: string,
+    chatbotType: 'tour' | 'website',
+    tourId?: string,
+    chatbotConfigId?: string
   ): Promise<HardLimitUsage | null> {
     try {
-      const scopedTourId = await this.resolveScopedTourId(venueId, tourId);
-      if (!scopedTourId) {
-        return null;
-      }
-
-      const query = supabase
+      let query = supabase
         .from('chatbot_hard_limit_usage')
         .select('*')
         .eq('venue_id', venueId)
-        .eq('chatbot_type', chatbotType)
-        .eq('tour_id', scopedTourId)
-        .maybeSingle();
+        .eq('chatbot_type', chatbotType);
 
-      const { data, error } = await query;
+      if (chatbotType === 'website') {
+        if (!chatbotConfigId) {
+          return null;
+        }
+        query = query.eq('chatbot_config_id', chatbotConfigId);
+      } else {
+        const scopedTourId = await this.resolveScopedTourId(venueId, tourId);
+        if (!scopedTourId) {
+          return null;
+        }
+        query = query.eq('tour_id', scopedTourId);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
         console.error('❌ Error fetching hard limit usage:', error);
@@ -399,10 +438,11 @@ export class HardLimitService {
 
   // Reset usage counters (admin function)
   async resetUsage(
-    venueId: string, 
-    chatbotType: 'tour',
+    venueId: string,
+    chatbotType: 'tour' | 'website',
     resetType: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all' = 'all',
-    tourId?: string
+    tourId?: string,
+    chatbotConfigId?: string
   ): Promise<boolean> {
     try {
       console.log(`🔄 Resetting ${resetType} usage for venue: ${venueId}, type: ${chatbotType}`);
@@ -434,7 +474,11 @@ export class HardLimitService {
         .eq('venue_id', venueId)
         .eq('chatbot_type', chatbotType);
 
-      if (tourId) {
+      if (chatbotType === 'website') {
+        if (chatbotConfigId) {
+          query = query.eq('chatbot_config_id', chatbotConfigId);
+        }
+      } else if (tourId) {
         query = query.eq('tour_id', tourId);
       }
 

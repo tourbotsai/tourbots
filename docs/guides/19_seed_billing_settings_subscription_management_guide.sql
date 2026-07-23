@@ -74,7 +74,7 @@ Add-ons are shown in the **Add-ons** section.
 
 - Add-ons are purchasable only when **Pro** is active.
 - Quantity-based add-ons:
-  - `extra_space`
+  - `extra_bot`
   - `message_block`
 - Account-level add-ons (single quantity):
   - `white_label`

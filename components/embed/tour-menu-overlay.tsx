@@ -1,25 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TourMenuSettings, TourMenuBlock } from "@/lib/types";
 import { TourMenuWidget } from "./tour-menu-widget";
+import { TourMenuRenderer, TourMenuActivatedItem } from "./tour-menu-renderer";
+import { getEffectiveMenuChrome, MenuTriggerSource, MenuItemAction } from "@/lib/tour-menu";
+import { getTourEmbedParentTrackingContext } from "@/lib/tour-embed-parent-context";
 
 type TourMenuData = { settings: TourMenuSettings | null; blocks: TourMenuBlock[] };
+type EmbedMenuEventType = 'menu_opened' | 'menu_closed' | 'menu_item_clicked' | 'menu_ai_prompt_sent';
 
 interface TourMenuOverlayProps {
   tourId: string;
   onClose?: () => void;
   isPreviewMode?: boolean; // Admin preview mode - bypasses session storage
   isTourReady?: boolean; // SDK ready state - disables navigation until ready
-  onOpenChat?: () => void; // Callback to open chat widget
+  onOpenChat?: (opts?: { prompt?: string; autoSend?: boolean }) => void; // Open the chat widget, optionally with a predefined prompt
   isChatAvailable?: boolean; // Whether chat widget is enabled
   currentModelId?: string; // Current active model ID - prevents redundant switches
   initialMenuData?: TourMenuData | null; // SSR-provided menu data for instant first paint
+  // Present on the production tour embed (not the app preview/portal) - enables menu analytics.
+  venueId?: string;
+  embedId?: string;
+  embedToken?: string | null;
 }
 
-export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTourReady = true, onOpenChat, isChatAvailable = false, currentModelId, initialMenuData }: TourMenuOverlayProps) {
+export function TourMenuOverlay({
+  tourId,
+  onClose,
+  isPreviewMode = false,
+  isTourReady = true,
+  onOpenChat,
+  isChatAvailable = false,
+  currentModelId,
+  initialMenuData,
+  venueId,
+  embedId,
+  embedToken,
+}: TourMenuOverlayProps) {
   const [menuData, setMenuData] = useState<TourMenuData | null>(initialMenuData ?? null);
   const [isVisible, setIsVisible] = useState(false);
   // When SSR data is present we are not loading on first paint.
@@ -30,6 +48,48 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
   // very first mount and fall back to fetching when the scope tour changes afterwards.
   const initialDataConsumedRef = useRef(false);
 
+  // Fires a menu analytics event. Takes the settings/mobile flag as explicit params (rather
+  // than reading them off state) so callers right after a setState still report accurately.
+  const sendMenuEvent = useCallback(
+    (
+      eventType: EmbedMenuEventType,
+      settingsForChrome: TourMenuSettings | Record<string, any> | null | undefined,
+      mobileFlag: boolean,
+      extra: {
+        triggerSource?: MenuTriggerSource;
+        itemId?: string;
+        itemLabel?: string;
+        itemType?: string;
+        actionType?: string;
+        targetRef?: string | null;
+      } = {}
+    ) => {
+      if (!venueId || !embedId || !embedToken || isPreviewMode || !settingsForChrome) return;
+
+      const chrome = getEffectiveMenuChrome(settingsForChrome, mobileFlag ? 'mobile' : 'desktop');
+      const ctx = getTourEmbedParentTrackingContext();
+
+      void fetch('/api/public/embed/track-menu-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          embedId,
+          embedToken,
+          venueId,
+          tourId,
+          eventType,
+          menuStyle: chrome.menuStyle,
+          domain: ctx?.domain ?? null,
+          pageUrl: ctx?.pageUrl ?? null,
+          ...extra,
+        }),
+      }).catch(() => {
+        /* non-blocking analytics */
+      });
+    },
+    [venueId, embedId, embedToken, isPreviewMode, tourId]
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -38,17 +98,23 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
       if (data?.settings?.enabled) {
         setMenuData(data);
 
+        // Read the viewport directly rather than the isMobile state, which may not have
+        // been set by its own effect yet on this very first render.
+        const mobileNow = typeof window !== 'undefined' && window.innerWidth < 768;
+        const chrome = getEffectiveMenuChrome(data.settings, mobileNow ? 'mobile' : 'desktop');
+
         // Check if menu was already dismissed this session (skip in preview mode)
         const dismissed = !isPreviewMode && sessionStorage.getItem(`tour-menu-dismissed-${tourId}`);
 
-        if (dismissed) {
-          // Menu was dismissed - show widget instead
+        if (dismissed || !chrome.startOpen) {
+          // Menu was dismissed, or configured to start closed - show the trigger/widget instead.
           setIsVisible(false);
           setShowWidget(true);
         } else {
           // Show menu on first load
           setIsVisible(true);
           setShowWidget(false);
+          sendMenuEvent('menu_opened', data.settings, mobileNow, { triggerSource: 'auto_open' });
         }
       } else {
         // Explicitly keep hidden if this tour has no enabled menu.
@@ -109,6 +175,7 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourId, isPreviewMode, initialMenuData]);
 
   // Detect mobile viewport
@@ -125,175 +192,165 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleClose = () => {
-    setIsVisible(false);
-    
-    // Show widget after menu close animation completes
-    setTimeout(() => {
-      setShowWidget(true);
-    }, 300); // Wait for menu fade-out
-    
-    // Mark as dismissed for this session (skip in preview mode)
-    if (!isPreviewMode) {
-      sessionStorage.setItem(`tour-menu-dismissed-${tourId}`, 'true');
-    }
-    
-    onClose?.();
-  };
+  const handleClose = useCallback(
+    (triggerSource: MenuTriggerSource = 'close_control') => {
+      setIsVisible(false);
 
-  const handleWidgetClick = () => {
+      // Show widget after menu close animation completes
+      setTimeout(() => {
+        setShowWidget(true);
+      }, 300); // Wait for menu fade-out
+
+      // Mark as dismissed for this session (skip in preview mode)
+      if (!isPreviewMode) {
+        sessionStorage.setItem(`tour-menu-dismissed-${tourId}`, 'true');
+      }
+
+      sendMenuEvent('menu_closed', menuData?.settings, isMobile, { triggerSource });
+
+      onClose?.();
+    },
+    [isPreviewMode, tourId, menuData, isMobile, sendMenuEvent, onClose]
+  );
+
+  const handleWidgetClick = useCallback(() => {
     setShowWidget(false);
-    
+
     // Clear session storage to allow menu to show
     if (!isPreviewMode) {
       sessionStorage.removeItem(`tour-menu-dismissed-${tourId}`);
     }
-    
+
     // Show menu after widget fades out
     setTimeout(() => {
       setIsVisible(true);
     }, 200);
-  };
 
-  const handleButtonClick = async (button: any) => {
-    // Prevent button click if SDK not ready (except for close_menu)
-    if (!isTourReady && button.action_type !== 'close_menu') {
-      console.warn('⚠️ Tour not ready yet - button disabled');
-      return;
+    if (menuData?.settings) {
+      const chrome = getEffectiveMenuChrome(menuData.settings, isMobile ? 'mobile' : 'desktop');
+      // "icon_button" = this is the menu's primary trigger (configured to start closed);
+      // "reopen_widget" = it started open and the visitor is reopening after dismissing it.
+      const triggerSource: MenuTriggerSource = chrome.startOpen ? 'reopen_widget' : 'icon_button';
+      sendMenuEvent('menu_opened', menuData.settings, isMobile, { triggerSource });
     }
+  }, [isPreviewMode, tourId, menuData, isMobile, sendMenuEvent]);
 
-    switch (button.action_type) {
-      case 'tour_point':
-        // Navigate to tour point - fetch point data first
-        if (button.target_id) {
-          try {
-            // Fetch tour point details
-            const response = await fetch(`/api/public/tours/points/${button.target_id}`);
-            if (response.ok) {
-              const point = await response.json();
-              
-              // Validate point data before dispatching event
-              if (point && point.sweep_id) {
-                const navigateToPoint = () => {
-                  window.dispatchEvent(new CustomEvent('matterport_navigate', {
-                    detail: {
-                      sweep_id: point.sweep_id,
-                      position: point.position,
-                      rotation: point.rotation,
-                      area_name: point.name
-                    }
-                  }));
-                };
+  // Every nav row / button that isn't close_menu, open_chat or none (all handled directly by
+  // the renderer) bubbles up here: tour points, other tours/models, and external links.
+  const handleItemActivate = useCallback(
+    (item: TourMenuActivatedItem) => {
+      if (!isTourReady) {
+        console.warn('⚠️ Tour not ready yet - menu item disabled');
+        return;
+      }
 
-                // If point belongs to another model, switch first then navigate.
-                if (button.target_model_id && button.target_model_id !== currentModelId) {
-                  window.dispatchEvent(new CustomEvent('switch_matterport_model', {
-                    detail: {
-                      modelId: button.target_model_id,
-                      tourName: button.target_model_name || 'Tour'
-                    }
-                  }));
+      const action = item.action;
 
-                  // Keep UX consistent with model-switch actions.
-                  setIsVisible(false);
-                  setShowWidget(false);
-                  if (!isPreviewMode) {
-                    sessionStorage.removeItem(`tour-menu-dismissed-${tourId}`);
-                  }
+      const trackClick = (targetRef?: string | null) => {
+        sendMenuEvent('menu_item_clicked', menuData?.settings, isMobile, {
+          triggerSource: 'item_action',
+          itemId: item.id,
+          itemLabel: item.label,
+          itemType: item.itemType,
+          actionType: action.type,
+          targetRef: targetRef ?? null,
+        });
+      };
 
-                  // Wait for model load transition before navigating to sweep.
-                  setTimeout(() => {
-                    navigateToPoint();
-                  }, 1500);
-                } else {
-                  navigateToPoint();
-                }
-              }
-            }
-          } catch (error) {
-            // Fail silently - just close the menu
-            console.error('Error fetching tour point:', error);
+      switch (action.type) {
+        case 'tour_point': {
+          trackClick(action.pointId);
+
+          if (action.pointId) {
+            // Switches model first (if the point lives on a different one) then navigates.
+            fetchAndNavigateToTourPoint(action, currentModelId);
           }
+
+          handleClose('item_action');
+          break;
         }
-        handleClose();
-        break;
-        
-      case 'tour_model':
-        // Switch to different model - use stored model ID
-        if (button.target_model_id) {
-          // Check if clicking same model we're already in
-          if (button.target_model_id === currentModelId) {
-            // Already on this model - just close menu normally
-            handleClose();
-            break;
-          }
-          
-          // Different model - dispatch switch event
-          window.dispatchEvent(new CustomEvent('switch_matterport_model', {
-            detail: {
-              modelId: button.target_model_id,
-              tourName: button.target_model_name || 'Tour'
+
+        case 'tour_model': {
+          trackClick(action.tourId);
+
+          if (action.modelId) {
+            if (action.modelId === currentModelId) {
+              // Already on this model - just close menu normally
+              handleClose('item_action');
+              break;
             }
-          }));
-          
-          // Temporarily hide menu and widget during transition
-          setIsVisible(false);
-          setShowWidget(false);
-          
-          // Clear dismissed state so menu can reappear on new model
-          if (!isPreviewMode) {
-            sessionStorage.removeItem(`tour-menu-dismissed-${tourId}`);
-          }
-          
-          // Reshow menu after model loads (1.5s delay for model switch animation)
-          setTimeout(() => {
-            setIsVisible(true);
+
+            // Different model - dispatch switch event
+            window.dispatchEvent(
+              new CustomEvent('switch_matterport_model', {
+                detail: { modelId: action.modelId, tourName: action.modelName || 'Tour' },
+              })
+            );
+
+            // Temporarily hide menu and widget during transition
+            setIsVisible(false);
             setShowWidget(false);
-          }, 1500);
-        }
-        break;
-        
-      case 'url':
-        // Open external URL
-        if (button.target_id) {
-          try {
-            // Prepend https:// if no protocol specified
-            let urlString = button.target_id.trim();
-            if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
-              urlString = 'https://' + urlString;
+
+            const settingsSnapshot = menuData?.settings;
+            const shouldAutoOpen =
+              getEffectiveMenuChrome(settingsSnapshot, isMobile ? 'mobile' : 'desktop').startOpen;
+
+            // Only clear dismissal when the menu is configured to start open on the new model.
+            // Hamburger menus (start_open = false) should stay closed behind the trigger.
+            if (!isPreviewMode && shouldAutoOpen) {
+              sessionStorage.removeItem(`tour-menu-dismissed-${tourId}`);
             }
-            
-            // Validate URL format
-            const url = new URL(urlString);
-            
-            // Only allow http/https protocols
-            if (url.protocol === 'http:' || url.protocol === 'https:') {
-              window.open(urlString, '_blank', 'noopener,noreferrer');
-              handleClose(); // Close menu after opening URL
-            }
-          } catch (error) {
-            // Invalid URL - fail silently
-            console.error('Invalid URL:', button.target_id);
+
+            setTimeout(() => {
+              if (shouldAutoOpen) {
+                setIsVisible(true);
+                setShowWidget(false);
+              } else {
+                setIsVisible(false);
+                setShowWidget(true);
+              }
+            }, 1500);
           }
+          break;
         }
-        break;
-        
-      case 'open_chat':
-        // Open the chat widget if available
-        if (onOpenChat && isChatAvailable) {
-          onOpenChat();
-          handleClose(); // Close menu after opening chat
-        } else if (!isChatAvailable) {
-          console.warn('Chat widget is not enabled for this tour');
+
+        case 'external_url': {
+          trackClick(action.url);
+          const opened = openExternalUrl(action.url, action.openIn);
+          if (opened) {
+            handleClose('item_action');
+          }
+          break;
         }
-        break;
-        
-      case 'close_menu':
-        // Just close the menu
-        handleClose();
-        break;
-    }
-  };
+
+        default:
+          handleClose('item_action');
+      }
+    },
+    [isTourReady, menuData, isMobile, sendMenuEvent, currentModelId, isPreviewMode, tourId, handleClose]
+  );
+
+  const handleOpenChatFromRenderer = useCallback(
+    (opts?: { prompt?: string; autoSend?: boolean }) => {
+      sendMenuEvent('menu_item_clicked', menuData?.settings, isMobile, {
+        triggerSource: 'item_action',
+        actionType: 'open_chat',
+        targetRef: opts?.prompt ? opts.prompt.slice(0, 200) : null,
+      });
+
+      if (opts?.prompt && opts.autoSend) {
+        sendMenuEvent('menu_ai_prompt_sent', menuData?.settings, isMobile, {
+          triggerSource: 'item_action',
+          actionType: 'open_chat',
+          targetRef: opts.prompt.slice(0, 200),
+        });
+      }
+
+      onOpenChat?.(opts);
+      handleClose('item_action');
+    },
+    [sendMenuEvent, menuData, isMobile, onOpenChat, handleClose]
+  );
 
   // Don't render anything if still loading
   if (isLoading) {
@@ -307,346 +364,93 @@ export function TourMenuOverlay({ tourId, onClose, isPreviewMode = false, isTour
 
   const settings = menuData.settings;
   const blocks = menuData.blocks;
-  const nonSpacerBlocks = blocks.filter((block) => block.block_type !== 'spacer');
-  const isCenteredSingleButtonsMenu =
-    settings.position === 'center' &&
-    nonSpacerBlocks.length === 1 &&
-    nonSpacerBlocks[0].block_type === 'buttons';
 
   // If menu not visible, show widget (if enabled)
   if (!isVisible) {
     return (
-      <TourMenuWidget
-        settings={settings}
-        onClick={handleWidgetClick}
-        isVisible={showWidget}
-      />
+      <TourMenuWidget settings={settings} onClick={handleWidgetClick} isVisible={showWidget} isMobile={isMobile} />
     );
   }
 
-  // Render the menu (menu is visible)
-
-  // Get animation class
-  const getAnimationClass = () => {
-    switch (settings.entrance_animation) {
-      case 'fade-scale':
-        return 'animate-in fade-in zoom-in-95 duration-400';
-      case 'slide-up':
-        return 'animate-in slide-in-from-bottom-8 duration-400';
-      case 'slide-down':
-        return 'animate-in slide-in-from-top-8 duration-400';
-      default:
-        return '';
-    }
-  };
-
-  const getPositionClass = () => {
-    switch (settings.position) {
-      case 'top':
-        return 'items-start pt-12';
-      case 'bottom':
-        return 'items-end pb-12';
-      default:
-        return 'items-center justify-center';
-    }
-  };
-
-  const getLogoDimensions = (content: any) => {
-    const desktopSize = Number(content.desktop_size);
-    const mobileSize = Number(content.mobile_size);
-    const legacyWidth = Number(content.width);
-    const legacyHeight = Number(content.height);
-
-    if (isMobile && Number.isFinite(mobileSize) && mobileSize > 0) {
-      return { width: mobileSize, height: mobileSize };
-    }
-
-    if (Number.isFinite(desktopSize) && desktopSize > 0) {
-      return { width: desktopSize, height: desktopSize };
-    }
-
-    return {
-      width: Number.isFinite(legacyWidth) && legacyWidth > 0 ? legacyWidth : 150,
-      height: Number.isFinite(legacyHeight) && legacyHeight > 0 ? legacyHeight : 80,
-    };
-  };
-
-  const renderBlock = (block: TourMenuBlock) => {
-    const alignmentClass = {
-      left: 'text-left',
-      center: 'text-center',
-      right: 'text-right'
-    }[block.alignment as 'left' | 'center' | 'right'] || 'text-center';
-
-    const rawMarginTop = Number.isFinite(block.margin_top) ? block.margin_top : 0;
-    const rawMarginBottom = Number.isFinite(block.margin_bottom) ? block.margin_bottom : 12;
-    const marginTop = isCenteredSingleButtonsMenu && block.block_type === 'buttons' ? 0 : rawMarginTop;
-    const marginBottom = isCenteredSingleButtonsMenu && block.block_type === 'buttons' ? 0 : rawMarginBottom;
-    const marginStyle = {
-      marginTop: `${marginTop}px`,
-      marginBottom: `${marginBottom}px`
-    };
-
-    switch (block.block_type) {
-      case 'text':
-        const content = block.content as any;
-        
-        // Safety check: ensure text exists
-        if (!content.text) {
-          return null;
-        }
-        
-        const fontWeightClass = {
-          light: 'font-light',
-          normal: 'font-normal',
-          semibold: 'font-semibold',
-          bold: 'font-bold'
-        }[content.font_weight as 'light' | 'normal' | 'semibold' | 'bold'] || 'font-normal';
-
-        return (
-          <div key={block.id} className={alignmentClass} style={marginStyle}>
-            <p
-              className={fontWeightClass}
-              style={{
-                fontSize: `${content.font_size || 16}px`,
-                color: content.color || '#000000',
-                lineHeight: content.line_height || 1.5
-              }}
-            >
-              {content.text}
-            </p>
-          </div>
-        );
-
-      case 'buttons':
-        const buttonsContent = block.content as any;
-        
-        // Safety check: ensure buttons array exists
-        if (!buttonsContent.buttons || !Array.isArray(buttonsContent.buttons) || buttonsContent.buttons.length === 0) {
-          return null;
-        }
-        
-        const sizeClass = {
-          small: 'px-3 py-1.5 text-sm',
-          medium: 'px-4 py-2 text-base',
-          large: 'px-6 py-3 text-lg'
-        }[buttonsContent.button_size as 'small' | 'medium' | 'large'] || 'px-4 py-2';
-
-        // Use mobile or desktop buttons_per_row based on viewport
-        const buttonsPerRow = isMobile 
-          ? (buttonsContent.mobile_buttons_per_row || buttonsContent.buttons_per_row) 
-          : buttonsContent.buttons_per_row;
-
-        const gridCols = {
-          1: 'grid-cols-1',
-          2: 'grid-cols-2',
-          3: 'grid-cols-3',
-          4: 'grid-cols-4'
-        }[buttonsPerRow as 1 | 2 | 3 | 4] || 'grid-cols-2';
-
-        return (
-          <div key={block.id} className={alignmentClass} style={marginStyle}>
-            <div
-              className={`grid ${gridCols} w-full`}
-              style={{ gap: `${buttonsContent.gap || 12}px` }}
-            >
-              {buttonsContent.buttons.map((button: any) => {
-                // Check if this button requires SDK to be ready (all except close_menu)
-                const requiresSDK = button.action_type !== 'close_menu';
-                const isDisabled = requiresSDK && !isTourReady;
-                
-                return (
-                  <button
-                    key={button.id}
-                    disabled={isDisabled}
-                    className={`${sizeClass} rounded-lg font-medium transition-all ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:opacity-90 active:scale-95 cursor-pointer'
-                    }`}
-                    style={{
-                      backgroundColor: buttonsContent.button_style === 'solid' ? button.button_color : 'transparent',
-                      color: button.text_color,
-                      border: buttonsContent.button_style === 'outline' ? `2px solid ${button.button_color}` : 'none'
-                    }}
-                    onClick={() => handleButtonClick(button)}
-                    title={isDisabled ? 'Loading tour...' : button.label}
-                  >
-                    {button.label}
-                    {isDisabled && (
-                      <span className="ml-2 inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-
-      case 'logo':
-        const logoContent = block.content as any;
-        const logoDimensions = getLogoDimensions(logoContent);
-        const logoAlignment = block.alignment === 'left'
-          ? 'flex-start'
-          : block.alignment === 'right'
-            ? 'flex-end'
-            : 'center';
-        
-        // Safety check: ensure image_url exists
-        if (!logoContent.image_url) {
-          return null;
-        }
-        
-        return (
-          <div key={block.id} className={alignmentClass} style={marginStyle}>
-            <div
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: logoAlignment,
-              }}
-            >
-              <img
-                src={logoContent.image_url}
-                alt={logoContent.alt_text || 'Logo'}
-                style={{
-                  width: `${logoDimensions.width}px`,
-                  height: 'auto',
-                  maxWidth: '100%',
-                  display: 'block',
-                  objectFit: 'contain',
-                }}
-                onError={(e) => {
-                  // Hide image if it fails to load
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-            </div>
-          </div>
-        );
-
-      case 'table':
-        const tableContent = block.content as any;
-        
-        // Safety check: ensure headers and rows exist
-        if (!tableContent.headers || !Array.isArray(tableContent.headers) || tableContent.headers.length === 0) {
-          return null;
-        }
-        
-        return (
-          <div key={block.id} className={alignmentClass} style={marginStyle}>
-            <table 
-              className="w-full border-collapse rounded-lg overflow-hidden"
-              style={{
-                borderColor: tableContent.border_color || '#E5E7EB',
-                fontSize: `${tableContent.text_size || 14}px`
-              }}
-            >
-              <thead>
-                <tr style={{ backgroundColor: tableContent.header_background || '#F3F4F6' }}>
-                  {tableContent.headers.map((header: string, index: number) => (
-                    <th
-                      key={index}
-                      className="px-4 py-2 font-semibold border"
-                      style={{ borderColor: tableContent.border_color || '#E5E7EB' }}
-                    >
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.isArray(tableContent.rows) && tableContent.rows.map((row: string[], rowIndex: number) => (
-                  <tr key={rowIndex}>
-                    {Array.isArray(row) && row.map((cell: string, colIndex: number) => (
-                      <td
-                        key={colIndex}
-                        className="px-4 py-2 border"
-                        style={{ borderColor: tableContent.border_color || '#E5E7EB' }}
-                      >
-                        {cell}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-
-      case 'spacer':
-        const spacerContent = block.content as any;
-        const spacerHeight = spacerContent.height || 24;
-        
-        // Cap spacer height to prevent abuse (max 200px)
-        const safeHeight = Math.min(Math.max(spacerHeight, 0), 200);
-        
-        return (
-          <div
-            key={block.id}
-            style={{ height: `${safeHeight}px` }}
-          />
-        );
-
-      default:
-        return null;
-    }
-  };
-
   return (
-    <div 
-      className="absolute inset-0 z-[9999]"
-      style={{
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        backdropFilter: settings.backdrop_blur ? 'blur(4px)' : 'none'
-      }}
-    >
-      <div
-        className={cn(
-          "absolute inset-0 flex",
-          getPositionClass()
-        )}
-      >
-        {/* Menu Container */}
-        <div
-          className={cn(
-            "relative mx-auto overflow-y-auto",
-            getAnimationClass()
-          )}
-          style={{
-            maxWidth: `${settings.max_width}px`,
-            paddingLeft: `${settings.padding}px`,
-            paddingRight: `${settings.padding}px`,
-            paddingTop: `${settings.padding_vertical ?? 0}px`,
-            paddingBottom: `${settings.padding_vertical ?? 0}px`,
-            backgroundColor: settings.menu_background_color,
-            borderRadius: `${settings.border_radius}px`,
-            maxHeight: '85%',
-            width: '90%',
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#CBD5E1 transparent'
-          }}
-        >
-          {/* Keep close on the menu's own top-right corner */}
-          {settings.show_close_button !== false && (
-            <button
-              className="absolute right-2 top-2 z-20 p-1 text-slate-700 transition-colors hover:text-slate-900"
-              onClick={handleClose}
-              aria-label="Close menu"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          {/* Blocks */}
-          <div className="space-y-0">
-            {blocks
-              .sort((a, b) => a.display_order - b.display_order)
-              .map(block => renderBlock(block))}
-          </div>
-        </div>
-      </div>
-    </div>
+    <TourMenuRenderer
+      settings={settings}
+      blocks={blocks}
+      isVisible={isVisible}
+      isMobile={isMobile}
+      isTourReady={isTourReady}
+      isChatAvailable={isChatAvailable}
+      mode="live"
+      onClose={handleClose}
+      onItemActivate={handleItemActivate}
+      onOpenChat={handleOpenChatFromRenderer}
+    />
   );
 }
 
+/** Fetches a tour point's sweep and dispatches the Matterport navigate event, switching model first if required. */
+async function fetchAndNavigateToTourPoint(
+  action: Extract<MenuItemAction, { type: 'tour_point' }>,
+  currentModelId?: string
+) {
+  try {
+    const response = await fetch(`/api/public/tours/points/${action.pointId}`);
+    if (!response.ok) return;
+
+    const point = await response.json();
+    if (!point || !point.sweep_id) return;
+
+    const navigateToPoint = () => {
+      window.dispatchEvent(
+        new CustomEvent('matterport_navigate', {
+          detail: {
+            sweep_id: point.sweep_id,
+            position: point.position,
+            rotation: point.rotation,
+            area_name: point.name,
+          },
+        })
+      );
+    };
+
+    if (action.modelId && action.modelId !== currentModelId) {
+      window.dispatchEvent(
+        new CustomEvent('switch_matterport_model', {
+          detail: { modelId: action.modelId, tourName: action.modelName || 'Tour' },
+        })
+      );
+      // Wait for model load transition before navigating to sweep.
+      setTimeout(navigateToPoint, 1500);
+    } else {
+      navigateToPoint();
+    }
+  } catch (error) {
+    // Fail silently - the menu still closes even if the point lookup fails.
+    console.error('Error fetching tour point:', error);
+  }
+}
+
+/** Opens a validated http(s) URL respecting the configured tab target. Returns whether it opened. */
+function openExternalUrl(rawUrl: string, openIn: 'same_tab' | 'new_tab'): boolean {
+  if (!rawUrl) return false;
+
+  try {
+    let urlString = rawUrl.trim();
+    if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
+      urlString = 'https://' + urlString;
+    }
+
+    const url = new URL(urlString);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+
+    if (openIn === 'same_tab') {
+      window.location.href = urlString;
+    } else {
+      window.open(urlString, '_blank', 'noopener,noreferrer');
+    }
+    return true;
+  } catch (error) {
+    console.error('Invalid URL:', rawUrl);
+    return false;
+  }
+}

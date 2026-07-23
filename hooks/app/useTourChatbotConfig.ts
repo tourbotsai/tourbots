@@ -28,7 +28,14 @@ function getCookieValue(name: string): string {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
-export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: string | null) => {
+// Pass `tourId` for a tour chatbot, or `chatbotConfigId` for a standalone
+// website chatbot (which has no tour). When both are absent, no config is
+// loaded.
+export const useTourChatbotConfig = (
+  tourId?: string | null,
+  forcedVenueId?: string | null,
+  chatbotConfigId?: string | null
+) => {
   const [tourConfig, setTourConfig] = useState<ChatbotConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +43,7 @@ export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: str
   const { getAuthHeaders } = useAuthHeaders();
 
   const fetchConfig = useCallback(async () => {
-    if (!tourId) {
+    if (!tourId && !chatbotConfigId) {
       setTourConfig(null);
       return;
     }
@@ -55,9 +62,10 @@ export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: str
     setError(null);
     try {
       const shareSlug = getAgencyShareSlug();
+      const scopeParam = chatbotConfigId ? `chatbotConfigId=${chatbotConfigId}` : `tourId=${tourId}`;
       const url = isPortal
-        ? `/api/public/agency-portal/chatbot-config?tourId=${tourId}${shareSlug ? `&shareSlug=${encodeURIComponent(shareSlug)}` : ''}`
-        : `/api/app/chatbots/config?venueId=${effectiveVenueId}&tourId=${tourId}`;
+        ? `/api/public/agency-portal/chatbot-config?${scopeParam}${shareSlug ? `&shareSlug=${encodeURIComponent(shareSlug)}` : ''}`
+        : `/api/app/chatbots/config?venueId=${effectiveVenueId}&${scopeParam}`;
       const headers = isPortal ? {} : await getAuthHeaders();
       const response = await fetch(url, { headers });
       const data = await response.json();
@@ -72,16 +80,16 @@ export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: str
     } finally {
       setIsLoading(false);
     }
-  }, [tourId, forcedVenueId, user?.venue?.id, getAuthHeaders]);
+  }, [tourId, chatbotConfigId, forcedVenueId, user?.venue?.id, getAuthHeaders]);
 
-  // Auto-fetch config when user/tour is available
+  // Auto-fetch config when user/tour (or website config) is available
   useEffect(() => {
-    if (tourId) {
+    if (tourId || chatbotConfigId) {
       fetchConfig();
     } else {
       setTourConfig(null);
     }
-  }, [fetchConfig, tourId]);
+  }, [fetchConfig, tourId, chatbotConfigId]);
 
   const updateConfig = useCallback(async (configId: string, updates: Partial<ChatbotConfig>) => {
     if (!isAgencyPortalPath() && !user?.venue?.id) {
@@ -124,14 +132,20 @@ export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: str
   }, [user?.venue?.id, getAuthHeaders]);
 
   const createConfig = useCallback(async (config: Partial<ChatbotConfig>) => {
-    if (!tourId) {
+    const isWebsite = config.chatbot_type === 'website';
+    if (!isWebsite && !tourId) {
       throw new Error('Tour is required');
     }
+    const {
+      chatbot_type: _chatbotType,
+      venue_id: _venueId,
+      tour_id: _tourId,
+      ...settings
+    } = config;
 
     setIsLoading(true);
     setError(null);
     try {
-      const configWithType = { ...config, chatbot_type: 'tour' as const };
       const isPortal = isAgencyPortalPath();
       const shareSlug = getAgencyShareSlug();
       
@@ -147,8 +161,18 @@ export const useTourChatbotConfig = (tourId?: string | null, forcedVenueId?: str
         }),
         body: JSON.stringify(
           isPortal
-            ? { shareSlug, tourId, config: configWithType }
-            : { venueId: user?.venue?.id, tourId, config: configWithType }
+            ? {
+                shareSlug,
+                tourId: isWebsite ? undefined : tourId,
+                chatbotType: isWebsite ? 'website' : 'tour',
+                config: settings,
+              }
+            : {
+                venueId: user?.venue?.id,
+                tourId: isWebsite ? undefined : tourId,
+                chatbotType: isWebsite ? 'website' : 'tour',
+                config: settings,
+              }
         ),
       });
 

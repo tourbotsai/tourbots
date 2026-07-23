@@ -1,78 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { trackEmbedView } from '@/lib/embed-analytics';
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { randomUUID } from 'crypto';
+import {
+  verifyPublicEmbedRequest,
+} from '@/lib/public-embed-token';
 
 function isValidUUID(str: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
 
-function getOriginHost(request: NextRequest): string | null {
-  const origin = request.headers.get('origin');
-  if (origin) {
-    try {
-      return new URL(origin).hostname.toLowerCase();
-    } catch {
-      return null;
-    }
-  }
-
-  const referer = request.headers.get('referer');
-  if (referer) {
-    try {
-      return new URL(referer).hostname.toLowerCase();
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-function isAllowedPublicChatOriginHost(host: string | null): boolean {
-  if (!host) return process.env.NODE_ENV === 'development';
-  if (host === 'localhost' || host === '127.0.0.1') return true;
-  return host === 'tourbots.ai' || host.endsWith('.tourbots.ai');
-}
-
-function verifyEmbedToken(params: {
-  token: string;
-  venueId: string;
-  embedId: string;
-}): boolean {
-  const secret = process.env.PUBLIC_CHATBOT_EMBED_TOKEN_SECRET;
-  if (!secret) return true;
-
-  const [payloadBase64, signature] = params.token.split('.');
-  if (!payloadBase64 || !signature) return false;
-
-  const expectedSignature = createHmac('sha256', secret)
-    .update(payloadBase64)
-    .digest('hex');
-
-  const signatureBuffer = Buffer.from(signature, 'hex');
-  const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-  if (
-    signatureBuffer.length !== expectedBuffer.length ||
-    !timingSafeEqual(signatureBuffer, expectedBuffer)
-  ) {
-    return false;
-  }
-
-  try {
-    const payloadJson = Buffer.from(payloadBase64, 'base64url').toString('utf8');
-    const payload = JSON.parse(payloadJson) as { v?: string; e?: string; exp?: number };
-    if (payload.v !== params.venueId) return false;
-    if (payload.e !== params.embedId) return false;
-    if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Tour chatbot config endpoint only.
+// Tour and website chatbot config endpoint.
 export async function GET(
   request: NextRequest,
   { params }: { params: { venueId: string } }
@@ -82,59 +21,30 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const tourId = searchParams.get('tourId');
     const modelId = searchParams.get('modelId');
+    const chatbotConfigId = searchParams.get('chatbotConfigId');
     const embedToken = searchParams.get('embedToken');
     const embedIdParam = searchParams.get('embedId');
     if (!venueId) {
       return NextResponse.json({ error: 'Venue ID required' }, { status: 400 });
     }
 
-    const originHost = getOriginHost(request);
-    const isFirstPartyOrigin = isAllowedPublicChatOriginHost(originHost);
     const resolvedEmbedId = typeof embedIdParam === 'string' && embedIdParam.trim().length > 0
       ? embedIdParam.trim()
       : `tour-widget-${venueId}`;
-    const embedTokenSecret = process.env.PUBLIC_CHATBOT_EMBED_TOKEN_SECRET;
 
-    if (!isFirstPartyOrigin) {
-      if (!embedTokenSecret) {
-        return NextResponse.json(
-          { error: 'Forbidden origin for public chatbot route' },
-          { status: 403 }
-        );
-      }
-
-      if (typeof embedToken !== 'string' || !verifyEmbedToken({
-        token: embedToken,
-        venueId,
-        embedId: resolvedEmbedId,
-      })) {
-        return NextResponse.json(
-          { error: 'Invalid or missing embed token' },
-          { status: 403 }
-        );
-      }
+    if (!verifyPublicEmbedRequest({
+      request,
+      token: embedToken,
+      venueId,
+      embedId: resolvedEmbedId,
+    })) {
+      return NextResponse.json(
+        { error: 'Invalid or missing embed token' },
+        { status: 403 }
+      );
     }
 
-    let resolvedTourId = tourId;
-    if (!resolvedTourId && modelId) {
-      const { data: tourByModel } = await supabase
-        .from('tours')
-        .select('id, parent_tour_id')
-        .eq('venue_id', venueId)
-        .eq('matterport_tour_id', modelId)
-        .maybeSingle();
-      resolvedTourId = (tourByModel?.parent_tour_id || tourByModel?.id) || null;
-    }
-
-    if (resolvedTourId) {
-      const { data: tourRow } = await supabase
-        .from('tours')
-        .select('id, parent_tour_id')
-        .eq('venue_id', venueId)
-        .eq('id', resolvedTourId)
-        .maybeSingle();
-      resolvedTourId = (tourRow?.parent_tour_id || tourRow?.id) || resolvedTourId;
-    }
+    const isWebsiteRequest = Boolean(chatbotConfigId);
 
     let query = supabase
       .from('chatbot_configs')
@@ -146,34 +56,67 @@ export async function GET(
           slug
         )
       `)
-      .eq('venue_id', venueId)
-      .eq('chatbot_type', 'tour');
+      .eq('venue_id', venueId);
 
-    if (resolvedTourId) {
-      query = query.eq('tour_id', resolvedTourId);
+    if (isWebsiteRequest) {
+      query = query.eq('chatbot_type', 'website').eq('id', chatbotConfigId as string);
+    } else {
+      let resolvedTourId = tourId;
+      if (!resolvedTourId && modelId) {
+        const { data: tourByModel } = await supabase
+          .from('tours')
+          .select('id, parent_tour_id')
+          .eq('venue_id', venueId)
+          .eq('matterport_tour_id', modelId)
+          .maybeSingle();
+        resolvedTourId = (tourByModel?.parent_tour_id || tourByModel?.id) || null;
+      }
+
+      if (resolvedTourId) {
+        const { data: tourRow } = await supabase
+          .from('tours')
+          .select('id, parent_tour_id')
+          .eq('venue_id', venueId)
+          .eq('id', resolvedTourId)
+          .maybeSingle();
+        resolvedTourId = (tourRow?.parent_tour_id || tourRow?.id) || resolvedTourId;
+      }
+
+      query = query.eq('chatbot_type', 'tour');
+      if (resolvedTourId) {
+        query = query.eq('tour_id', resolvedTourId);
+      }
     }
 
     const { data: rows, error: configError } = await query.limit(1);
     const config = rows && rows.length > 0 ? rows[0] : null;
 
     if (configError || !config) {
-      return NextResponse.json({ error: 'Tour chatbot config not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: isWebsiteRequest ? 'Website chatbot config not found' : 'Tour chatbot config not found' },
+        { status: 404 }
+      );
     }
 
     if (!config.is_active) {
-      return NextResponse.json({ error: 'Tour chatbot not active' }, { status: 400 });
+      return NextResponse.json(
+        { error: isWebsiteRequest ? 'Website chatbot not active' : 'Tour chatbot not active' },
+        { status: 400 }
+      );
     }
 
     const venue = config.venues;
     const welcomeMessage =
       config.welcome_message ||
-      `Hello! I'm ${config.chatbot_name}, your virtual tour guide for ${venue.name}. I'm here to help you explore and understand our facilities during your virtual tour. What would you like to know about our venue?`;
+      (isWebsiteRequest
+        ? `Hello! I'm ${config.chatbot_name}, the assistant for ${venue.name}. What would you like to know?`
+        : `Hello! I'm ${config.chatbot_name}, your virtual tour guide for ${venue.name}. I'm here to help you explore and understand our facilities during your virtual tour. What would you like to know about our venue?`);
 
     return NextResponse.json({
       chatbot_name: config.chatbot_name,
       welcome_message: welcomeMessage,
       is_active: config.is_active,
-      chatbot_type: 'tour',
+      chatbot_type: config.chatbot_type,
       venue_name: venue.name,
       venue_id: venueId,
     });
@@ -196,39 +139,30 @@ export async function POST(
       sessionId,
       conversationId: existingConversationId,
       tourId,
-      modelId
+      modelId,
+      chatbotConfigId
     } = await request.json();
     const { venueId } = params;
+    const isWebsiteRequest = Boolean(chatbotConfigId);
 
     if (!venueId) {
       return NextResponse.json({ error: 'Venue ID required' }, { status: 400 });
     }
 
-    const originHost = getOriginHost(request);
-    const isFirstPartyOrigin = isAllowedPublicChatOriginHost(originHost);
     const resolvedEmbedId = typeof embedId === 'string' && embedId.trim().length > 0
       ? embedId.trim()
       : `tour-widget-${venueId}`;
-    const embedTokenSecret = process.env.PUBLIC_CHATBOT_EMBED_TOKEN_SECRET;
 
-    if (!isFirstPartyOrigin) {
-      if (!embedTokenSecret) {
-        return NextResponse.json(
-          { error: 'Forbidden origin for public chatbot route' },
-          { status: 403 }
-        );
-      }
-
-      if (typeof embedToken !== 'string' || !verifyEmbedToken({
-        token: embedToken,
-        venueId,
-        embedId: resolvedEmbedId,
-      })) {
-        return NextResponse.json(
-          { error: 'Invalid or missing embed token' },
-          { status: 403 }
-        );
-      }
+    if (!verifyPublicEmbedRequest({
+      request,
+      token: embedToken,
+      venueId,
+      embedId: resolvedEmbedId,
+    })) {
+      return NextResponse.json(
+        { error: 'Invalid or missing embed token' },
+        { status: 403 }
+      );
     }
 
     const finalSessionId = sessionId || `tour-${venueId}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -239,21 +173,17 @@ export async function POST(
 
     if (resolvedEmbedId) {
       try {
-        await trackEmbedView(resolvedEmbedId, venueId, 'tour', domain, pageUrl, 'tour');
+        await trackEmbedView(
+          resolvedEmbedId,
+          venueId,
+          isWebsiteRequest ? 'website' : 'tour',
+          domain,
+          pageUrl,
+          isWebsiteRequest ? 'website' : 'tour'
+        );
       } catch (error) {
         console.error('Failed to track embed view:', error);
       }
-    }
-
-    let resolvedTourId = tourId;
-    if (!resolvedTourId && modelId) {
-      const { data: tourByModel } = await supabase
-        .from('tours')
-        .select('id')
-        .eq('venue_id', venueId)
-        .eq('matterport_tour_id', modelId)
-        .maybeSingle();
-      resolvedTourId = tourByModel?.id || null;
     }
 
     let query = supabase
@@ -266,36 +196,59 @@ export async function POST(
           slug
         )
       `)
-      .eq('venue_id', venueId)
-      .eq('chatbot_type', 'tour');
+      .eq('venue_id', venueId);
 
-    if (resolvedTourId) {
-      query = query.eq('tour_id', resolvedTourId);
+    if (isWebsiteRequest) {
+      query = query.eq('chatbot_type', 'website').eq('id', chatbotConfigId);
+    } else {
+      let resolvedTourId = tourId;
+      if (!resolvedTourId && modelId) {
+        const { data: tourByModel } = await supabase
+          .from('tours')
+          .select('id')
+          .eq('venue_id', venueId)
+          .eq('matterport_tour_id', modelId)
+          .maybeSingle();
+        resolvedTourId = tourByModel?.id || null;
+      }
+
+      query = query.eq('chatbot_type', 'tour');
+      if (resolvedTourId) {
+        query = query.eq('tour_id', resolvedTourId);
+      }
     }
 
     const { data: rows, error: configError } = await query.limit(1);
     const config = rows && rows.length > 0 ? rows[0] : null;
 
     if (configError || !config) {
-      return NextResponse.json({ error: 'Tour chatbot config not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: isWebsiteRequest ? 'Website chatbot config not found' : 'Tour chatbot config not found' },
+        { status: 404 }
+      );
     }
 
     if (!config.is_active) {
-      return NextResponse.json({ error: 'Tour chatbot not active' }, { status: 400 });
+      return NextResponse.json(
+        { error: isWebsiteRequest ? 'Website chatbot not active' : 'Tour chatbot not active' },
+        { status: 400 }
+      );
     }
 
     const venue = config.venues;
     const welcomeMessage =
       config.welcome_message ||
-      `Hello! I'm ${config.chatbot_name}, your virtual tour guide for ${venue.name}. I'm here to help you explore and understand our facilities during your virtual tour. What would you like to know about our venue?`;
+      (isWebsiteRequest
+        ? `Hello! I'm ${config.chatbot_name}, the assistant for ${venue.name}. What would you like to know?`
+        : `Hello! I'm ${config.chatbot_name}, your virtual tour guide for ${venue.name}. I'm here to help you explore and understand our facilities during your virtual tour. What would you like to know about our venue?`);
 
     return NextResponse.json({
       response: welcomeMessage,
       chatbot_name: config.chatbot_name,
       welcome_message: welcomeMessage,
       is_active: config.is_active,
-      chatbot_type: 'tour',
-      chatbotType: 'tour',
+      chatbot_type: config.chatbot_type,
+      chatbotType: config.chatbot_type,
       venue_name: venue.name,
       venue_id: venueId,
       sessionId: finalSessionId,

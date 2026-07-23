@@ -7,6 +7,8 @@
 
 # testing
 /coverage
+# Contains local test-account credentials; never commit.
+/docs/ProdTestList.md
 
 # next.js
 /.next/

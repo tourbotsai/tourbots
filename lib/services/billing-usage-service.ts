@@ -43,12 +43,12 @@ export async function checkBillingMessageUsage(venueId: string): Promise<Billing
       .maybeSingle();
 
     const baseMessages = Number(planRow?.included_messages || 0);
-    const extraSpaces = Number(billingRecord?.addon_extra_spaces || 0);
+    const extraBots = Number(billingRecord?.addon_extra_bots || 0);
     const messageBlocks = Number(billingRecord?.addon_message_blocks || 0);
 
     const totalMessageLimit = Number(
       billingRecord?.effective_message_limit ??
-      (baseMessages + (extraSpaces * 1000) + (messageBlocks * 1000))
+      (baseMessages + (extraBots * 1000) + (messageBlocks * 1000))
     );
 
     const { periodStart, resetAt } = getCurrentMessageCreditPeriod();
@@ -57,7 +57,7 @@ export async function checkBillingMessageUsage(venueId: string): Promise<Billing
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('venue_id', venueId)
-      .eq('chatbot_type', 'tour')
+      .in('chatbot_type', ['tour', 'website'])
       .eq('message_type', 'visitor')
       .gte('created_at', periodStart);
 

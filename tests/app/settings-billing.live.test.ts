@@ -23,7 +23,7 @@ describe('live app settings billing smoke', () => {
     expect(Array.isArray(payload?.addons)).toBe(true)
     expect(payload).toHaveProperty('billingRecord')
     expect(payload).toHaveProperty('limits')
-    expect(typeof payload?.limits?.totalSpaces).toBe('number')
+    expect(typeof payload?.limits?.totalBots).toBe('number')
     expect(typeof payload?.limits?.totalMessages).toBe('number')
   }, 30_000)
 })

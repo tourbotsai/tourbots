@@ -30,7 +30,7 @@ import {
 interface HardLimitUsageWidgetProps {
   config: HardLimitConfig;
   usage: HardLimitUsage | null;
-  chatbotType: 'tour';
+  chatbotType: 'tour' | 'website';
   showActions?: boolean;
   onUpgrade?: () => void;
   compact?: boolean;

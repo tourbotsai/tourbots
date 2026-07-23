@@ -7,10 +7,14 @@ import { getTourEmbedParentTrackingContext } from '@/lib/tour-embed-parent-conte
 import { resolveChatButtonSizePx } from '@/lib/chat-button-size';
 
 interface ChatbotEmbedClientProps {
-  tour: Tour;
+  // null for a standalone website chatbot (no Matterport tour attached).
+  tour: Tour | null;
   venue: Venue;
   customisation: ChatbotCustomisation | null;
   chatbotConfig?: { chatbot_name: string; welcome_message: string; is_active: boolean } | null;
+  // Identifies a standalone website chatbot. When set, tour-specific behaviour
+  // (navigation, tour analytics) is skipped entirely.
+  chatbotConfigId?: string | null;
   embedId: string;
   embedToken?: string | null;
   navigationEnabled: boolean;
@@ -24,6 +28,7 @@ export function ChatbotEmbedClient({
   venue,
   customisation,
   chatbotConfig,
+  chatbotConfigId = null,
   embedId,
   embedToken,
   navigationEnabled,
@@ -36,7 +41,7 @@ export function ChatbotEmbedClient({
   // that covers (and blocks clicks to) the whole host tour. In embed mode we assume
   // desktop until the host reports otherwise, to avoid that fullscreen flash.
   const [hostViewport, setHostViewport] = useState<{ width: number; height: number } | null>(null);
-  const locationScopeTourId = tour.parent_tour_id || tour.id;
+  const locationScopeTourId = tour ? (tour.parent_tour_id || tour.id) : null;
 
   const resolvedHostWidth =
     hostViewport?.width ??
@@ -178,24 +183,26 @@ export function ChatbotEmbedClient({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         embedId,
+        embedToken,
         venueId: venue.id,
         type: 'chatbot',
-        chatbotType: 'tour',
+        chatbotType: chatbotConfigId ? 'website' : 'tour',
         domain: ctx.domain,
         pageUrl: ctx.pageUrl,
-        modelId: tour.matterport_tour_id,
+        modelId: tour?.matterport_tour_id,
         tourId: locationScopeTourId,
       }),
     }).catch(() => {
       /* non-blocking analytics */
     });
-  }, [embedId, venue.id, tour.matterport_tour_id, locationScopeTourId]);
+  }, [embedId, embedToken, venue.id, tour?.matterport_tour_id, locationScopeTourId, chatbotConfigId]);
 
   // Move tracking: chat.js's bridge subscribes to the host tour's pose and relays
   // sweep changes here, so moves are recorded same-origin (avoids cross-origin POST).
+  // Website chatbots have no tour to move, so this is skipped entirely.
   const lastSweepRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!navigationEnabled) return;
+    if (!navigationEnabled || !tour) return;
 
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
@@ -213,6 +220,7 @@ export function ChatbotEmbedClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           embedId,
+          embedToken,
           venueId: venue.id,
           tourId: locationScopeTourId,
           sweepId,
@@ -229,7 +237,7 @@ export function ChatbotEmbedClient({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [navigationEnabled, embedId, venue.id, locationScopeTourId, tour.matterport_tour_id]);
+  }, [navigationEnabled, embedId, embedToken, venue.id, locationScopeTourId, tour]);
 
   return (
     <>
@@ -253,6 +261,7 @@ export function ChatbotEmbedClient({
         venueName={venue.name}
         tour={tour}
         scopeTourId={locationScopeTourId}
+        chatbotConfigId={chatbotConfigId}
         customisation={customisation}
         initialConfig={chatbotConfig ?? undefined}
         isFullscreen={false}

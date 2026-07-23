@@ -92,11 +92,11 @@ async function clearVenueAddonsForCancellation(venueId: string, stripeCustomerId
     .update({
       plan_code: 'free',
       billing_status: 'cancelled',
-      addon_extra_spaces: 0,
+      addon_extra_bots: 0,
       addon_message_blocks: 0,
       addon_white_label: false,
       addon_agency_portal: false,
-      effective_space_limit: null,
+      effective_bot_limit: null,
       effective_message_limit: null,
       stripe_customer_id: stripeCustomerId || null,
       stripe_subscription_id: null,

@@ -8,6 +8,7 @@ import {
   validatePortalVenueAccess,
   verifyStoredPassword,
 } from '@/lib/agency-portal-auth';
+import { getClientIp } from '@/lib/request-client-ip';
 
 const loginSchema = z
   .object({
@@ -26,14 +27,6 @@ const loginSchema = z
 const MAX_FAILED_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW_MINUTES = 15;
 const RETRY_AFTER_SECONDS = RATE_LIMIT_WINDOW_MINUTES * 60;
-
-function getClientIp(request: NextRequest): string | null {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim() || null;
-  }
-  return request.headers.get('x-real-ip');
-}
 
 function getWindowStartIso(minutes: number) {
   return new Date(Date.now() - minutes * 60 * 1000).toISOString();

@@ -164,7 +164,10 @@ export interface AgencyPortalSessionContext {
   shareId: string;
   shareSlug: string;
   venueId: string;
-  tourId: string;
+  /** Present for tour-backed client portals; null for website-only clients. */
+  tourId: string | null;
+  /** Present for website-only client portals; null for tour-backed clients. */
+  chatbotConfigId: string | null;
   csrfTokenHash: string | null;
   enabledModules: {
     tour?: boolean;
@@ -216,7 +219,7 @@ export async function resolveAgencyPortalSession(
   const [{ data: shareRecord, error: shareError }, { data: userRecord, error: userError }] = await Promise.all([
     supabase
       .from('agency_portal_shares')
-      .select('tour_id, share_slug, enabled_modules, is_active')
+      .select('tour_id, chatbot_config_id, share_slug, enabled_modules, is_active')
       .eq('id', session.share_id)
       .maybeSingle(),
     supabase
@@ -241,7 +244,8 @@ export async function resolveAgencyPortalSession(
     shareId: session.share_id,
     shareSlug: shareRecord.share_slug,
     venueId: session.venue_id,
-    tourId: shareRecord.tour_id,
+    tourId: shareRecord.tour_id || null,
+    chatbotConfigId: shareRecord.chatbot_config_id || null,
     csrfTokenHash: session.csrf_token_hash,
     enabledModules: shareRecord.enabled_modules || {},
     user: {
