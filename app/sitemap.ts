@@ -1,53 +1,24 @@
 import { MetadataRoute } from 'next'
 import { supabaseServiceRole } from '@/lib/supabase-service-role'
 import { getSiteUrl } from '@/lib/site-url'
-const BLOG_TABLE_PRIMARY = 'resource_blog_posts'
-const BLOG_TABLE_LEGACY = 'blogs'
-const GUIDE_TABLE_PRIMARY = 'resource_guides'
-const GUIDE_TABLE_LEGACY = 'guides'
+const BLOG_TABLE = 'blogs'
+const GUIDE_TABLE = 'guides'
 
 // Revalidate sitemap every hour to pick up new published content
 export const revalidate = 3600
 
-function isMissingTable(error: any): boolean {
-  const message = String(error?.message || '').toLowerCase()
-  return (
-    error?.code === '42P01' ||
-    message.includes('does not exist') ||
-    message.includes('relation') ||
-    message.includes('schema cache')
-  )
-}
-
-async function fetchPublishedRows(
-  primaryTable: string,
-  legacyTable: string
-): Promise<any[]> {
-  const { data: primaryRows, error: primaryError } = await supabaseServiceRole
-    .from(primaryTable)
+async function fetchPublishedRows(tableName: string): Promise<any[]> {
+  const { data, error } = await supabaseServiceRole
+    .from(tableName)
     .select('slug, updated_at, created_at, is_published, published_at')
     .eq('is_published', true)
     .order('published_at', { ascending: false })
 
-  if (!primaryError) {
-    return primaryRows || []
+  if (error) {
+    throw error
   }
 
-  if (!isMissingTable(primaryError)) {
-    throw primaryError
-  }
-
-  const { data: legacyCompatRows, error: legacyCompatError } = await supabaseServiceRole
-    .from(legacyTable)
-    .select('slug, updated_at, created_at, is_published, published_at, published')
-    .or('is_published.eq.true,published.eq.true')
-    .order('published_at', { ascending: false })
-
-  if (legacyCompatError) {
-    throw legacyCompatError
-  }
-
-  return legacyCompatRows || []
+  return data || []
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -112,7 +83,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   try {
-    const blogs = await fetchPublishedRows(BLOG_TABLE_PRIMARY, BLOG_TABLE_LEGACY)
+    const blogs = await fetchPublishedRows(BLOG_TABLE)
 
     // Generate blog URLs
     const blogPages: MetadataRoute.Sitemap = (blogs || []).map((blog) => ({
@@ -122,7 +93,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     }))
 
-    const guides = await fetchPublishedRows(GUIDE_TABLE_PRIMARY, GUIDE_TABLE_LEGACY)
+    const guides = await fetchPublishedRows(GUIDE_TABLE)
 
     // Generate guide URLs
     const guidePages: MetadataRoute.Sitemap = (guides || []).map((guide) => ({

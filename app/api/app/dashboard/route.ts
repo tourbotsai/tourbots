@@ -3,6 +3,7 @@ import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { venueHasAnyCustomisedTourTraining } from '@/lib/chatbot-training-defaults';
 import { getCurrentMessageCreditPeriod } from '@/lib/billing-period';
+import { countBotsUsed } from '@/lib/server/venue-bot-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,58 @@ function getDateDaysAgo(days: number): Date {
   const date = new Date();
   date.setDate(date.getDate() - days);
   return date;
+}
+
+/**
+ * Menu Analytics card data — sourced from `embed_menu_events` (sql/90_embed_menu_events.sql).
+ * Wrapped in its own try/catch so the rest of the dashboard still loads if the
+ * table has not been created yet (Phase 0 migration not yet applied).
+ */
+async function getMenuAnalytics(venueId: string, sevenDaysAgoIso: string, tourViewsThisWeek: number) {
+  const empty = { opens: 0, openRate: 0, topItems: [] as Array<{ label: string; count: number }>, styleBreakdown: [] as Array<{ style: string; count: number }> };
+
+  try {
+    const { data, error } = await supabase
+      .from('embed_menu_events')
+      .select('event_type, menu_style, item_label')
+      .eq('venue_id', venueId)
+      .gte('created_at', sevenDaysAgoIso);
+
+    if (error) throw error;
+
+    const rows = data || [];
+    const opens = rows.filter((row) => row.event_type === 'menu_opened').length;
+
+    const itemClickCounts: Record<string, number> = {};
+    rows
+      .filter((row) => row.event_type === 'menu_item_clicked' && row.item_label)
+      .forEach((row) => {
+        const label = String(row.item_label);
+        itemClickCounts[label] = (itemClickCounts[label] || 0) + 1;
+      });
+    const topItems = Object.entries(itemClickCounts)
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const styleCounts: Record<string, number> = {};
+    rows
+      .filter((row) => row.event_type === 'menu_opened' && row.menu_style)
+      .forEach((row) => {
+        const style = String(row.menu_style);
+        styleCounts[style] = (styleCounts[style] || 0) + 1;
+      });
+    const styleBreakdown = Object.entries(styleCounts)
+      .map(([style, count]) => ({ style, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const openRate = Number(((opens / Math.max(tourViewsThisWeek, 1)) * 100).toFixed(1));
+
+    return { opens, openRate, topItems, styleBreakdown };
+  } catch (error) {
+    console.error('Dashboard menu analytics unavailable (embed_menu_events may not exist yet):', error);
+    return empty;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -56,10 +109,11 @@ export async function GET(request: NextRequest) {
       supabase.from('embed_stats').select('domain').eq('venue_id', venueId).eq('embed_type', 'tour').not('domain', 'is', null),
       supabase.from('conversations').select('conversation_id, created_at, message_type, user_agent, domain').eq('venue_id', venueId),
       supabase.from('embed_stats').select('*', { count: 'exact', head: true }).eq('venue_id', venueId).eq('embed_type', 'tour').gte('created_at', sevenDaysAgo),
-      supabase.from('tours').select('*', { count: 'exact', head: true }).eq('venue_id', venueId).eq('is_active', true),
+      // Placeholder — bots used computed via countBotsUsed below
+      Promise.resolve({ count: 0, data: null, error: null }),
       supabase.from('leads').select('*', { count: 'exact', head: true }).eq('venue_id', venueId),
       supabase.from('venue_billing_records').select('*').eq('venue_id', venueId).maybeSingle(),
-      supabase.from('billing_plans').select('code, included_spaces, included_messages').eq('is_active', true),
+      supabase.from('billing_plans').select('code, included_bots, included_messages').eq('is_active', true),
       supabase.from('subscriptions').select('status, plan_name, current_price, billing_cycle, is_trial, trial_end_date, next_billing_date').eq('venue_id', venueId).maybeSingle(),
       supabase.from('embed_stats').select('created_at').eq('venue_id', venueId).eq('embed_type', 'tour').gte('created_at', sevenDaysAgo),
       supabase.from('embed_tour_moves').select('created_at').eq('venue_id', venueId).gte('created_at', sevenDaysAgo),
@@ -71,16 +125,22 @@ export async function GET(request: NextRequest) {
       supabase.from('chatbot_configs').select('id').eq('venue_id', venueId).eq('is_active', true),
       supabase.from('conversations').select('*', { count: 'exact', head: true }).eq('venue_id', venueId).gte('created_at', thirtyDaysAgo),
       supabase.from('venues').select('pressed_share').eq('id', venueId).maybeSingle(),
-      // Monthly message-credit usage: tour visitor messages since the start of the
-      // current calendar month, matching the billing enforcement service.
+      // Monthly message-credit usage: visitor messages (tour + website) since period start
       supabase
         .from('conversations')
         .select('*', { count: 'exact', head: true })
         .eq('venue_id', venueId)
-        .eq('chatbot_type', 'tour')
+        .in('chatbot_type', ['tour', 'website'])
         .eq('message_type', 'visitor')
         .gte('created_at', messageCreditPeriodStart),
     ]);
+
+    const botsUsedCount = await countBotsUsed(venueId);
+    const menuAnalytics = await getMenuAnalytics(
+      venueId,
+      sevenDaysAgo,
+      Number(weeklyViewCountResult.count || 0)
+    );
 
     const tourViewRows = tourViewRowsResult.data || [];
     const totalTourViews = tourViewRows.reduce((sum, row) => sum + Number(row.views_count || 0), 0);
@@ -151,18 +211,18 @@ export async function GET(request: NextRequest) {
         : billingRecord?.plan_code || 'free';
     const activePlan = allPlans.find((plan) => plan.code === planCode) || null;
 
-    const baseSpacesFromPlan = Number(activePlan?.included_spaces || 0);
-    const baseSpaces = Math.max(baseSpacesFromPlan, planCode === 'free' ? 1 : 0);
+    const baseBotsFromPlan = Number(activePlan?.included_bots || 0);
+    const baseBots = Math.max(baseBotsFromPlan, planCode === 'free' ? 1 : 0);
     const baseMessages = Number(activePlan?.included_messages || 0);
-    const addonExtraSpaces = Number(billingRecord?.addon_extra_spaces || 0);
+    const addonExtraBots = Number(billingRecord?.addon_extra_bots || 0);
     const addonMessageBlocks = Number(billingRecord?.addon_message_blocks || 0);
 
-    const spacesLimit = Number(
-      billingRecord?.effective_space_limit ?? (baseSpaces + addonExtraSpaces)
+    const botsLimit = Number(
+      billingRecord?.effective_bot_limit ?? (baseBots + addonExtraBots)
     );
     const messageCreditsLimit = Number(
       billingRecord?.effective_message_limit ??
-        (baseMessages + addonExtraSpaces * 1000 + addonMessageBlocks * 1000)
+        (baseMessages + addonExtraBots * 1000 + addonMessageBlocks * 1000)
     );
 
     const dailyMap: Record<string, { tourViews: number; tourMoves: number; chatMessages: number }> = {};
@@ -313,8 +373,8 @@ export async function GET(request: NextRequest) {
         messageCreditsUsed: Number(messageCreditsUsedResult.count || 0),
         messageCreditsLimit: Number(messageCreditsLimit || 0),
         messageCreditsResetAt,
-        spacesUsed: Number(activeTourCountResult.count || 0),
-        spacesLimit: Number(spacesLimit || 1),
+        botsUsed: Number(botsUsedCount || 0),
+        botsLimit: Number(botsLimit || 1),
         uniqueDomains: Number(uniqueDomains) || 0,
         totalLeads: Number(leadCountResult.count || 0),
         avgResponseTime: 0,
@@ -334,6 +394,7 @@ export async function GET(request: NextRequest) {
         hasCustomisedTourTraining,
         pressedShare: Boolean(venuePressedShareResult.data?.pressed_share),
       },
+      menuAnalytics,
       visitorAnalytics: {
         totalTourViews: Number(totalTourViews) || 0,
         totalTourMoves: Number(totalTourMoves) || 0,

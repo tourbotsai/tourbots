@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import {
   getChatbotCustomisation,
   upsertChatbotCustomisation,
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
     const venueId = searchParams.get('venueId');
     const chatbotType = searchParams.get('chatbotType') as string | null;
     const tourId = searchParams.get('tourId');
+    const chatbotConfigId = searchParams.get('chatbotConfigId');
 
     if (!venueId) {
       return NextResponse.json(
@@ -62,19 +64,25 @@ export async function GET(request: NextRequest) {
     }
 
     if (chatbotType) {
-      if (chatbotType !== 'tour') {
+      if (chatbotType !== 'tour' && chatbotType !== 'website') {
         return NextResponse.json(
-          { error: 'Invalid chatbot type. Only "tour" is supported' },
+          { error: 'Invalid chatbot type. Must be "tour" or "website"' },
           { status: 400 }
         );
       }
-      if (!tourId) {
+      if (chatbotType === 'tour' && !tourId) {
         return NextResponse.json(
           { error: 'Tour ID is required for tour chatbot customisation' },
           { status: 400 }
         );
       }
-      const customisation = await getChatbotCustomisation(scopedVenueId, 'tour', tourId);
+      if (chatbotType === 'website' && !chatbotConfigId) {
+        return NextResponse.json(
+          { error: 'Chatbot config ID is required for website chatbot customisation' },
+          { status: 400 }
+        );
+      }
+      const customisation = await getChatbotCustomisation(scopedVenueId, chatbotType, tourId, chatbotConfigId);
       return NextResponse.json(customisation);
     } else {
       // Get all customisations for venue
@@ -90,40 +98,68 @@ export async function GET(request: NextRequest) {
   }
 }
 
+async function ensureWebsiteConfigScope(venueId: string, chatbotConfigId: string): Promise<NextResponse | null> {
+  const { data, error } = await supabase
+    .from('chatbot_configs')
+    .select('id')
+    .eq('id', chatbotConfigId)
+    .eq('venue_id', venueId)
+    .eq('chatbot_type', 'website')
+    .maybeSingle();
+
+  if (error || !data) {
+    return NextResponse.json({ error: 'Website chatbot config not found for venue' }, { status: 404 });
+  }
+  return null;
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const authResult = await authenticateChatbotRoute(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId, tourId, chatbotType, customisation } = await request.json();
+    const { venueId, tourId, chatbotConfigId, chatbotType, customisation } = await request.json();
     const venueScopeError = ensureVenueScope(authResult, venueId);
     if (venueScopeError) return venueScopeError;
     const scopedVenueId = getScopedVenueId(authResult, venueId);
-    const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
-    if (tourScopeError) return tourScopeError;
 
-    if (!venueId || !tourId || !chatbotType) {
+    if (!venueId || !chatbotType) {
       return NextResponse.json(
-        { error: 'Venue ID, tour ID and chatbot type are required' },
+        { error: 'Venue ID and chatbot type are required' },
         { status: 400 }
       );
     }
 
-    if (chatbotType !== 'tour') {
+    if (chatbotType !== 'tour' && chatbotType !== 'website') {
       return NextResponse.json(
-        { error: 'Invalid chatbot type. Only "tour" is supported' },
+        { error: 'Invalid chatbot type. Must be "tour" or "website"' },
         { status: 400 }
       );
+    }
+
+    if (chatbotType === 'website') {
+      if (!chatbotConfigId) {
+        return NextResponse.json({ error: 'Chatbot config ID is required for website chatbots' }, { status: 400 });
+      }
+      const configScopeError = await ensureWebsiteConfigScope(scopedVenueId, chatbotConfigId);
+      if (configScopeError) return configScopeError;
+    } else {
+      if (!tourId) {
+        return NextResponse.json({ error: 'Tour ID is required for tour chatbots' }, { status: 400 });
+      }
+      const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
+      if (tourScopeError) return tourScopeError;
     }
 
     const updatedCustomisation = await upsertChatbotCustomisation(
       scopedVenueId,
-      'tour',
-      tourId,
-      customisation
+      chatbotType,
+      chatbotType === 'tour' ? tourId : null,
+      customisation,
+      chatbotType === 'website' ? chatbotConfigId : undefined
     );
 
-    logChatbotAudit('chatbot_customisation_updated', authResult, { tour_id: tourId });
+    logChatbotAudit('chatbot_customisation_updated', authResult, { tour_id: tourId, chatbot_config_id: chatbotConfigId });
     return NextResponse.json(updatedCustomisation);
   } catch (error: any) {
     console.error('Error updating chatbot customisation:', error);
@@ -139,35 +175,48 @@ export async function POST(request: NextRequest) {
     const authResult = await authenticateChatbotRoute(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId, tourId, chatbotType, customisation } = await request.json();
+    const { venueId, tourId, chatbotConfigId, chatbotType, customisation } = await request.json();
     const venueScopeError = ensureVenueScope(authResult, venueId);
     if (venueScopeError) return venueScopeError;
     const scopedVenueId = getScopedVenueId(authResult, venueId);
-    const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
-    if (tourScopeError) return tourScopeError;
 
-    if (!venueId || !tourId || !chatbotType) {
+    if (!venueId || !chatbotType) {
       return NextResponse.json(
-        { error: 'Venue ID, tour ID and chatbot type are required' },
+        { error: 'Venue ID and chatbot type are required' },
         { status: 400 }
       );
     }
 
-    if (chatbotType !== 'tour') {
+    if (chatbotType !== 'tour' && chatbotType !== 'website') {
       return NextResponse.json(
-        { error: 'Invalid chatbot type. Only "tour" is supported' },
+        { error: 'Invalid chatbot type. Must be "tour" or "website"' },
         { status: 400 }
       );
+    }
+
+    if (chatbotType === 'website') {
+      if (!chatbotConfigId) {
+        return NextResponse.json({ error: 'Chatbot config ID is required for website chatbots' }, { status: 400 });
+      }
+      const configScopeError = await ensureWebsiteConfigScope(scopedVenueId, chatbotConfigId);
+      if (configScopeError) return configScopeError;
+    } else {
+      if (!tourId) {
+        return NextResponse.json({ error: 'Tour ID is required for tour chatbots' }, { status: 400 });
+      }
+      const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
+      if (tourScopeError) return tourScopeError;
     }
 
     const newCustomisation = await upsertChatbotCustomisation(
       scopedVenueId,
-      'tour',
-      tourId,
-      customisation
+      chatbotType,
+      chatbotType === 'tour' ? tourId : null,
+      customisation,
+      chatbotType === 'website' ? chatbotConfigId : undefined
     );
 
-    logChatbotAudit('chatbot_customisation_created', authResult, { tour_id: tourId });
+    logChatbotAudit('chatbot_customisation_created', authResult, { tour_id: tourId, chatbot_config_id: chatbotConfigId });
     return NextResponse.json(newCustomisation);
   } catch (error: any) {
     console.error('Error creating chatbot customisation:', error);
@@ -183,30 +232,42 @@ export async function DELETE(request: NextRequest) {
     const authResult = await authenticateChatbotRoute(request);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { venueId, tourId, chatbotType } = await request.json();
+    const { venueId, tourId, chatbotConfigId, chatbotType } = await request.json();
     const venueScopeError = ensureVenueScope(authResult, venueId);
     if (venueScopeError) return venueScopeError;
     const scopedVenueId = getScopedVenueId(authResult, venueId);
-    const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
-    if (tourScopeError) return tourScopeError;
 
-    if (!venueId || !tourId || !chatbotType) {
+    if (!venueId || !chatbotType) {
       return NextResponse.json(
-        { error: 'Venue ID, tour ID and chatbot type are required' },
+        { error: 'Venue ID and chatbot type are required' },
         { status: 400 }
       );
     }
 
-    if (chatbotType !== 'tour') {
+    if (chatbotType !== 'tour' && chatbotType !== 'website') {
       return NextResponse.json(
-        { error: 'Invalid chatbot type. Only "tour" is supported' },
+        { error: 'Invalid chatbot type. Must be "tour" or "website"' },
         { status: 400 }
       );
     }
 
-    await deleteChatbotCustomisation(scopedVenueId, 'tour', tourId);
+    if (chatbotType === 'website') {
+      if (!chatbotConfigId) {
+        return NextResponse.json({ error: 'Chatbot config ID is required for website chatbots' }, { status: 400 });
+      }
+      const configScopeError = await ensureWebsiteConfigScope(scopedVenueId, chatbotConfigId);
+      if (configScopeError) return configScopeError;
+      await deleteChatbotCustomisation(scopedVenueId, 'website', null, chatbotConfigId);
+    } else {
+      if (!tourId) {
+        return NextResponse.json({ error: 'Tour ID is required for tour chatbots' }, { status: 400 });
+      }
+      const tourScopeError = await ensureTourScope(scopedVenueId, tourId);
+      if (tourScopeError) return tourScopeError;
+      await deleteChatbotCustomisation(scopedVenueId, 'tour', tourId);
+    }
 
-    logChatbotAudit('chatbot_customisation_deleted', authResult, { tour_id: tourId });
+    logChatbotAudit('chatbot_customisation_deleted', authResult, { tour_id: tourId, chatbot_config_id: chatbotConfigId });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting chatbot customisation:', error);

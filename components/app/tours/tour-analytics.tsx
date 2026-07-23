@@ -10,7 +10,7 @@ import { EmbedStatistics } from '@/components/app/chatbots/shared/embed-statisti
 import { EmbedStat, Tour } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Eye, Globe, BarChart3, Users, MessageCircle, ArrowLeft, Navigation } from 'lucide-react';
+import { Eye, Globe, BarChart3, Users, MessageCircle, ArrowLeft, Navigation, Menu } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -32,6 +32,8 @@ interface AnalyticsSummary {
   totalConversations: number;
   tourChatMessages: number;
   uniqueDomains: number;
+  menuOpens: number;
+  menuTopItems: Array<{ label: string; count: number }>;
 }
 
 interface TourAnalyticsProps {
@@ -65,7 +67,9 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId 
     tourMoves: 0,
     totalConversations: 0,
     tourChatMessages: 0,
-    uniqueDomains: 0
+    uniqueDomains: 0,
+    menuOpens: 0,
+    menuTopItems: [],
   });
   const [loading, setLoading] = useState(true);
   const { conversations } = useTourChatbotAnalytics(selectedTourId, forcedVenueId);
@@ -81,7 +85,9 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId 
           tourMoves: 0,
           totalConversations: 0,
           tourChatMessages: 0,
-          uniqueDomains: 0
+          uniqueDomains: 0,
+          menuOpens: 0,
+          menuTopItems: [],
         });
         setLoading(false);
         return;
@@ -98,6 +104,8 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId 
             totalConversations: 0,
             tourChatMessages: 0,
             uniqueDomains: 0,
+            menuOpens: 0,
+            menuTopItems: [],
           });
           setLoading(false);
           return;
@@ -143,6 +151,10 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId 
           totalConversations: analytics.summary?.totalConversations || 0,
           tourChatMessages: analytics.summary?.tourChatMessages || 0,
           uniqueDomains: analytics.summary?.uniqueDomains || 0,
+          menuOpens: analytics.summary?.menuOpens || 0,
+          menuTopItems: Array.isArray(analytics.summary?.menuTopItems)
+            ? analytics.summary.menuTopItems
+            : [],
         });
       } catch (error) {
         console.error('Error fetching analytics:', error);
@@ -274,7 +286,7 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Tour views</p>
@@ -309,6 +321,18 @@ export function TourAnalytics({ selectedTourId, onSwitchToViewer, forcedVenueId 
                 <Globe className="h-4 w-4 text-slate-400 dark:text-slate-500" />
               </div>
               <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{summary.uniqueDomains}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Menu opens</p>
+                <Menu className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+              </div>
+              <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{summary.menuOpens.toLocaleString()}</p>
+              {summary.menuTopItems.length > 0 ? (
+                <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
+                  Top: {summary.menuTopItems[0].label}
+                </p>
+              ) : null}
             </div>
           </div>
 

@@ -2,22 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateAndGetVenue } from '@/lib/authenticated-venue';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 
-const FRONTEND_GUIDE_TABLE = 'resource_guides';
-const LEGACY_GUIDE_TABLE = 'guides';
+const GUIDE_TABLE = 'guides';
 
-function isMissingTable(error: any): boolean {
-  const message = String(error?.message || '').toLowerCase();
-  return (
-    error?.code === '42P01' ||
-    message.includes('does not exist') ||
-    message.includes('relation') ||
-    message.includes('schema cache')
-  );
-}
-
-async function queryGuides(tableName: string, search?: string) {
+async function queryGuides(search?: string) {
   let query = supabase
-    .from(tableName)
+    .from(GUIDE_TABLE)
     .select('*')
     .eq('is_published', true)
     .order('published_at', { ascending: false })
@@ -61,18 +50,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim();
 
-    let rows: any[] = [];
-    let queryError: any = null;
-
-    const primaryResult = await queryGuides(FRONTEND_GUIDE_TABLE, search || undefined);
-    if (primaryResult.error && isMissingTable(primaryResult.error)) {
-      const legacyResult = await queryGuides(LEGACY_GUIDE_TABLE, search || undefined);
-      rows = legacyResult.data || [];
-      queryError = legacyResult.error;
-    } else {
-      rows = primaryResult.data || [];
-      queryError = primaryResult.error;
-    }
+    const { data, error: queryError } = await queryGuides(search || undefined);
+    const rows = data || [];
 
     if (queryError) {
       throw queryError;

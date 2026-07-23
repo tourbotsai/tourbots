@@ -21,6 +21,7 @@ describe('live app dashboard smoke: localhost + Firebase', () => {
     expect(payload).toHaveProperty('actionItems')
     expect(typeof payload.overview.totalTourViews).toBe('number')
     expect(typeof payload.overview.totalTourMoves).toBe('number')
-    expect(typeof payload.quickStats.spacesUsed).toBe('number')
+    expect(typeof payload.quickStats.botsUsed).toBe('number')
+    expect(typeof payload.quickStats.botsLimit).toBe('number')
   }, 40_000)
 })

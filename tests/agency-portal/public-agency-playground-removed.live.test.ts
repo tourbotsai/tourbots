@@ -17,6 +17,7 @@ describe('live agency portal removed playground contract', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Origin: baseUrl,
       },
       body: JSON.stringify({ message: 'test' }),
     })

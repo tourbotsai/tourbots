@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { TourBookingEmail } from '@/components/emails/TourBookingEmail';
 import { z } from 'zod';
 
-const PLATFORM_ADMIN_EMAIL = 'hello@tourbots.ai';
+const PLATFORM_ADMIN_EMAIL = 'info@tourbots.ai';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const { venueName, preferred_date, preferred_time, contact_phone, additional_notes } = parsed.data;
 
     const { data, error } = await resend.emails.send({
-      from: 'Tour Booking <bookings@tourbots.ai>',
+      from: 'Tour Booking <info@tourbots.ai>',
       to: [PLATFORM_ADMIN_EMAIL],
       subject: `New Tour Booking Request from ${venueName}`,
       react: TourBookingEmail({ 

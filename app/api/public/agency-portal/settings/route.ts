@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAgencyPortalSession } from '@/lib/agency-portal-auth';
 import {
-  getScopedTourChatbotConfig,
+  getScopedSessionChatbotConfig,
   updateScopedTourChatbotConfig,
 } from '@/lib/agency-portal-module-service';
 
@@ -27,7 +27,11 @@ export async function GET(request: NextRequest) {
     });
     if (session instanceof NextResponse) return session;
 
-    const config = await getScopedTourChatbotConfig(session.venueId, session.tourId);
+    const config = await getScopedSessionChatbotConfig(
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
 
     return NextResponse.json({
       settings: config,
@@ -67,9 +71,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No settings fields provided.' }, { status: 400 });
     }
 
-    const updated = await updateScopedTourChatbotConfig(session.venueId, session.tourId, parsed.data);
+    const updated = await updateScopedTourChatbotConfig(
+      session.venueId,
+      session.tourId,
+      parsed.data,
+      session.chatbotConfigId
+    );
     if (!updated) {
-      return NextResponse.json({ error: 'Tour chatbot settings not found.' }, { status: 404 });
+      return NextResponse.json({ error: 'Chatbot settings not found.' }, { status: 404 });
     }
 
     return NextResponse.json({ settings: updated });

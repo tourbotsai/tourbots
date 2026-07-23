@@ -131,6 +131,38 @@ export async function GET(request: NextRequest) {
       conversationRows.map((row) => row.conversation_id).filter(Boolean)
     ).size;
 
+    let menuOpens = 0;
+    let menuTopItems: Array<{ label: string; count: number }> = [];
+    try {
+      const { data: menuEventRows, error: menuError } = await withScope(
+        supabase
+          .from('embed_menu_events')
+          .select('event_type, item_label')
+          .order('created_at', { ascending: false })
+          .limit(2000)
+      );
+      if (menuError) throw menuError;
+
+      const rows = (menuEventRows || []) as Array<{
+        event_type: string | null;
+        item_label: string | null;
+      }>;
+      menuOpens = rows.filter((row) => row.event_type === 'menu_opened').length;
+      const itemClickCounts: Record<string, number> = {};
+      rows
+        .filter((row) => row.event_type === 'menu_item_clicked' && row.item_label)
+        .forEach((row) => {
+          const label = String(row.item_label);
+          itemClickCounts[label] = (itemClickCounts[label] || 0) + 1;
+        });
+      menuTopItems = Object.entries(itemClickCounts)
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+    } catch (menuAnalyticsError) {
+      console.error('Tour menu analytics unavailable (embed_menu_events may not exist yet):', menuAnalyticsError);
+    }
+
     return NextResponse.json({
       data: sampleDataResult.data || [],
       moves: tourMovesRowsResult.data || [],
@@ -140,6 +172,8 @@ export async function GET(request: NextRequest) {
         totalConversations: uniqueConversations,
         tourChatMessages: tourChatMessagesResult.count || 0,
         uniqueDomains,
+        menuOpens,
+        menuTopItems,
       },
     });
   } catch (error: any) {

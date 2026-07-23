@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
-import Script from "next/script";
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
 import { MyFirebaseProvider } from "@/components/firebase-providers";
 import { Toaster } from "@/components/ui/toaster";
+import { CookieConsentBanner } from "@/components/website/shared/CookieConsentBanner";
+import { GoogleAnalytics } from "@/components/website/shared/GoogleAnalytics";
 import { getSiteMetadataBase, getSiteUrl } from "@/lib/site-url";
 import { ReactNode } from "react";
 
@@ -111,23 +112,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
-        {/* Google Analytics */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-V92BCZ1FJM"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-V92BCZ1FJM');
-          `}
-        </Script>
-        
         <MyFirebaseProvider>
           {children}
           <Toaster />
+          <CookieConsentBanner />
+          <GoogleAnalytics />
         </MyFirebaseProvider>
       </body>
     </html>

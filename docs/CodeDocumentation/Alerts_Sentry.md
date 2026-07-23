@@ -132,7 +132,7 @@ All three tables have indexes for operational querying and have RLS enabled.
 
 - `RESEND_API_KEY`
 - `ALERT_EMAIL_TO` (for example: `tourbotsai@gmail.com`)
-- `ALERT_EMAIL_FROM` (for example: `alerts@tourbots.ai`)
+- `ALERT_EMAIL_FROM` (for example: `info@tourbots.ai`)
 
 ### Optional but recommended
 

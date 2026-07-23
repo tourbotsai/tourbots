@@ -14,15 +14,8 @@ export function PricingHero() {
         </h1>
 
         <p className="max-w-5xl text-base leading-relaxed text-slate-300 sm:text-lg">
-          <span className="block sm:hidden">
-            Start completely free, move to Pro for your first live space, add spaces as you grow.
-          </span>
-          <span className="hidden sm:block lg:whitespace-nowrap">
-            Start completely free, move to Pro for your first live space, then add more spaces as you grow.
-          </span>
-          <span className="mt-2 hidden sm:block">
-            Choose Free, Pro, or Agency, with add-ons such as extra spaces, message blocks, and white-label available.
-          </span>
+          Every plan gives you an AI bot you can launch straight onto your website or drop into a
+          virtual tour, whichever you need. Start free, then add more bots as you grow.
         </p>
 
         <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:flex sm:max-w-none sm:w-auto sm:flex-row sm:justify-center sm:gap-4">

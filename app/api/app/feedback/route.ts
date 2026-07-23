@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { FeedbackFormEmail } from '@/components/emails/FeedbackFormEmail';
 import { z } from 'zod';
 
-const PLATFORM_ADMIN_EMAIL = 'hello@tourbots.ai';
+const PLATFORM_ADMIN_EMAIL = 'info@tourbots.ai';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const { category, message, tourId, userEmail } = parsed.data;
 
     const { data, error } = await resend.emails.send({
-      from: 'Feedback Form <feedback@tourbots.ai>',
+      from: 'Feedback Form <support@tourbots.ai>',
       to: [PLATFORM_ADMIN_EMAIL],
       subject: `New Feedback Received (${category})`,
       replyTo: userEmail,

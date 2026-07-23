@@ -3,8 +3,7 @@ import "server-only";
 import { Guide, ResourceFilters } from "@/lib/types";
 import { supabaseServiceRole } from "@/lib/supabase-service-role";
 
-const FRONTEND_GUIDE_TABLE = "resource_guides";
-const LEGACY_GUIDE_TABLE = "guides";
+const GUIDE_TABLE = "guides";
 
 type RawGuide = Record<string, any>;
 
@@ -31,34 +30,9 @@ function toGuide(raw: RawGuide): Guide {
   };
 }
 
-function isMissingTable(error: any): boolean {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    error?.code === "42P01" ||
-    message.includes("does not exist") ||
-    message.includes("relation") ||
-    message.includes("schema cache")
-  );
-}
-
-async function fetchFromPrimaryThenLegacy<T>(
-  primary: () => Promise<T>,
-  legacy: () => Promise<T>
-): Promise<T> {
-  try {
-    return await primary();
-  } catch (error) {
-    if (!isMissingTable(error)) throw error;
-    return legacy();
-  }
-}
-
-async function queryGuidesTable(
-  tableName: string,
-  filters: ResourceFilters = {}
-): Promise<RawGuide[]> {
+async function queryGuidesTable(filters: ResourceFilters = {}): Promise<RawGuide[]> {
   let query = supabaseServiceRole
-    .from(tableName)
+    .from(GUIDE_TABLE)
     .select("*")
     .eq("is_published", true)
     .order("published_at", { ascending: false });
@@ -88,9 +62,14 @@ async function queryGuidesTable(
   return data || [];
 }
 
-async function queryGuideBySlug(tableName: string, slug: string): Promise<RawGuide | null> {
+export async function getPublicGuides(filters: ResourceFilters = {}): Promise<Guide[]> {
+  const rows = await queryGuidesTable(filters);
+  return rows.map(toGuide);
+}
+
+export async function getPublicGuideBySlug(slug: string): Promise<Guide | null> {
   const { data, error } = await supabaseServiceRole
-    .from(tableName)
+    .from(GUIDE_TABLE)
     .select("*")
     .eq("slug", slug)
     .eq("is_published", true)
@@ -100,47 +79,24 @@ async function queryGuideBySlug(tableName: string, slug: string): Promise<RawGui
     if (error.code === "PGRST116") return null;
     throw error;
   }
-  return data;
-}
-
-export async function getPublicGuides(filters: ResourceFilters = {}): Promise<Guide[]> {
-  const rows = await fetchFromPrimaryThenLegacy(
-    () => queryGuidesTable(FRONTEND_GUIDE_TABLE, filters),
-    () => queryGuidesTable(LEGACY_GUIDE_TABLE, filters)
-  );
-  return rows.map(toGuide);
-}
-
-export async function getPublicGuideBySlug(slug: string): Promise<Guide | null> {
-  const row = await fetchFromPrimaryThenLegacy(
-    () => queryGuideBySlug(FRONTEND_GUIDE_TABLE, slug),
-    () => queryGuideBySlug(LEGACY_GUIDE_TABLE, slug)
-  );
-  return row ? toGuide(row) : null;
+  return data ? toGuide(data) : null;
 }
 
 export async function getPublicGuideTags(): Promise<string[]> {
-  const fetchTags = async (tableName: string): Promise<string[]> => {
-    const { data, error } = await supabaseServiceRole
-      .from(tableName)
-      .select("tags")
-      .eq("is_published", true);
+  const { data, error } = await supabaseServiceRole
+    .from(GUIDE_TABLE)
+    .select("tags")
+    .eq("is_published", true);
 
-    if (error) throw error;
-    const allTags = data?.flatMap((guide: any) => guide.tags || []) || [];
-    return Array.from(new Set(allTags)).sort();
-  };
-
-  return fetchFromPrimaryThenLegacy(
-    () => fetchTags(FRONTEND_GUIDE_TABLE),
-    () => fetchTags(LEGACY_GUIDE_TABLE)
-  );
+  if (error) throw error;
+  const allTags = data?.flatMap((guide: any) => guide.tags || []) || [];
+  return Array.from(new Set(allTags)).sort();
 }
 
 export async function incrementPublicGuideViews(guideId: string): Promise<void> {
-  const updateViews = async (tableName: string) => {
+  try {
     const { data: currentGuide, error: fetchError } = await supabaseServiceRole
-      .from(tableName)
+      .from(GUIDE_TABLE)
       .select("view_count")
       .eq("id", guideId)
       .single();
@@ -149,18 +105,11 @@ export async function incrementPublicGuideViews(guideId: string): Promise<void> 
     if (!currentGuide) return;
 
     const { error: updateError } = await supabaseServiceRole
-      .from(tableName)
+      .from(GUIDE_TABLE)
       .update({ view_count: (currentGuide.view_count || 0) + 1 })
       .eq("id", guideId);
 
     if (updateError) throw updateError;
-  };
-
-  try {
-    await fetchFromPrimaryThenLegacy(
-      () => updateViews(FRONTEND_GUIDE_TABLE),
-      () => updateViews(LEGACY_GUIDE_TABLE)
-    );
   } catch (error) {
     console.warn("incrementPublicGuideViews warning:", error);
   }

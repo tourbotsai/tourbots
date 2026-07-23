@@ -44,13 +44,8 @@ Default automation is Vitest integration tests for route handlers and services. 
 - [ ] Account detail and venue patch smoke (`tests/admin/admin-account-detail-and-patch-venue.live.test.ts`)
 - [ ] Billing venues read/write smoke (`tests/admin/admin-billing-venues.live.test.ts`)
 - [ ] Payments links and subscriptions read smoke (`tests/admin/admin-payments-and-links.live.test.ts`)
-- [ ] Trials overview and checkout-session smoke (`tests/admin/admin-trials-overview-and-checkout.live.test.ts`)
-- [ ] Outbound leads and notes smoke (`tests/admin/admin-outbound-leads-and-notes.live.test.ts`)
-- [ ] Outbound sequences CRUD smoke (`tests/admin/admin-outbound-sequences-crud.live.test.ts`)
 - [ ] Help articles and support conversations smoke (`tests/admin/admin-help-and-support.live.test.ts`)
 - [ ] Resources blogs/guides CMS smoke (`tests/admin/admin-resources-cms.live.test.ts`)
-- [ ] Sales metrics/leads/activities/sequences smoke (`tests/admin/admin-sales-core.live.test.ts`)
-- [ ] Lead enrichment and AI email endpoints smoke (`tests/admin/admin-sales-ai-and-enrichment.live.test.ts`)
 
 ## First implementation
 

@@ -59,7 +59,7 @@ export function VenueSettings({ onManagePlan }: { onManagePlan?: () => void }) {
   const planCode = billingRecord?.plan_code || "free";
   const planLabel = planCode === "agency" ? "Agency" : planCode === "pro" ? "Pro" : "Free";
   const addonParts: string[] = [];
-  if ((billingRecord?.addon_extra_spaces || 0) > 0) addonParts.push(`${billingRecord?.addon_extra_spaces}x storage`);
+  if ((billingRecord?.addon_extra_bots || 0) > 0) addonParts.push(`${billingRecord?.addon_extra_bots}x extra bots`);
   if ((billingRecord?.addon_message_blocks || 0) > 0) addonParts.push(`${billingRecord?.addon_message_blocks}x message credits`);
   if (billingRecord?.addon_white_label) addonParts.push("white-label");
   const accountTypeText = `Plan: ${planLabel}. Add-ons: ${addonParts.length ? addonParts.join(", ") : "None"}`;

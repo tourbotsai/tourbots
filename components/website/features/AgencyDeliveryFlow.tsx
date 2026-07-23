@@ -7,7 +7,7 @@ export function AgencyDeliveryFlow() {
       step: "01",
       title: "Connect your tour",
       description:
-        "Add your Matterport tour, confirm the preview, and set up your space in minutes.",
+        "Add your Matterport tour, confirm the preview, and set up your bot in minutes.",
       duration: "2 minutes",
       points: ["Matterport-ready setup", "Quick tour import", "No rebuild required"],
     },
@@ -26,7 +26,7 @@ export function AgencyDeliveryFlow() {
       description:
         "Embed once, launch quickly, and monitor engagement and triggers in one clear dashboard.",
       duration: "Go live instantly",
-      points: ["Single embed rollout", "Space-level analytics", "Trigger and engagement reporting"],
+      points: ["Single embed rollout", "Bot-level analytics", "Trigger and engagement reporting"],
     },
   ];
 

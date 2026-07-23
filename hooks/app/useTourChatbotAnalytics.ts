@@ -3,7 +3,13 @@ import { Conversation } from '@/lib/types';
 import { useUser } from '@/hooks/useUser';
 import { useAuthHeaders } from '@/hooks/useAuthHeaders';
 
-export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVenueId?: string | null) {
+export function useTourChatbotAnalytics(
+  selectedTourId?: string | null,
+  forcedVenueId?: string | null,
+  chatbotConfigId?: string | null
+) {
+  const isWebsiteMode = Boolean(chatbotConfigId);
+  const chatbotTypeParam = isWebsiteMode ? 'website' : 'tour';
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +26,10 @@ export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVe
     setIsLoading(true);
     setError(null);
     try {
-      let url = `/api/app/chatbots/analytics?venueId=${effectiveVenueId}&chatbotType=tour`;
-      if (selectedTourId) {
+      let url = `/api/app/chatbots/analytics?venueId=${effectiveVenueId}&chatbotType=${chatbotTypeParam}`;
+      if (isWebsiteMode) {
+        url += `&chatbotConfigId=${chatbotConfigId}`;
+      } else if (selectedTourId) {
         url += `&tourId=${selectedTourId}`;
       }
       if (sessionId) {
@@ -41,7 +49,7 @@ export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVe
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveVenueId, selectedTourId, getAuthHeaders]);
+  }, [effectiveVenueId, selectedTourId, isWebsiteMode, chatbotConfigId, chatbotTypeParam, getAuthHeaders]);
 
   // Auto-fetch conversations when user/venue is available
   useEffect(() => {
@@ -56,8 +64,10 @@ export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVe
     setIsLoading(true);
     setError(null);
     try {
-      const tourParam = selectedTourId ? `&tourId=${selectedTourId}` : '';
-      const url = `/api/app/chatbots/analytics?venueId=${effectiveVenueId}&type=stats&chatbotType=tour${tourParam}`;
+      const scopeParam = isWebsiteMode
+        ? `&chatbotConfigId=${chatbotConfigId}`
+        : selectedTourId ? `&tourId=${selectedTourId}` : '';
+      const url = `/api/app/chatbots/analytics?venueId=${effectiveVenueId}&type=stats&chatbotType=${chatbotTypeParam}${scopeParam}`;
       const response = await fetch(url, { headers: await getAuthHeaders() });
       const data = await response.json();
 
@@ -72,7 +82,7 @@ export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVe
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveVenueId, selectedTourId, getAuthHeaders]);
+  }, [effectiveVenueId, selectedTourId, isWebsiteMode, chatbotConfigId, chatbotTypeParam, getAuthHeaders]);
 
   const getSessionMessages = useCallback(async (sessionId: string) => {
     if (!effectiveVenueId) return;
@@ -80,8 +90,10 @@ export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVe
     setIsLoading(true);
     setError(null);
     try {
-      const tourParam = selectedTourId ? `&tourId=${selectedTourId}` : '';
-      const url = `/api/app/chatbots/analytics?venueId=${effectiveVenueId}&type=session&sessionId=${sessionId}&chatbotType=tour${tourParam}`;
+      const scopeParam = isWebsiteMode
+        ? `&chatbotConfigId=${chatbotConfigId}`
+        : selectedTourId ? `&tourId=${selectedTourId}` : '';
+      const url = `/api/app/chatbots/analytics?venueId=${effectiveVenueId}&type=session&sessionId=${sessionId}&chatbotType=${chatbotTypeParam}${scopeParam}`;
       const response = await fetch(url, { headers: await getAuthHeaders() });
       const data = await response.json();
 
@@ -96,7 +108,7 @@ export function useTourChatbotAnalytics(selectedTourId?: string | null, forcedVe
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveVenueId, selectedTourId, getAuthHeaders]);
+  }, [effectiveVenueId, selectedTourId, isWebsiteMode, chatbotConfigId, chatbotTypeParam, getAuthHeaders]);
 
   return {
     conversations,

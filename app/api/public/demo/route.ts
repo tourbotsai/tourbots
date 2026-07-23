@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { DemoRequestEmail } from '@/components/emails/DemoRequestEmail';
 import { z } from 'zod';
 
-const PLATFORM_ADMIN_EMAIL = 'hello@tourbots.ai';
+const PLATFORM_ADMIN_EMAIL = 'info@tourbots.ai';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     } = parsed.data;
 
     const { data, error } = await resend.emails.send({
-      from: 'Demo Request <demo@tourbots.ai>',
+      from: 'Demo Request <info@tourbots.ai>',
       to: [PLATFORM_ADMIN_EMAIL],
       subject: `New Demo Request from ${name} (${venueName})`,
       replyTo: email,

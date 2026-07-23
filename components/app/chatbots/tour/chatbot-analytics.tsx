@@ -45,13 +45,23 @@ interface ConversationGroup {
 interface TourChatbotAnalyticsProps {
   onSwitchToSettings?: () => void;
   selectedTourId?: string | null;
+  chatbotConfigId?: string | null;
 }
 
-export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: TourChatbotAnalyticsProps) {
+export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId, chatbotConfigId }: TourChatbotAnalyticsProps) {
+  const isWebsiteMode = Boolean(chatbotConfigId);
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
-  const { conversations, isLoading, error, getConversationStats } = useTourChatbotAnalytics(selectedTourId);
-  const { tourConfig, isLoading: configLoading } = useTourChatbotConfig(selectedTourId);
+  const { conversations, isLoading, error, getConversationStats } = useTourChatbotAnalytics(
+    isWebsiteMode ? null : selectedTourId,
+    undefined,
+    isWebsiteMode ? chatbotConfigId : undefined
+  );
+  const { tourConfig, isLoading: configLoading } = useTourChatbotConfig(
+    isWebsiteMode ? null : selectedTourId,
+    undefined,
+    isWebsiteMode ? chatbotConfigId : undefined
+  );
   const [stats, setStats] = useState<any>(null);
   const [conversationGroups, setConversationGroups] = useState<ConversationGroup[]>([]);
 
@@ -154,7 +164,7 @@ export function TourChatbotAnalytics({ onSwitchToSettings, selectedTourId }: Tou
     );
   }
 
-  if (!selectedTourId) {
+  if (!selectedTourId && !chatbotConfigId) {
     return <NoTourEmptyState description="Upload your Matterport tour first, then return here to view your AI chatbot analytics." />;
   }
 

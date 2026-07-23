@@ -8,10 +8,10 @@ const updateVenueBillingSchema = z.object({
   billing_status: z.enum(['free', 'active', 'past_due', 'cancelled', 'trialing']).optional(),
   billing_override_enabled: z.boolean().optional(),
   override_plan_code: z.string().nullable().optional(),
-  addon_extra_spaces: z.number().int().min(0).optional(),
+  addon_extra_bots: z.number().int().min(0).optional(),
   addon_message_blocks: z.number().int().min(0).optional(),
   addon_white_label: z.boolean().optional(),
-  effective_space_limit: z.number().int().min(0).nullable().optional(),
+  effective_bot_limit: z.number().int().min(0).nullable().optional(),
   effective_message_limit: z.number().int().min(0).nullable().optional(),
   notes: z.string().nullable().optional(),
 });

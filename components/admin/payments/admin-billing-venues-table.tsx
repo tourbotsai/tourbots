@@ -24,10 +24,10 @@ interface DraftState {
     billing_status: 'free' | 'active' | 'past_due' | 'cancelled' | 'trialing';
     billing_override_enabled: boolean;
     override_plan_code: string;
-    addon_extra_spaces: number;
+    addon_extra_bots: number;
     addon_message_blocks: number;
     addon_white_label: boolean;
-    effective_space_limit: string;
+    effective_bot_limit: string;
     effective_message_limit: string;
     notes: string;
   };
@@ -55,12 +55,12 @@ export function AdminBillingVenuesTable() {
         billing_status: (record?.billing_status || "free") as DraftState[string]["billing_status"],
         billing_override_enabled: record?.billing_override_enabled || false,
         override_plan_code: record?.override_plan_code || "",
-        addon_extra_spaces: record?.addon_extra_spaces || 0,
+        addon_extra_bots: record?.addon_extra_bots || 0,
         addon_message_blocks: record?.addon_message_blocks || 0,
         addon_white_label: record?.addon_white_label || false,
-        effective_space_limit:
-          record?.effective_space_limit !== null && record?.effective_space_limit !== undefined
-            ? String(record.effective_space_limit)
+        effective_bot_limit:
+          record?.effective_bot_limit !== null && record?.effective_bot_limit !== undefined
+            ? String(record.effective_bot_limit)
             : "",
         effective_message_limit:
           record?.effective_message_limit !== null && record?.effective_message_limit !== undefined
@@ -96,10 +96,10 @@ export function AdminBillingVenuesTable() {
       billing_status: draft.billing_status,
       billing_override_enabled: draft.billing_override_enabled,
       override_plan_code: draft.override_plan_code || null,
-      addon_extra_spaces: draft.addon_extra_spaces,
+      addon_extra_bots: draft.addon_extra_bots,
       addon_message_blocks: draft.addon_message_blocks,
       addon_white_label: draft.addon_white_label,
-      effective_space_limit: draft.effective_space_limit === "" ? null : Number(draft.effective_space_limit),
+      effective_bot_limit: draft.effective_bot_limit === "" ? null : Number(draft.effective_bot_limit),
       effective_message_limit: draft.effective_message_limit === "" ? null : Number(draft.effective_message_limit),
       notes: draft.notes || null,
     });
@@ -215,12 +215,12 @@ export function AdminBillingVenuesTable() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs text-slate-500">Extra spaces add-on</Label>
+                          <Label className="text-xs text-slate-500">Extra bots add-on</Label>
                           <Input
                             type="number"
                             min={0}
-                            value={draft.addon_extra_spaces}
-                            onChange={(event) => updateDraft(row.venue.id, { addon_extra_spaces: Number(event.target.value || 0) })}
+                            value={draft.addon_extra_bots}
+                            onChange={(event) => updateDraft(row.venue.id, { addon_extra_bots: Number(event.target.value || 0) })}
                             className="border-slate-300"
                           />
                         </div>
@@ -265,13 +265,13 @@ export function AdminBillingVenuesTable() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs text-slate-500">Space limit override</Label>
+                          <Label className="text-xs text-slate-500">Bot limit override</Label>
                           <Input
                             type="number"
                             min={0}
                             placeholder="Auto"
-                            value={draft.effective_space_limit}
-                            onChange={(event) => updateDraft(row.venue.id, { effective_space_limit: event.target.value })}
+                            value={draft.effective_bot_limit}
+                            onChange={(event) => updateDraft(row.venue.id, { effective_bot_limit: event.target.value })}
                             className="border-slate-300"
                           />
                         </div>

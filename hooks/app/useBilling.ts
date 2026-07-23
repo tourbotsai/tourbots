@@ -4,9 +4,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { BillingAddon, BillingPlan, Invoice, Subscription, SubscriptionStatus, VenueBillingRecord } from '@/lib/types';
 
 interface BillingLimits {
-  baseSpaces: number;
+  baseBots: number;
   baseMessages: number;
-  totalSpaces: number;
+  totalBots: number;
   totalMessages: number;
 }
 
@@ -36,10 +36,10 @@ export interface AddonSubscriptionDetail {
 }
 
 export type AddonCode =
-  | 'extra_space'
+  | 'extra_bot'
   | 'message_block'
   | 'white_label'
-  | 'agency_extra_space'
+  | 'agency_extra_bot'
   | 'agency_message_block';
 
 export type PaidPlanCode = 'pro' | 'agency';

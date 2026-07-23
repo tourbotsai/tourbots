@@ -1,7 +1,7 @@
 {
   "name": "tourbots-ai",
   "description": "Virtual venue tours with AI assistance - turning browsers into customers, 24/7",
-  "author": "TourBots AI <hello@tourbots.ai> (https://tourbots.ai)",
+  "author": "TourBots AI <info@tourbots.ai> (https://tourbots.ai)",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "build:widget": "node scripts/build-widget-bundle.js",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",

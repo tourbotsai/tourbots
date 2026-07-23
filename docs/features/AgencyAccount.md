@@ -15,7 +15,7 @@ Deliver a paid Agency add-on that allows agencies to:
 
 - Account model is based on `users` and `venues` (no separate organisations table).
 - One venue account can own multiple tours.
-- Billing add-ons already include `white_label`, `extra_space`, and `message_block`.
+- Billing add-ons already include `white_label`, `extra_bot`, and `message_block`.
 - Embed/share patterns already exist in:
   - `lib/embed-generator.ts`
   - `components/app/tours/tour-share.tsx`

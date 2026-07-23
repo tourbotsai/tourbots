@@ -24,11 +24,14 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 // Add-on subscription codes (capacity scaling). Agency is a plan tier, not an
 // add-on, so it is not listed here. Add-ons always cascade with the main plan.
 const ADDON_CODES = new Set([
-  'extra_space',
+  'extra_bot',
   'message_block',
   'white_label',
-  'agency_extra_space',
+  'agency_extra_bot',
   'agency_message_block',
+  // Dual-accept legacy codes during Stripe cutover
+  'extra_space',
+  'agency_extra_space',
 ]);
 
 function mapStripePlanToBillingPlan(planName?: string | null): string {
@@ -152,11 +155,11 @@ async function clearVenueAddonsForCancellation(
   const update: Record<string, unknown> = {
     plan_code: 'free',
     billing_status: 'cancelled',
-    addon_extra_spaces: 0,
+    addon_extra_bots: 0,
     addon_message_blocks: 0,
     addon_white_label: false,
     addon_agency_portal: false,
-    effective_space_limit: null,
+    effective_bot_limit: null,
     effective_message_limit: null,
     stripe_customer_id: stripeCustomerId || null,
     stripe_subscription_id: null,

@@ -13,16 +13,18 @@ import { NoTourEmptyState } from "../no-tour-empty-state";
 interface TourChatbotCustomisationProps {
   onSwitchToSettings?: () => void;
   selectedTourId?: string | null;
+  chatbotConfigId?: string | null;
 }
 
-export function TourChatbotCustomisation({ onSwitchToSettings, selectedTourId }: TourChatbotCustomisationProps) {
+export function TourChatbotCustomisation({ onSwitchToSettings, selectedTourId, chatbotConfigId }: TourChatbotCustomisationProps) {
+  const isWebsiteMode = Boolean(chatbotConfigId);
   const { 
     customisation, 
     isLoading, 
     error, 
     updateCustomisation, 
     resetToDefaults
-  } = useChatbotCustomisation('tour', selectedTourId);
+  } = useChatbotCustomisation(isWebsiteMode ? 'website' : 'tour', selectedTourId, chatbotConfigId);
   const { billingRecord, fetchBilling } = useBilling();
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export function TourChatbotCustomisation({ onSwitchToSettings, selectedTourId }:
     );
   }
 
-  if (!selectedTourId) {
+  if (!selectedTourId && !chatbotConfigId) {
     return <NoTourEmptyState description="Upload your Matterport tour first, then return here to customise your AI chatbot." />;
   }
 

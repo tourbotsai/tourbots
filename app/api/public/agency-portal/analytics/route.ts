@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
     const [stats, allocationResult] = await Promise.all([
       getScopedTourAnalyticsStats(session.venueId, session.tourId),
-      checkClientAllocationUsage(session.venueId, session.tourId),
+      checkClientAllocationUsage(session.venueId, session.tourId, session.chatbotConfigId),
     ]);
 
     // Only surface allocation to the client when the agency runs in allocated mode.

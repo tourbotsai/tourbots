@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTourChatbotConfig } from '@/hooks/app/useTourChatbotConfig';
 import { useUser } from '@/hooks/useUser';
+import { LeadFormCard } from '@/components/app/tours/lead-form-card';
 import { ChatMessage, Tour, ChatbotCustomisation } from '@/lib/types';
 import { getDefaultCustomisation, getAdvancedDefaultCustomisation } from '@/lib/chatbot-customisation-service';
 import { ChatbotConfigService } from '@/lib/services/chatbot-config-service';
@@ -64,8 +65,12 @@ function createConversationId(): string {
 interface TourChatWidgetProps {
   venueId: string;
   venueName?: string;
-  tour?: Tour;
+  tour?: Tour | null;
   scopeTourId?: string | null;
+  // Identifies a standalone website chatbot (no Matterport tour). When set,
+  // `tour`/`scopeTourId` are ignored for config/message scoping and all tour
+  // navigation is disabled.
+  chatbotConfigId?: string | null;
   className?: string;
   isFullscreen?: boolean;
   customisation?: ChatbotCustomisation | null;
@@ -73,6 +78,9 @@ interface TourChatWidgetProps {
   onToggle: (isExpanded: boolean) => void;
   forceMobileMode?: boolean;
   externalPrompt?: string | null;
+  // When true, externalPrompt is sent immediately (as a normal visitor message) rather
+  // than just populating the input box - used by tour menu "open chat with prompt" items.
+  externalAutoSend?: boolean;
   onExternalPromptConsumed?: () => void;
   embedId?: string;
   embedToken?: string;
@@ -108,6 +116,7 @@ export function TourChatWidget({
   venueName, 
   tour, 
   scopeTourId,
+  chatbotConfigId = null,
   className = "", 
   isFullscreen = false, 
   customisation,
@@ -115,6 +124,7 @@ export function TourChatWidget({
   onToggle,
   forceMobileMode = false,
   externalPrompt = null,
+  externalAutoSend = false,
   onExternalPromptConsumed,
   embedId,
   embedToken,
@@ -128,7 +138,11 @@ export function TourChatWidget({
   // In forced-public mode (marketing site) skip the authenticated config hook
   // entirely by passing a null tourId, so it never hits /api/app/chatbots/config
   // for a venue the signed-in user doesn't own (which 403s).
-  const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(forcePublic ? null : (scopeTourId || tour?.id), venueId);
+  const { tourConfig: authTourConfig, isLoading: authConfigLoading } = useTourChatbotConfig(
+    forcePublic ? null : (chatbotConfigId ? null : (scopeTourId || tour?.id)),
+    venueId,
+    forcePublic ? null : chatbotConfigId
+  );
   // Seed from SSR config when provided so the button renders fully on first paint.
   const [publicConfig, setPublicConfig] = useState<any>(initialConfig ?? null);
   const [isPublicConfigLoading, setIsPublicConfigLoading] = useState(false);
@@ -154,7 +168,8 @@ export function TourChatWidget({
 
   // Whether this embed is allowed to drive the tour. When 'none', no navigation
   // events are emitted and the backend is told to withhold the navigation tools.
-  const navigationEnabled = navTarget !== 'none';
+  // Website chatbots have no Matterport tour to navigate, so this is always off.
+  const navigationEnabled = navTarget !== 'none' && !chatbotConfigId;
 
   // Single dispatch point for tour-control events so the destination ('event' vs
   // 'parent' window) is decided in one place:
@@ -186,11 +201,12 @@ export function TourChatWidget({
           setIsPublicConfigLoading(true);
           const configData = await ChatbotConfigService.getPublicConfig(
             venueId,
-            'tour',
-            scopeTourId || tour?.id,
+            chatbotConfigId ? 'website' : 'tour',
+            chatbotConfigId ? undefined : (scopeTourId || tour?.id),
             {
               embedId: embedId || `tour-widget-${venueId}`,
               embedToken,
+              chatbotConfigId: chatbotConfigId || undefined,
             }
           );
             setPublicConfig({
@@ -200,11 +216,19 @@ export function TourChatWidget({
             });
         } catch (error) {
           // Set fallback config for demos
-          setPublicConfig({
-            chatbot_name: 'Tour Assistant',
-            welcome_message: `Hello! I'm your virtual tour guide${venueName ? ` for ${venueName}` : ''}. How can I help you explore this space?`,
-            is_active: true
-          });
+          setPublicConfig(
+            chatbotConfigId
+              ? {
+                  chatbot_name: 'Website Assistant',
+                  welcome_message: `Hello! I'm the assistant${venueName ? ` for ${venueName}` : ''}. What would you like to know?`,
+                  is_active: true
+                }
+              : {
+                  chatbot_name: 'Tour Assistant',
+                  welcome_message: `Hello! I'm your virtual tour guide${venueName ? ` for ${venueName}` : ''}. How can I help you explore this space?`,
+                  is_active: true
+                }
+          );
         } finally {
           setIsPublicConfigLoading(false);
         }
@@ -220,7 +244,19 @@ export function TourChatWidget({
     if (!conversationId) {
       setConversationId(createConversationId());
     }
-  }, [isPublicDemo, venueId, venueName, sessionId, conversationId, initialConfig]);
+  }, [
+    isPublicDemo,
+    venueId,
+    venueName,
+    sessionId,
+    conversationId,
+    initialConfig,
+    chatbotConfigId,
+    embedId,
+    embedToken,
+    scopeTourId,
+    tour?.id,
+  ]);
 
   // Detect client-only viewport/device state
   useEffect(() => {
@@ -246,10 +282,10 @@ export function TourChatWidget({
 
   // Get final customisation with defaults
   const finalCustomisation = customisation || {
-    ...getAdvancedDefaultCustomisation('tour'),
+    ...getAdvancedDefaultCustomisation(chatbotConfigId ? 'website' : 'tour'),
     id: '',
     venue_id: venueId,
-    chatbot_type: 'tour' as const,
+    chatbot_type: chatbotConfigId ? ('website' as const) : ('tour' as const),
     created_at: '',
     updated_at: '',
   } as ChatbotCustomisation;
@@ -447,10 +483,19 @@ export function TourChatWidget({
       onToggle(true);
     }
 
-    setInputMessage(prompt);
-    setTimeout(() => textareaRef.current?.focus(), 0);
+    if (externalAutoSend) {
+      // Visitor-visible send (menu "AI prompt" items): show it in the input briefly then
+      // send as a normal message, giving the panel a moment to expand/config to settle.
+      setInputMessage(prompt);
+      setTimeout(() => sendMessage(prompt), 250);
+    } else {
+      setInputMessage(prompt);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    }
+
     onExternalPromptConsumed?.();
-  }, [externalPrompt, isExpanded, onExternalPromptConsumed, onToggle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalPrompt, externalAutoSend, isExpanded, onExternalPromptConsumed, onToggle]);
 
   // Handle idle animation interval - Updated to match enhanced-live-preview.tsx
   const idleAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -522,8 +567,9 @@ export function TourChatWidget({
     setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || !venueId || isLoading || !config?.is_active) return;
+  const sendMessage = async (overrideText?: string) => {
+    const textToSend = (overrideText ?? inputMessage).trim();
+    if (!textToSend || !venueId || isLoading || !config?.is_active) return;
 
     // Resolve the parent page domain the same way embed view tracking does, since the
     // widget runs inside an iframe served from tourbots.ai (window.location would be
@@ -548,7 +594,7 @@ export function TourChatWidget({
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputMessage.trim(),
+      content: textToSend,
       timestamp: new Date().toISOString(),
     };
 
@@ -593,7 +639,8 @@ export function TourChatWidget({
             content: msg.content,
           })),
           previousResponseId,
-          tourId: scopeTourId || tour?.id,
+          tourId: chatbotConfigId ? undefined : (scopeTourId || tour?.id),
+          chatbotConfigId: chatbotConfigId || undefined,
           sessionId: currentSessionId,
           conversationId: currentConversationId,
           embedId: embedId || `tour-widget-${venueId}`,
@@ -694,6 +741,35 @@ export function TourChatWidget({
               } else if (data.action_type === 'switch_tour_model' && data.model_id) {
                 emitTourEvent('switch_matterport_model', { modelId: data.model_id });
               }
+            } else if (data.type === 'show_lead_form' && data.form_id) {
+              setMessages((prev) => {
+                if (prev.some((msg) => msg.kind === 'lead_form')) {
+                  return prev;
+                }
+                return [
+                  ...prev,
+                  {
+                    id: `lead-form-${data.form_id}-${Date.now()}`,
+                    role: 'assistant',
+                    content: '',
+                    timestamp: new Date().toISOString(),
+                    kind: 'lead_form',
+                    leadForm: {
+                      formId: data.form_id,
+                      chatbotConfigId: data.chatbot_config_id,
+                      introMessage: data.intro_message || null,
+                      submitLabel: data.submit_label || 'Send',
+                      successMessage: data.success_message || "Thanks — we'll be in touch shortly.",
+                      fields: Array.isArray(data.fields) ? data.fields : [],
+                      privacyPolicyUrl: data.privacy_policy_url || 'https://tourbots.ai/legal',
+                      consentCheckboxLabel:
+                        data.consent_checkbox_label ||
+                        'By submitting, you agree to our privacy policy.',
+                      status: 'pending',
+                    },
+                  },
+                ];
+              });
             } else if (data.type === 'done') {
               if (typeof data.responseId === 'string' && data.responseId.length > 0) {
                 setPreviousResponseId(data.responseId);
@@ -1465,6 +1541,35 @@ export function TourChatWidget({
                         maxWidth: `${getCustomisationValue('message_max_width', 'mobile_message_max_width')}%`,
                       }}
                     >
+                      {message.kind === 'lead_form' && message.leadForm ? (
+                        <LeadFormCard
+                          message={message}
+                          venueId={venueId}
+                          chatbotConfigId={message.leadForm.chatbotConfigId || authTourConfig?.id}
+                          tourId={scopeTourId || tour?.id || null}
+                          conversationId={conversationId}
+                          sessionId={sessionId}
+                          embedId={embedId || null}
+                          embedToken={embedToken || null}
+                          bubbleStyle={{
+                            backgroundColor: getCustomisationValue('ai_message_background', 'mobile_ai_message_background') as string,
+                            color: getCustomisationValue('ai_message_text_color', 'mobile_ai_message_text_color') as string,
+                            borderRadius: `${getCustomisationValue('message_border_radius', 'mobile_message_border_radius')}px`,
+                          }}
+                          textColor={getCustomisationValue('ai_message_text_color', 'mobile_ai_message_text_color') as string}
+                          buttonBackground={getCustomisationValue('send_button_color', 'mobile_send_button_color') as string}
+                          buttonTextColor={getCustomisationValue('send_button_icon_color', 'mobile_send_button_icon_color') as string}
+                          onSubmitted={(messageId) => {
+                            setMessages((prev) =>
+                              prev.map((msg) =>
+                                msg.id === messageId && msg.leadForm
+                                  ? { ...msg, leadForm: { ...msg.leadForm, status: 'submitted' } }
+                                  : msg
+                              )
+                            );
+                          }}
+                        />
+                      ) : (
                       <div className={cn(
                         "min-w-0 w-fit max-w-full break-words p-3",
                         getMessageAnimationClass(),
@@ -1536,6 +1641,7 @@ export function TourChatWidget({
                           </ReactMarkdown>
                         </div>
                       </div>
+                      )}
                       
                       {/* Timestamp */}
                       {(() => {
@@ -1700,7 +1806,7 @@ export function TourChatWidget({
                     />
                   </div>
                   <button
-                    onClick={sendMessage}
+                    onClick={() => sendMessage()}
                     disabled={!inputMessage.trim() || isLoading}
                     className={cn(
                       "rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 hover:scale-105 shadow-lg"

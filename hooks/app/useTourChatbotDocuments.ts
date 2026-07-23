@@ -73,8 +73,8 @@ export function useTourChatbotDocuments(chatbotConfigId?: string | null, tourId?
   }, [chatbotConfigId, fetchDocuments]);
 
   const uploadDocument = useCallback(async (file: File) => {
-    if (!chatbotConfigId || !tourId) {
-      throw new Error('Chatbot configuration and tour are required');
+    if (!chatbotConfigId) {
+      throw new Error('Chatbot configuration is required');
     }
 
     const isPortal = isAgencyPortalPath();
@@ -86,7 +86,9 @@ export function useTourChatbotDocuments(chatbotConfigId?: string | null, tourId?
       formData.append('shareSlug', shareSlug);
     } else {
       formData.append('venueId', user!.venue!.id);
-      formData.append('tourId', tourId);
+      if (tourId) {
+        formData.append('tourId', tourId);
+      }
       formData.append('userId', user!.id);
     }
     

@@ -23,12 +23,15 @@ import { NoTourEmptyState } from "../no-tour-empty-state";
 
 interface TourChatbotSettingsProps {
   selectedTourId?: string | null;
+  chatbotConfigId?: string | null;
   visibleSections?: {
     config?: boolean;
     information?: boolean;
     documents?: boolean;
     triggers?: boolean;
   };
+  /** Called after this chatbot config is deleted so the parent can refresh slots. */
+  onDeleted?: () => void | Promise<void>;
 }
 
 const MAX_DOCUMENTS_PER_CHATBOT = 10;
@@ -36,17 +39,31 @@ const DEFAULT_TOUR_INSTRUCTION_PROMPT =
   "Guide visitors through the virtual tour clearly and concisely. Focus on what they can see in this location and help them navigate the space.";
 const DEFAULT_TOUR_GUARDRAIL_PROMPT =
   "You are an AI assistant for this virtual tour. Only answer questions about this location, its spaces, and the virtual tour experience. If a question is unrelated, politely explain that you can only help with tour and location questions.";
+const DEFAULT_WEBSITE_INSTRUCTION_PROMPT =
+  "Answer questions about the business clearly and concisely. Help visitors understand opening hours, pricing, services, and how to get in touch.";
+const DEFAULT_WEBSITE_GUARDRAIL_PROMPT =
+  "You are an AI assistant for this business's website. Only answer questions about the business, its services, and how visitors can get in touch. If a question is unrelated, politely explain that you can only help with questions about the business.";
 
-export function TourChatbotSettings({ selectedTourId, visibleSections }: TourChatbotSettingsProps) {
+export function TourChatbotSettings({ selectedTourId, chatbotConfigId, visibleSections, onDeleted }: TourChatbotSettingsProps) {
+  const isWebsiteMode = Boolean(chatbotConfigId);
+  const effectiveScopeId = isWebsiteMode ? chatbotConfigId : selectedTourId;
   const showConfigSection = visibleSections?.config !== false;
   const showInformationSection = visibleSections?.information !== false;
   const showDocumentsSection = visibleSections?.documents !== false;
-  const showTriggersSection = visibleSections?.triggers !== false;
+  // Triggers live on the Actions tab in the main app. Agency portal still opts in via visibleSections.
+  const showTriggersSection = visibleSections?.triggers === true;
   const hasAnyVisibleSection =
     showConfigSection || showInformationSection || showDocumentsSection || showTriggersSection;
 
-  const { tourConfig, isLoading, error, updateConfig, createConfig } = useTourChatbotConfig(selectedTourId);
-  const { documents, isUploading, uploadDocument, deleteDocument } = useTourChatbotDocuments(tourConfig?.id, selectedTourId);
+  const { tourConfig, isLoading, error, updateConfig, createConfig, deleteConfig } = useTourChatbotConfig(
+    isWebsiteMode ? null : selectedTourId,
+    undefined,
+    isWebsiteMode ? chatbotConfigId : undefined
+  );
+  const { documents, isUploading, uploadDocument, deleteDocument } = useTourChatbotDocuments(
+    tourConfig?.id,
+    isWebsiteMode ? null : selectedTourId
+  );
   const { user } = useUser();
   const { getAuthHeaders } = useAuthHeaders();
   const { toast } = useToast();
@@ -58,15 +75,40 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
   const [hardLimitUsage, setHardLimitUsage] = useState<HardLimitUsage | null>(null);
   const [isLoadingHardLimits, setIsLoadingHardLimits] = useState(false);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ id: string; name: string } | null>(null);
+  const [pendingDeleteChatbot, setPendingDeleteChatbot] = useState(false);
+
+  const handleDeleteChatbot = async () => {
+    if (!tourConfig?.id) return;
+    try {
+      await deleteConfig(tourConfig.id);
+      toast({
+        title: "Chatbot deleted",
+        description: isWebsiteMode
+          ? "The website chatbot has been removed and the bot slot is free to use again."
+          : "This tour's chatbot configuration has been removed. You can create a new one when you need it.",
+      });
+      await onDeleted?.();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to delete chatbot",
+        variant: "destructive",
+      });
+      throw err;
+    }
+  };
 
   // Fetch hard limit data
   useEffect(() => {
     const fetchHardLimits = async () => {
-      if (!user?.venue?.id || !selectedTourId) return;
-      
+      if (!user?.venue?.id || !effectiveScopeId) return;
+
       setIsLoadingHardLimits(true);
       try {
-        const response = await fetch(`/api/app/chatbots/hard-limits?venueId=${user.venue.id}&chatbotType=tour&tourId=${selectedTourId}`, {
+        const params = isWebsiteMode
+          ? `chatbotType=website&chatbotConfigId=${effectiveScopeId}`
+          : `chatbotType=tour&tourId=${effectiveScopeId}`;
+        const response = await fetch(`/api/app/chatbots/hard-limits?venueId=${user.venue.id}&${params}`, {
           headers: await getAuthHeaders(),
         });
         if (response.ok) {
@@ -82,15 +124,30 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
     };
 
     fetchHardLimits();
-  }, [user?.venue?.id, selectedTourId, tourConfig, getAuthHeaders]);
+  }, [user?.venue?.id, effectiveScopeId, isWebsiteMode, tourConfig, getAuthHeaders]);
 
   useEffect(() => {
-    if (!selectedTourId) {
+    if (!effectiveScopeId) {
       setEditingConfig(null);
       return;
     }
 
-    setEditingConfig(tourConfig || {
+    setEditingConfig(tourConfig || (isWebsiteMode ? {
+      id: '',
+      venue_id: user?.venue?.id || '',
+      tour_id: null,
+      chatbot_type: 'website',
+      chatbot_name: 'Website Assistant',
+      welcome_message: '',
+      personality_prompt: '',
+      instruction_prompt: DEFAULT_WEBSITE_INSTRUCTION_PROMPT,
+      guardrails_enabled: true,
+      guardrail_prompt: DEFAULT_WEBSITE_GUARDRAIL_PROMPT,
+      is_active: true,
+      created_at: '',
+      updated_at: '',
+      openai_vector_store_id: null
+    } : {
       id: '',
       venue_id: user?.venue?.id || '',
       tour_id: selectedTourId,
@@ -105,8 +162,8 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
       created_at: '',
       updated_at: '',
       openai_vector_store_id: null
-    } as ChatbotConfig);
-  }, [tourConfig, selectedTourId, user?.venue?.id]);
+    }) as ChatbotConfig);
+  }, [tourConfig, effectiveScopeId, isWebsiteMode, selectedTourId, user?.venue?.id]);
 
   const handleSaveConfig = async () => {
     if (!editingConfig) return;
@@ -126,20 +183,33 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
         });
       } else {
         // Create new config
-        await createConfig({
-          tour_id: selectedTourId!,
-          chatbot_name: editingConfig.chatbot_name,
-          welcome_message: editingConfig.welcome_message,
-          personality_prompt: editingConfig.personality_prompt,
-          instruction_prompt: editingConfig.instruction_prompt,
-          guardrails_enabled: editingConfig.guardrails_enabled,
-          guardrail_prompt: editingConfig.guardrail_prompt,
-          is_active: editingConfig.is_active,
-        });
+        await createConfig(
+          isWebsiteMode
+            ? {
+                chatbot_type: 'website',
+                chatbot_name: editingConfig.chatbot_name,
+                welcome_message: editingConfig.welcome_message,
+                personality_prompt: editingConfig.personality_prompt,
+                instruction_prompt: editingConfig.instruction_prompt,
+                guardrails_enabled: editingConfig.guardrails_enabled,
+                guardrail_prompt: editingConfig.guardrail_prompt,
+                is_active: editingConfig.is_active,
+              }
+            : {
+                tour_id: selectedTourId!,
+                chatbot_name: editingConfig.chatbot_name,
+                welcome_message: editingConfig.welcome_message,
+                personality_prompt: editingConfig.personality_prompt,
+                instruction_prompt: editingConfig.instruction_prompt,
+                guardrails_enabled: editingConfig.guardrails_enabled,
+                guardrail_prompt: editingConfig.guardrail_prompt,
+                is_active: editingConfig.is_active,
+              }
+        );
       }
       toast({
         title: "Success",
-        description: "Virtual Tour chatbot configuration updated successfully",
+        description: `${isWebsiteMode ? "Website" : "Virtual Tour"} chatbot configuration updated successfully`,
       });
     } catch (error) {
       toast({
@@ -154,7 +224,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user?.venue?.id || !selectedTourId || !tourConfig?.id) return;
+    if (!file || !user?.venue?.id || !effectiveScopeId || !tourConfig?.id) return;
 
     try {
       await uploadDocument(file);
@@ -235,7 +305,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
     );
   }
 
-  if (!selectedTourId) {
+  if (!effectiveScopeId) {
     return <NoTourEmptyState />;
   }
 
@@ -282,7 +352,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                 variant="outline"
                 type="button"
                 className="border-slate-200 bg-white dark:border-input dark:bg-background dark:text-slate-100 dark:hover:bg-neutral-800"
-                disabled={!selectedTourId}
+                disabled={!effectiveScopeId}
                 onClick={() => setIsConfigExpanded((prev) => !prev)}
               >
                 {isConfigExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
@@ -337,7 +407,11 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                   ...prev,
                   welcome_message: e.target.value,
                 } : null)}
-                placeholder="Hello! I'm your virtual tour guide. How can I help you explore our facilities?"
+                placeholder={
+                  isWebsiteMode
+                    ? "Hello! I'm here to help. What would you like to know about us?"
+                    : "Hello! I'm your virtual tour guide. How can I help you explore our facilities?"
+                }
                 className="border-slate-200 bg-white text-sm focus-visible:ring-slate-400/70 dark:border-input dark:bg-background dark:text-slate-100"
               />
             </div>
@@ -353,7 +427,11 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                   ...prev,
                   personality_prompt: e.target.value,
                 } : null)}
-                placeholder="You are a helpful and knowledgeable tour guide. Focus on explaining fitness equipment, facilities, and what visitors can see during their virtual tour..."
+                placeholder={
+                  isWebsiteMode
+                    ? "You are a helpful and knowledgeable assistant for this business. Focus on answering questions about services, pricing, and how to get in touch..."
+                    : "You are a helpful and knowledgeable tour guide. Focus on explaining fitness equipment, facilities, and what visitors can see during their virtual tour..."
+                }
                 className="min-h-[88px] border-slate-200 bg-white text-sm focus-visible:ring-slate-400/70 dark:border-input dark:bg-background dark:text-slate-100"
               />
             </div>
@@ -369,7 +447,11 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                   ...prev,
                   instruction_prompt: e.target.value,
                 } : null)}
-                placeholder="Add specific instructions for how this chatbot should answer in this tour."
+                placeholder={
+                  isWebsiteMode
+                    ? "Add specific instructions for how this chatbot should answer website visitors."
+                    : "Add specific instructions for how this chatbot should answer in this tour."
+                }
                 className="min-h-[140px] border-slate-200 bg-white text-sm focus-visible:ring-slate-400/70 dark:border-input dark:bg-background dark:text-slate-100"
               />
             </div>
@@ -417,7 +499,7 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
                 <HardLimitUsageWidget
                   config={hardLimitConfig}
                   usage={hardLimitUsage}
-                  chatbotType="tour"
+                  chatbotType={isWebsiteMode ? "website" : "tour"}
                   showActions={true}
                   onUpgrade={() => window.open('/app/billing', '_blank')}
                   compact={false}
@@ -563,7 +645,60 @@ export function TourChatbotSettings({ selectedTourId, visibleSections }: TourCha
       )
       ) : null}
 
-      {showTriggersSection ? <ChatbotTriggers chatbotConfigId={tourConfig?.id} /> : null}
+      {showTriggersSection ? (
+        <ChatbotTriggers chatbotConfigId={tourConfig?.id} chatbotType={isWebsiteMode ? 'website' : 'tour'} />
+      ) : null}
+
+      {tourConfig?.id ? (
+        <Card className="overflow-hidden border-red-200/80 bg-white/95 shadow-sm dark:border-red-900/50 dark:bg-background">
+          <CardHeader className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900/60">
+                    <Trash2 className="h-4 w-4" />
+                  </span>
+                  Delete chatbot
+                </CardTitle>
+                <CardDescription className="mt-1 text-xs sm:text-sm dark:text-slate-400">
+                  {isWebsiteMode
+                    ? "Permanently remove this website chatbot and free the bot slot on your plan."
+                    : "Remove this tour chatbot configuration. The tour itself stays in Tours; you can set up a new chatbot later."}
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800 sm:w-auto dark:border-red-900/60 dark:bg-background dark:text-red-300 dark:hover:bg-red-950/40"
+                onClick={() => setPendingDeleteChatbot(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete chatbot
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      <ConfirmDialog
+        open={pendingDeleteChatbot}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteChatbot(false);
+        }}
+        title={
+          isWebsiteMode
+            ? `Delete "${tourConfig?.chatbot_name || "Website Assistant"}"?`
+            : "Delete chatbot for this tour?"
+        }
+        description={
+          isWebsiteMode
+            ? "This website chatbot, its training documents, and related settings will be permanently deleted. This cannot be undone."
+            : "This tour chatbot configuration, training documents, and related settings will be permanently deleted. The Matterport tour will not be deleted. This cannot be undone."
+        }
+        confirmText="Delete chatbot"
+        destructive
+        onConfirm={handleDeleteChatbot}
+      />
 
       <ConfirmDialog
         open={pendingDeleteDoc !== null}

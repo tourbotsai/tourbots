@@ -46,7 +46,7 @@ If total spaces are already fully used, purchase extra space before attempting t
 
 ## 2) Buy extra space add-ons
 
-1. In **Billing > Add-ons**, find **Additional Space** (`extra_space`).
+1. In **Billing > Add-ons**, find **Additional Bot** (`extra_bot`).
 2. Enter the required quantity.
 3. Click **Buy** and complete Stripe checkout.
 4. Return to **Settings > Billing**.
@@ -81,7 +81,7 @@ This ensures location context is fully active after creation.
 If you hit a location limit:
 
 1. Return to **Settings > Billing**.
-2. Purchase additional **extra_space** quantity.
+2. Purchase additional **extra_bot** quantity.
 3. Refresh Billing and reconfirm total spaces.
 4. Retry location creation.
 

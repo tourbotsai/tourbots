@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { trackEmbedView } from '@/lib/embed-analytics';
-import {
-  getMarketingSiteMoveGateConfig,
-  isMarketingSiteTourMoveOriginAllowed,
-} from '@/lib/marketing-site-tour-move-request';
+import { verifyPublicEmbedRequest } from '@/lib/public-embed-token';
 
 // Helper to extract domain and pageUrl from query parameters
 function extractFromQueryParams(url: string) {
@@ -50,6 +47,7 @@ export async function POST(request: NextRequest) {
       chatbotType,
       debugInfo,
       tourId,
+      embedToken,
     } = body as {
       embedId?: string;
       venueId?: string;
@@ -59,6 +57,7 @@ export async function POST(request: NextRequest) {
       chatbotType?: 'tour';
       debugInfo?: unknown;
       tourId?: string;
+      embedToken?: string;
     };
 
     console.log('📊 Embed tracking request:', { embedId, venueId, type, domain, pageUrl });
@@ -78,14 +77,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const gate = getMarketingSiteMoveGateConfig();
-    if (gate && embedId === gate.embedId) {
-      if (venueId !== gate.venueId || tourId !== gate.tourId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-      if (!isMarketingSiteTourMoveOriginAllowed(request)) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    if (!verifyPublicEmbedRequest({ request, token: embedToken, venueId, embedId })) {
+      return NextResponse.json({ error: 'Invalid or missing embed token' }, { status: 403 });
     }
 
     // Get user agent from request headers

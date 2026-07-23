@@ -11,7 +11,7 @@ export function PlatformShowcaseContainer() {
         </h2>
         
         <p className="max-w-4xl text-base leading-relaxed text-slate-300 md:text-lg">
-          Add your spaces, train the AI, apply customisations, and track performance.
+          Add your bots, train the AI, apply customisations, and track performance.
         </p>
       </div>
 

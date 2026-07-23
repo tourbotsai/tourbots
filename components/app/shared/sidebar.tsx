@@ -34,14 +34,14 @@ const baseNavigation = [
     icon: Home,
   },
   {
+    name: "Bots",
+    href: "/app/chatbots",
+    icon: Bot,
+  },
+  {
     name: "Tours", 
     href: "/app/tours",
     icon: Video,
-  },
-  {
-    name: "Chatbot",
-    href: "/app/chatbots",
-    icon: Bot,
   },
   {
     name: "Help Centre",

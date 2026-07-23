@@ -2,6 +2,8 @@
 
 Last updated: 30/05/2026
 
+> **Terminology note (2026):** Billing capacity is now named **bot** (`included_bots`, `addon_extra_bots`, catalogue codes `extra_bot` / `agency_extra_bot`). See `sql/87_billing_unit_rename_space_to_bot.sql`. Historical sections below may still say “space”; treat those as the pre-rename name for the same unit.
+
 ## Goal
 
 Convert "Agency Portal" from a billing **add-on** into a first-class **plan tier**, so the billing model becomes three clean plans plus plan-scoped add-ons:

@@ -45,11 +45,11 @@ export function CTA() {
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-success-green" />
-              <span>First space: £19.99/month</span>
+              <span>First bot: £19.99/month</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-success-green" />
-              <span>Extra spaces: £14.99 each</span>
+              <span>Extra bots: £14.99 each</span>
             </div>
           </div>
         </div>

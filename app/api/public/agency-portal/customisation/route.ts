@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
     });
     if (session instanceof NextResponse) return session;
 
-    const customisation = await getScopedTourCustomisation(session.venueId, session.tourId);
+    const customisation = await getScopedTourCustomisation(
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
     if (!customisation) {
       return NextResponse.json({ customisation: null }, { status: 200 });
     }
@@ -77,7 +81,8 @@ export async function PUT(request: NextRequest) {
     const customisation = await updateScopedTourCustomisation(
       session.venueId,
       session.tourId,
-      parsed.data.customisation
+      parsed.data.customisation,
+      session.chatbotConfigId
     );
 
     return NextResponse.json({ customisation });

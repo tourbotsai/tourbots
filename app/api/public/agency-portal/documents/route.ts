@@ -37,16 +37,31 @@ function sanitiseFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
-async function getScopedChatbotConfig(chatbotConfigId: string, venueId: string, tourId: string) {
-  const { data, error } = await supabase
-    .from('chatbot_configs')
-    .select('id, venue_id, tour_id, openai_vector_store_id')
-    .eq('id', chatbotConfigId)
-    .eq('venue_id', venueId)
-    .eq('tour_id', tourId)
-    .eq('chatbot_type', 'tour')
-    .maybeSingle();
+function scopeDocumentsToSession<T extends {
+  eq: (column: string, value: string) => T;
+  is: (column: string, value: null) => T;
+}>(query: T, tourId: string | null): T {
+  return tourId ? query.eq('tour_id', tourId) : query.is('tour_id', null);
+}
 
+async function getScopedChatbotConfig(
+  chatbotConfigId: string,
+  venueId: string,
+  tourId: string | null
+) {
+  let query = supabase
+    .from('chatbot_configs')
+    .select('*')
+    .eq('id', chatbotConfigId)
+    .eq('venue_id', venueId);
+
+  if (tourId) {
+    query = query.eq('tour_id', tourId).eq('chatbot_type', 'tour');
+  } else {
+    query = query.eq('chatbot_type', 'website');
+  }
+
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -67,8 +82,8 @@ export async function GET(request: NextRequest) {
       .from('chatbot_documents')
       .select('*')
       .eq('venue_id', session.venueId)
-      .eq('tour_id', session.tourId)
       .order('created_at', { ascending: false });
+    query = scopeDocumentsToSession(query, session.tourId);
 
     if (chatbotConfigId) {
       const scopedConfig = await getScopedChatbotConfig(chatbotConfigId, session.venueId, session.tourId);
@@ -231,13 +246,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Document ID is required.' }, { status: 400 });
     }
 
-    const { data: document, error: fetchError } = await supabase
+    let documentQuery = supabase
       .from('chatbot_documents')
       .select('*')
       .eq('id', documentId)
-      .eq('venue_id', session.venueId)
-      .eq('tour_id', session.tourId)
-      .single();
+      .eq('venue_id', session.venueId);
+    documentQuery = scopeDocumentsToSession(documentQuery, session.tourId);
+    const { data: document, error: fetchError } = await documentQuery.single();
 
     if (fetchError || !document) {
       return NextResponse.json({ error: 'Document not found.' }, { status: 404 });

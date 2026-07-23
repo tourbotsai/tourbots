@@ -19,6 +19,7 @@ import {
   MousePointer2,
   HelpCircle,
   ChevronDown,
+  PanelLeft,
 } from "lucide-react";
 import { useDashboard } from "@/hooks/app/useDashboard";
 import { useUser } from "@/hooks/useUser";
@@ -64,7 +65,7 @@ const DASHBOARD_PRIORITY_STEPS = [
   },
 ] as const;
 
-/** Matches dashboard API `quickStats.spacesUsed`: count of active tours for the venue (see `/api/app/dashboard`). */
+/** Matches dashboard API `quickStats.botsUsed`: count of active tours for the venue (see `/api/app/dashboard`). */
 const UPLOAD_TOUR_STEP_ID = DASHBOARD_PRIORITY_STEPS[0].id;
 /** Matches tour chatbot Settings “Status: Active” (`chatbot_configs.is_active`). */
 const CREATE_CHATBOT_STEP_ID = DASHBOARD_PRIORITY_STEPS[1].id;
@@ -144,10 +145,11 @@ export function DashboardContent() {
   const overview = data.overview;
   const quickStats = data.quickStats;
   const analytics = data.visitorAnalytics;
+  const menuAnalytics = data.menuAnalytics;
 
-  /** Same signal as “Available spaces” usage: at least one active tour row for this venue. */
+  /** Same signal as “Available bots” usage: at least one active tour row for this venue. */
   const hasActiveTour =
-    quickStats != null && Number(quickStats.spacesUsed || 0) > 0;
+    quickStats != null && Number(quickStats.botsUsed || 0) > 0;
   /** At least one tour chatbot config with is_active true (Virtual Tour Chatbot Configuration block). */
   const hasActiveTourChatbot =
     quickStats != null && Boolean(quickStats.hasActiveTourChatbot);
@@ -220,6 +222,11 @@ export function DashboardContent() {
       icon: MousePointer2,
     },
     {
+      label: "Menu opens",
+      value: formatNumber(menuAnalytics?.opens || 0),
+      icon: PanelLeft,
+    },
+    {
       label: "Conversations",
       value: formatNumber(overview?.totalTourConversations || 0),
       icon: Users,
@@ -241,8 +248,8 @@ export function DashboardContent() {
       sublabel: messageCreditsResetDate ? `Resets ${messageCreditsResetDate}` : "Resets monthly",
     },
     {
-      label: "Available spaces",
-      value: `${formatNumber(quickStats?.spacesUsed || 0)}/${formatNumber(quickStats?.spacesLimit || 0)}`,
+      label: "Available bots",
+      value: `${formatNumber(quickStats?.botsUsed || 0)}/${formatNumber(quickStats?.botsLimit || 0)}`,
       icon: Building2,
     },
   ];
@@ -290,7 +297,7 @@ export function DashboardContent() {
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
             {kpis.map((item) => (
               <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-input dark:bg-background">
                 <div className="mb-2 flex items-center justify-between">
@@ -343,6 +350,27 @@ export function DashboardContent() {
                 "Top domain data will appear once your tour is embedded on a live site."
               )}
             </div>
+
+            {(menuAnalytics?.topItems?.length || menuAnalytics?.styleBreakdown?.length) ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs text-slate-600 dark:border-input dark:bg-background dark:text-slate-400">
+                Menu analytics (7 days):
+                {menuAnalytics?.topItems?.length ? (
+                  <>
+                    {" "}Most clicked —{" "}
+                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                      {menuAnalytics.topItems[0].label}
+                    </span>
+                    {" "}({formatNumber(menuAnalytics.topItems[0].count)} clicks)
+                  </>
+                ) : null}
+                {menuAnalytics?.styleBreakdown?.length ? (
+                  <>
+                    {menuAnalytics?.topItems?.length ? " · " : " "}
+                    Styles: {menuAnalytics.styleBreakdown.map((s) => `${s.style} (${s.count})`).join(", ")}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {!hideOnboardingChecklist && (

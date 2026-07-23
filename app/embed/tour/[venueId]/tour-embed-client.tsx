@@ -25,6 +25,9 @@ interface TourEmbedClientProps {
 
 export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfig, options, embedToken }: TourEmbedClientProps) {
   const [isChatExpanded, setIsChatExpanded] = useState(false);
+  // Predefined message from a tour menu "open chat" item, relayed to the chat widget.
+  const [chatExternalPrompt, setChatExternalPrompt] = useState<string | null>(null);
+  const [chatExternalAutoSend, setChatExternalAutoSend] = useState(false);
   const [mpSdk, setMpSdk] = useState<any>(null);
   const [currentPosition, setCurrentPosition] = useState<any>(null);
   const [currentSweep, setCurrentSweep] = useState<any>(null);
@@ -218,6 +221,7 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           embedId: options.embedId,
+          embedToken,
           venueId: venue.id,
           tourId: locationScopeTourId,
           sweepId: sid,
@@ -233,7 +237,7 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
     }, 80);
 
     return () => window.clearTimeout(timer);
-  }, [currentSweep, options.embedId, venue.id, locationScopeTourId, currentModelId]);
+  }, [currentSweep, options.embedId, venue.id, locationScopeTourId, currentModelId, embedToken]);
 
   useEffect(() => {
     if (!options.embedId) return;
@@ -248,6 +252,7 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embedId: options.embedId,
+            embedToken,
             venueId: venue.id,
             type: 'tour',
             domain: ctx.domain,
@@ -261,7 +266,7 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
       }
     };
     trackView();
-  }, [options.embedId, venue.id, currentModelId, locationScopeTourId]);
+  }, [options.embedId, venue.id, currentModelId, locationScopeTourId, embedToken]);
 
   return (
     <div className="w-full h-full min-h-screen bg-black relative">
@@ -326,6 +331,9 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
             onToggle={setIsChatExpanded}
             embedId={options.embedId}
             embedToken={embedToken || undefined}
+            externalPrompt={chatExternalPrompt}
+            externalAutoSend={chatExternalAutoSend}
+            onExternalPromptConsumed={() => setChatExternalPrompt(null)}
           />
         )}
 
@@ -335,9 +343,16 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
           tourId={locationScopeTourId} 
           initialMenuData={menu ?? undefined}
           isTourReady={tourLoaded}
-          onOpenChat={() => setIsChatExpanded(true)}
+          onOpenChat={(opts) => {
+            setIsChatExpanded(true);
+            setChatExternalAutoSend(Boolean(opts?.autoSend && opts?.prompt));
+            setChatExternalPrompt(opts?.prompt || null);
+          }}
           isChatAvailable={options.showChat}
           currentModelId={currentModelId}
+          venueId={venue.id}
+          embedId={options.embedId || `tour-widget-${venue.id}`}
+          embedToken={embedToken}
         />
       </div>
     </div>

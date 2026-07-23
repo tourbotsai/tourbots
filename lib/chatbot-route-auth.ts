@@ -60,6 +60,18 @@ export function ensureVenueScope(
   return null;
 }
 
+export function ensureIntegrationAdmin(
+  authContext: ChatbotRouteAuthContext
+): NextResponse | null {
+  const allowedRoles = new Set(['platform_admin', 'owner', 'admin', 'venue_admin']);
+  if (allowedRoles.has(authContext.role)) return null;
+
+  return NextResponse.json(
+    { error: 'Forbidden: integration management requires venue administrator access' },
+    { status: 403 }
+  );
+}
+
 export function getScopedVenueId(
   authContext: ChatbotRouteAuthContext,
   requestedVenueId?: string | null
@@ -97,10 +109,16 @@ export async function getScopedChatbotConfig(
   configId: string,
   venueId: string,
   role?: string
-): Promise<{ id: string; venue_id: string; tour_id?: string | null; openai_vector_store_id?: string | null } | null> {
+): Promise<{
+  id: string;
+  venue_id: string;
+  tour_id?: string | null;
+  chatbot_type?: 'tour' | 'website' | null;
+  openai_vector_store_id?: string | null;
+} | null> {
   let query = supabase
     .from('chatbot_configs')
-    .select('id, venue_id, tour_id, openai_vector_store_id')
+    .select('id, venue_id, tour_id, chatbot_type, openai_vector_store_id')
     .eq('id', configId);
 
   // Platform admins may resolve any account's config; everyone else is scoped

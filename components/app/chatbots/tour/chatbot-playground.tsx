@@ -11,13 +11,16 @@ import { Tour } from "@/lib/types";
 import { TourChatWidget } from "@/components/app/tours/tour-chat-widget";
 import MobilePreviewFrame from "@/components/app/chatbots/shared/preview/mobile-preview-frame";
 import { NoTourEmptyState } from "../no-tour-empty-state";
+import { usePreviewEmbedToken } from "@/hooks/app/usePreviewEmbedToken";
 
 interface TourChatbotPlaygroundProps {
   onSwitchToSettings?: () => void;
   selectedTourId?: string | null;
+  chatbotConfigId?: string | null;
 }
 
-export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: TourChatbotPlaygroundProps) {
+export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId, chatbotConfigId }: TourChatbotPlaygroundProps) {
+  const isWebsiteMode = Boolean(chatbotConfigId);
   const [mode, setMode] = useState<'desktop' | 'mobile'>('desktop');
   const [isWidgetOpen, setIsWidgetOpen] = useState(false);
   const [widgetInstanceKey, setWidgetInstanceKey] = useState(0);
@@ -25,13 +28,23 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
   const [isPromptsExpanded, setIsPromptsExpanded] = useState(true);
 
   const { user } = useUser();
-  const { tourConfig, isLoading: configLoading, error: configError } = useTourChatbotConfig(selectedTourId);
-  const { customisation, isLoading: customisationLoading, error: customisationError } = useChatbotCustomisation('tour', selectedTourId);
+  const previewEmbedId = user?.venue?.id ? `tour-widget-${user.venue.id}` : null;
+  const previewEmbedToken = usePreviewEmbedToken(user?.venue?.id, previewEmbedId);
+  const { tourConfig, isLoading: configLoading, error: configError } = useTourChatbotConfig(
+    isWebsiteMode ? null : selectedTourId,
+    undefined,
+    isWebsiteMode ? chatbotConfigId : undefined
+  );
+  const { customisation, isLoading: customisationLoading, error: customisationError } = useChatbotCustomisation(
+    isWebsiteMode ? 'website' : 'tour',
+    selectedTourId,
+    chatbotConfigId
+  );
 
   useEffect(() => {
     setIsWidgetOpen(false);
     setQueuedPrompt(null);
-  }, [mode, selectedTourId]);
+  }, [mode, selectedTourId, chatbotConfigId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -49,7 +62,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
     setIsWidgetOpen(true);
   };
 
-  const previewTour: Tour | undefined = selectedTourId && user?.venue?.id
+  const previewTour: Tour | undefined = !isWebsiteMode && selectedTourId && user?.venue?.id
     ? {
         id: selectedTourId,
         venue_id: user.venue.id,
@@ -91,7 +104,45 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
     } as any;
   }, [customisation]);
 
-  const getTestPrompts = () => [
+  const getTestPrompts = () => isWebsiteMode
+    ? [
+        {
+          category: "Overview",
+          text: "Can you give me a quick overview of what you offer?",
+          emoji: "🏢"
+        },
+        {
+          category: "Services",
+          text: "What services or facilities do you provide?",
+          emoji: "🛠️"
+        },
+        {
+          category: "Bookings",
+          text: "How can I enquire or book an appointment?",
+          emoji: "💳"
+        },
+        {
+          category: "Pricing",
+          text: "What are your prices?",
+          emoji: "💰"
+        },
+        {
+          category: "Opening Hours",
+          text: "What are your opening hours?",
+          emoji: "🕐"
+        },
+        {
+          category: "Directions",
+          text: "Where are you located and how can I get in touch?",
+          emoji: "📍"
+        },
+        {
+          category: "Support",
+          text: "How can someone contact the team if they need help?",
+          emoji: "💬"
+        }
+      ]
+    : [
     {
       category: "Tour Overview",
       text: "Can you give me a quick overview of this venue?",
@@ -144,7 +195,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
     );
   }
 
-  if (!selectedTourId) {
+  if (!selectedTourId && !chatbotConfigId) {
     return <NoTourEmptyState description="Upload your Matterport tour first, then return here to test your AI chatbot." />;
   }
 
@@ -167,7 +218,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
   if (!tourConfig) {
     return (
       <div className="text-center p-8">
-        <p className="mb-4 text-slate-500">No tour chatbot configuration found</p>
+        <p className="mb-4 text-slate-500">No {isWebsiteMode ? "website" : "tour"} chatbot configuration found</p>
         <p className="text-sm text-slate-400">Set up your chatbot in the Settings tab first.</p>
       </div>
     );
@@ -176,7 +227,7 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
   if (!tourConfig.is_active) {
     return (
       <div className="text-center p-8">
-        <p className="mb-4 text-amber-600">Tour chatbot is not active</p>
+        <p className="mb-4 text-amber-600">{isWebsiteMode ? "Website" : "Tour"} chatbot is not active</p>
         <p className="text-sm text-slate-400">Activate your chatbot in the Settings tab to test it here.</p>
       </div>
     );
@@ -187,9 +238,13 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
       <Card className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-input dark:bg-background">
         <div className="flex min-h-[72px] flex-col justify-center gap-3 px-4 py-3 sm:min-h-[64px] sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Tour Chatbot Playground</h2>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              {isWebsiteMode ? "Website Chatbot Playground" : "Tour Chatbot Playground"}
+            </h2>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Test how your chatbot appears and responds before publishing it to your live tour.
+              {isWebsiteMode
+                ? "Test how your chatbot appears and responds before publishing it to your website."
+                : "Test how your chatbot appears and responds before publishing it to your live tour."}
             </p>
           </div>
 
@@ -276,18 +331,21 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                         </div>
                       </div>
 
-                      {user?.venue?.id && previewTour && (
+                      {user?.venue?.id && (previewTour || isWebsiteMode) && (
                         <TourChatWidget
                           key={`desktop-${widgetInstanceKey}`}
                           venueId={user.venue.id}
                           venueName={user.venue.name}
-                          tour={previewTour}
+                          tour={previewTour || null}
+                          chatbotConfigId={isWebsiteMode ? chatbotConfigId : null}
                           customisation={previewCustomisation as any}
                           className="absolute inset-0 z-20"
                           isFullscreen={false}
                           isExpanded={isWidgetOpen}
                           onToggle={setIsWidgetOpen}
                           externalPrompt={queuedPrompt}
+                          embedId={previewEmbedId || undefined}
+                          embedToken={previewEmbedToken || undefined}
                           onExternalPromptConsumed={() => setQueuedPrompt(null)}
                         />
                       )}
@@ -320,12 +378,13 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                           </div>
                         </div>
 
-                        {user?.venue?.id && previewTour && (
+                        {user?.venue?.id && (previewTour || isWebsiteMode) && (
                           <TourChatWidget
                             key={`mobile-${widgetInstanceKey}`}
                             venueId={user.venue.id}
                             venueName={user.venue.name}
-                            tour={previewTour}
+                            tour={previewTour || null}
+                            chatbotConfigId={isWebsiteMode ? chatbotConfigId : null}
                             customisation={previewCustomisation as any}
                             className="absolute inset-0 z-20"
                             isFullscreen={false}
@@ -333,6 +392,8 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
                             onToggle={setIsWidgetOpen}
                             forceMobileMode={true}
                             externalPrompt={queuedPrompt}
+                            embedId={previewEmbedId || undefined}
+                            embedToken={previewEmbedToken || undefined}
                             onExternalPromptConsumed={() => setQueuedPrompt(null)}
                           />
                         )}
@@ -350,7 +411,9 @@ export function TourChatbotPlayground({ onSwitchToSettings, selectedTourId }: To
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <CardTitle className="text-base text-slate-900 dark:text-slate-100">Tour test prompts</CardTitle>
+                  <CardTitle className="text-base text-slate-900 dark:text-slate-100">
+                    {isWebsiteMode ? "Website test prompts" : "Tour test prompts"}
+                  </CardTitle>
                   <CardDescription className="text-slate-600 dark:text-slate-400">
                     Click any prompt to test likely visitor questions.
                   </CardDescription>

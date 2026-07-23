@@ -4,6 +4,7 @@ import {
   getCrmSequenceById,
   listCrmScheduledEmailsForSequence,
   listCrmSequenceContacts,
+  listCrmSequenceEffectiveSchedule,
   listCrmSequenceStepStatuses,
   listCrmSequenceSteps,
   updateCrmSequence,
@@ -23,14 +24,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: 'Sequence not found' }, { status: 404 });
     }
 
-    const [contacts, steps, stepStatuses, scheduledEmails] = await Promise.all([
+    const [contacts, steps, stepStatuses, scheduledEmails, effectiveSchedule] = await Promise.all([
       listCrmSequenceContacts(sequenceId),
       listCrmSequenceSteps(sequenceId),
       listCrmSequenceStepStatuses(sequenceId),
       listCrmScheduledEmailsForSequence(sequenceId),
+      listCrmSequenceEffectiveSchedule(sequenceId),
     ]);
 
-    return NextResponse.json({ success: true, sequence, contacts, steps, stepStatuses, scheduledEmails });
+    return NextResponse.json({
+      success: true,
+      sequence,
+      contacts,
+      steps,
+      stepStatuses,
+      scheduledEmails,
+      effectiveSchedule,
+    });
   } catch (error: any) {
     console.error('Error in GET /api/admin/crm/sequences/[id]:', error);
     return NextResponse.json(

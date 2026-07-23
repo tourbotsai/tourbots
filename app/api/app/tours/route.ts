@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { initAdmin } from '@/lib/firebase-admin';
 import { getUserWithVenue } from '@/lib/user-service';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
+import { assertBotAvailable } from '@/lib/server/venue-bot-limits';
 
 initAdmin();
 const auth = getAuth();
@@ -47,35 +48,6 @@ async function authenticateAndGetVenue(request: NextRequest): Promise<{ venueId:
   }
 }
 
-async function getLocationSpaceLimit(venueId: string): Promise<number> {
-  const { data: billingRecord } = await supabase
-    .from('venue_billing_records')
-    .select('*')
-    .eq('venue_id', venueId)
-    .maybeSingle();
-
-  const planCode =
-    billingRecord?.billing_override_enabled && billingRecord?.override_plan_code
-      ? billingRecord.override_plan_code
-      : billingRecord?.plan_code || 'free';
-
-  const { data: planRow } = await supabase
-    .from('billing_plans')
-    .select('included_spaces')
-    .eq('code', planCode)
-    .maybeSingle();
-
-  const baseSpacesFromPlan = Number(planRow?.included_spaces || 0);
-  const baseSpaces = Math.max(baseSpacesFromPlan, planCode === 'free' ? 1 : 0);
-  const extraSpaces = Number(billingRecord?.addon_extra_spaces || 0);
-
-  const totalSpaces = Number(
-    billingRecord?.effective_space_limit ?? (baseSpaces + extraSpaces)
-  );
-
-  return Math.max(totalSpaces, 1);
-}
-
 export async function POST(request: NextRequest) {
   try {
     const authResult = await authenticateAndGetVenue(request);
@@ -109,28 +81,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (tourType === 'primary') {
-      const [spaceLimit, primaryCountResult] = await Promise.all([
-        getLocationSpaceLimit(venueId),
-        supabase
-          .from('tours')
-          .select('id', { count: 'exact', head: true })
-          .eq('venue_id', venueId)
-          .eq('is_active', true)
-          .or('tour_type.eq.primary,tour_type.is.null'),
-      ]);
-
-      if (primaryCountResult.error) {
-        throw primaryCountResult.error;
-      }
-
-      const primaryCount = Number(primaryCountResult.count || 0);
-      if (primaryCount >= spaceLimit) {
-        return NextResponse.json(
-          {
-            error: `Location limit reached (${primaryCount}/${spaceLimit}). Upgrade your plan or purchase extra space add-ons to add another location.`,
-          },
-          { status: 403 }
-        );
+      const botCheck = await assertBotAvailable(venueId);
+      if (!botCheck.ok) {
+        return NextResponse.json({ error: botCheck.error }, { status: 403 });
       }
     }
 
@@ -191,6 +144,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error creating tour:', error);
+    if (error?.code === 'P0001' && String(error?.message || '').includes('Bot limit reached')) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     if (error?.code === '23505' && String(error?.message || '').includes('idx_tours_matterport_tour_id')) {
       return NextResponse.json(
         {

@@ -18,8 +18,11 @@ export interface ChatbotEmbedOptions {
   position?: 'bottom-right' | 'bottom-left';
   primaryColor?: string;
   title?: string;
-  chatbotType?: 'tour';
+  chatbotType?: 'tour' | 'website';
   tourId?: string;
+  // Identifies a standalone website chatbot (no Matterport tour). Mutually
+  // exclusive with tourId; when set, navigation is always forced off.
+  chatbotConfigId?: string;
   customisation?: ChatbotCustomisation;
   useDirect?: boolean;
   // When true (default), the embed is allowed to drive the tour (move/switch).
@@ -338,7 +341,8 @@ gt('init', '${embedId}', '${venueId}', ${JSON.stringify(embedOptions)});
 }
 
 export function generateChatbotEmbed(venueId: string, options: ChatbotEmbedOptions = {}) {
-  const chatbotType = options.chatbotType || 'tour';
+  const isWebsiteChatbot = options.chatbotType === 'website' || Boolean(options.chatbotConfigId);
+  const chatbotType = isWebsiteChatbot ? 'website' : 'tour';
   const embedId = `${chatbotType}-chat-${venueId}-${Date.now()}`;
   // Prefer an explicit white-label host; otherwise detect the running domain
   // (client) and fall back to tourbots.ai (server-side).
@@ -347,15 +351,19 @@ export function generateChatbotEmbed(venueId: string, options: ChatbotEmbedOptio
       ? `${window.location.protocol}//${window.location.host}`
       : 'https://tourbots.ai');
 
-  // Navigation defaults ON. Serialised into both snippets so the embed page and
-  // the chatbot route gate the navigation tools accordingly.
-  const navigationEnabled = options.navigationEnabled ?? true;
+  // Navigation defaults ON for tour chatbots. Website chatbots have no
+  // Matterport tour, so navigation is always forced off regardless of the
+  // requested option. Serialised into both snippets so the embed page and the
+  // chatbot route gate the navigation tools accordingly.
+  const navigationEnabled = isWebsiteChatbot ? false : (options.navigationEnabled ?? true);
   const navParam = navigationEnabled ? 'on' : 'off';
 
   const queryParams = new URLSearchParams({
     id: embedId,
     nav: navParam,
-    ...(options.tourId ? { tourId: options.tourId } : {}),
+    ...(isWebsiteChatbot
+      ? (options.chatbotConfigId ? { chatbotConfigId: options.chatbotConfigId } : {})
+      : (options.tourId ? { tourId: options.tourId } : {})),
   });
   const iframeSrc = `${baseUrl}/embed/chatbot/${venueId}?${queryParams.toString()}`;
 
@@ -370,7 +378,7 @@ export function generateChatbotEmbed(venueId: string, options: ChatbotEmbedOptio
   // "extend-HTML" block.
   const advancedEmbed = `<script
   src="${baseUrl}/embed/chat.js"
-  data-venue-id="${venueId}"${options.tourId ? `\n  data-tour-id="${options.tourId}"` : ''}
+  data-venue-id="${venueId}"${!isWebsiteChatbot && options.tourId ? `\n  data-tour-id="${options.tourId}"` : ''}${isWebsiteChatbot && options.chatbotConfigId ? `\n  data-chatbot-config-id="${options.chatbotConfigId}"` : ''}
   data-embed-id="${embedId}"
   data-mode="embed"
   data-nav="${navParam}"
@@ -585,6 +593,22 @@ export function generateTourChatbotEmbed(
   tourId?: string
 ) {
   return generateChatbotEmbed(venueId, { ...options, chatbotType: 'tour', customisation, tourId });
+}
+
+// Website chatbots have no Matterport tour, so navigation is always off.
+export function generateWebsiteChatbotEmbed(
+  venueId: string,
+  chatbotConfigId: string,
+  customisation?: ChatbotCustomisation,
+  options: Omit<ChatbotEmbedOptions, 'chatbotType' | 'customisation' | 'tourId' | 'chatbotConfigId' | 'navigationEnabled'> = {}
+) {
+  return generateChatbotEmbed(venueId, {
+    ...options,
+    chatbotType: 'website',
+    customisation,
+    chatbotConfigId,
+    navigationEnabled: false,
+  });
 }
 
 // Generate CSS for customisation (can be used in embed scripts)

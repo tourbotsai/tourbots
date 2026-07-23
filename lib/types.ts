@@ -1,3 +1,5 @@
+import type { MenuItemAction } from './tour-menu';
+
 // User type for Supabase user row
 export interface User {
   id: string;
@@ -172,16 +174,35 @@ export interface TourMenuSettings {
   // Feature control
   enabled: boolean;
   show_close_button: boolean;
-  
+  close_button_size: 'small' | 'medium' | 'large';
+  close_button_position: 'top-right' | 'top-left';
+  close_button_color: string;
+  close_button_style: 'ghost' | 'filled';
+
+  // Chrome / style
+  menu_style: 'modal' | 'drawer';
+  anchor_side: 'left' | 'right';
+  start_open: boolean;
+  avoid_chat_launcher: boolean;
+
   // Layout
   position: 'center' | 'top' | 'bottom';
   max_width: number;
+  drawer_width: number;
   padding: number;
   padding_vertical: number;
   border_radius: number;
-  
+
+  // Mobile-scoped layout overrides
+  mobile_max_width?: number;
+  mobile_drawer_width?: number;
+  mobile_padding?: number;
+  mobile_padding_vertical?: number;
+
   // Styling
   menu_background_color: string;
+  menu_font_family: string;
+  panel_shadow: 'none' | 'light' | 'medium' | 'heavy';
   backdrop_blur: boolean;
   
   // Animation
@@ -200,7 +221,11 @@ export interface TourMenuSettings {
   widget_tooltip_text: string;
   widget_border_radius: number;
   widget_shadow_intensity: 'none' | 'light' | 'medium' | 'heavy';
-  
+
+  // Mobile-scoped widget overrides
+  mobile_widget_position?: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
+  mobile_widget_size?: 'small' | 'medium' | 'large';
+
   // Metadata
   created_at: string;
   updated_at: string;
@@ -210,7 +235,7 @@ export interface TourMenuSettings {
 export interface TourMenuBlock {
   id: string;
   menu_id: string;
-  block_type: 'text' | 'buttons' | 'logo' | 'table' | 'spacer';
+  block_type: 'text' | 'buttons' | 'logo' | 'table' | 'spacer' | 'nav_list';
   display_order: number;
   alignment: 'left' | 'center' | 'right';
   margin_top: number;
@@ -227,7 +252,8 @@ export type TourMenuBlockContent =
   | ButtonsBlockContent 
   | LogoBlockContent 
   | TableBlockContent 
-  | SpacerBlockContent;
+  | SpacerBlockContent
+  | NavListBlockContent;
 
 // Text Block Content
 export interface TextBlockContent {
@@ -237,6 +263,12 @@ export interface TextBlockContent {
   font_weight: 'light' | 'normal' | 'semibold' | 'bold';
   color: string;
   line_height: number;
+  /** Optional per-block font override; falls back to menu_font_family. */
+  font_family?: string;
+  letter_spacing?: number;
+  mobile_font_size?: number;
+  mobile_color?: string;
+  mobile_line_height?: number;
 }
 
 // Buttons Block Content
@@ -245,6 +277,7 @@ export interface ButtonsBlockContent {
   buttons_per_row: 1 | 2 | 3 | 4; // Desktop
   mobile_buttons_per_row?: 1 | 2 | 3 | 4; // Mobile (optional - falls back to desktop)
   button_size: 'small' | 'medium' | 'large';
+  mobile_button_size?: 'small' | 'medium' | 'large';
   button_style: 'solid' | 'outline' | 'ghost';
   gap: number;
 }
@@ -258,9 +291,84 @@ export interface MenuButton {
   target_tour_id?: string; // For tour_point: selected source tour.id when multiple models exist
   target_model_id?: string; // For tour_model: matterport_tour_id (direct model ID)
   target_model_name?: string; // For tour_model: tour.title
+  open_in?: 'same_tab' | 'new_tab'; // For url: where the link opens
+  chat_prompt?: string; // For open_chat: predefined visitor message
+  chat_auto_send?: boolean; // For open_chat: auto-send chat_prompt on click
   button_color: string;
   text_color: string;
   icon?: string;
+  // Unified action shape (takes precedence over the legacy action_type/target_* fields
+  // above when present) - see lib/tour-menu MenuItemAction.
+  action?: MenuItemAction;
+}
+
+/** One description + action under a nav list item label. */
+export interface NavListEntry {
+  id: string;
+  description?: string;
+  action_type?: 'tour_point' | 'tour_model' | 'url' | 'open_chat' | 'close_menu' | 'none';
+  target_id?: string;
+  target_tour_id?: string;
+  target_model_id?: string;
+  target_model_name?: string;
+  open_in?: 'same_tab' | 'new_tab';
+  chat_prompt?: string;
+  chat_auto_send?: boolean;
+  action?: MenuItemAction;
+}
+
+// Nav List Block Content — ordered section headers + actionable rows
+export interface NavListItem {
+  id: string;
+  kind: 'header' | 'item';
+  label: string;
+  /** @deprecated Prefer entries[].description — kept for legacy single-entry items. */
+  description?: string;
+  icon?: string;
+  /** @deprecated Prefer entries[] — kept for legacy single-entry items. */
+  action_type?: 'tour_point' | 'tour_model' | 'url' | 'open_chat' | 'close_menu' | 'none';
+  target_id?: string;
+  target_tour_id?: string;
+  target_model_id?: string;
+  target_model_name?: string;
+  open_in?: 'same_tab' | 'new_tab';
+  chat_prompt?: string;
+  chat_auto_send?: boolean;
+  /** Multiple description + action pairs under this label. */
+  entries?: NavListEntry[];
+  /**
+   * Vertical padding (px) for this item’s rows / sub-actions.
+   * Unset = inherit NavListBlockContent.item_padding_y / density.
+   */
+  item_padding_y?: number;
+  /** Optional overrides — fall back to NavListBlockContent colours when unset. */
+  label_color?: string;
+  description_color?: string;
+  icon_color?: string;
+  action?: MenuItemAction;
+}
+
+export interface NavListBlockContent {
+  items: NavListItem[];
+  density?: 'compact' | 'comfortable' | 'spacious';
+  mobile_density?: 'compact' | 'comfortable' | 'spacious';
+  item_padding_y?: number;
+  mobile_item_padding_y?: number;
+  label_font_size?: number;
+  mobile_label_font_size?: number;
+  description_font_size?: number;
+  mobile_description_font_size?: number;
+  /** Block typography — `inherit` / omitted uses the menu font. */
+  font_family?: string;
+  font_weight?: 'light' | 'normal' | 'semibold' | 'bold' | string;
+  font_size?: number;
+  line_height?: number;
+  letter_spacing?: number;
+  /** Global colours — items inherit unless they set their own override. */
+  header_color?: string;
+  label_color?: string;
+  description_color?: string;
+  icon_color?: string;
 }
 
 // Logo Block Content
@@ -311,8 +419,8 @@ export const WIDGET_SHADOW_MAP = {
 export interface ChatbotConfig {
   id: string;
   venue_id: string;
-  tour_id: string;
-  chatbot_type: 'tour';
+  tour_id: string | null;
+  chatbot_type: 'tour' | 'website';
   chatbot_name: string;
   welcome_message?: string | null;
   personality_prompt?: string | null;
@@ -357,8 +465,9 @@ export interface HardLimitConfig {
 export interface HardLimitUsage {
   id: string;
   venue_id: string;
-  chatbot_type: 'tour';
+  chatbot_type: 'tour' | 'website';
   tour_id?: string | null;
+  chatbot_config_id?: string | null;
   daily_messages_used: number;
   weekly_messages_used: number;
   monthly_messages_used: number;
@@ -402,6 +511,7 @@ export interface Conversation {
   id: string;
   venue_id: string;
   tour_id?: string | null;
+  chatbot_config_id?: string | null;
   session_id: string;
   conversation_id: string;
   message_position: number;
@@ -409,7 +519,7 @@ export interface Conversation {
   message?: string | null;
   response?: string | null;
   message_type: 'visitor' | 'bot';
-  chatbot_type?: 'tour' | null;
+  chatbot_type?: 'tour' | 'website' | null;
   ip_address?: string | null;
   user_agent?: string | null;
   page_url?: string | null;
@@ -424,14 +534,14 @@ export interface ChatbotDocument {
   id: string;
   chatbot_config_id: string;
   venue_id: string;
-  tour_id: string;
+  tour_id: string | null;
   original_filename: string;
   file_size?: number | null;
   file_type?: string | null;
   openai_file_id: string;
   openai_vector_store_id: string;
   uploaded_by?: string | null;
-  chatbot_type?: 'tour' | null;
+  chatbot_type?: 'tour' | 'website' | null;
   file_path?: string | null;
   file_url?: string | null;
   created_at: string;
@@ -472,7 +582,7 @@ export interface ChatbotTrigger {
   id: string;
   chatbot_config_id: string;
   venue_id: string;
-  tour_id: string;
+  tour_id: string | null;
   name: string;
   display_order: number;
   is_active: boolean;
@@ -510,7 +620,8 @@ export interface ChatbotCustomisation {
   id: string;
   venue_id: string;
   tour_id?: string | null;
-  chatbot_type: 'tour';
+  chatbot_config_id?: string | null;
+  chatbot_type: 'tour' | 'website';
   
   // EXISTING BASIC FIELDS
   chat_button_color: string;
@@ -760,94 +871,136 @@ export interface ChatbotCustomisation {
   updated_at: string;
 }
 
-// Lead capture - Updated to match new SQL schema
+// Lead form capture (sql/81_chatbot_lead_forms_and_leads_initial.sql)
+export type ChatbotLeadFormConditionType = 'keywords' | 'intent';
+export type ChatbotLeadFormFieldType = 'text' | 'email' | 'phone' | 'textarea' | 'select';
+export type LeadStatus = 'new' | 'contacted' | 'archived';
+
+export interface ChatbotLeadFormFieldOption {
+  value: string;
+  label: string;
+}
+
+export interface ChatbotLeadFormField {
+  id?: string;
+  lead_form_id?: string;
+  field_key: string;
+  label: string;
+  field_type: ChatbotLeadFormFieldType;
+  placeholder?: string | null;
+  options?: ChatbotLeadFormFieldOption[] | null;
+  is_required: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ChatbotLeadForm {
+  id: string;
+  chatbot_config_id: string;
+  venue_id: string;
+  tour_id?: string | null;
+  is_enabled: boolean;
+  intro_message?: string | null;
+  submit_label: string;
+  success_message: string;
+  privacy_policy_url?: string | null;
+  consent_checkbox_label: string;
+  condition_type: ChatbotLeadFormConditionType;
+  condition_keywords?: string[] | null;
+  condition_intent?: string | null;
+  email_notifications_enabled: boolean;
+  notification_email?: string | null;
+  once_per_conversation: boolean;
+  created_at: string;
+  updated_at: string;
+  fields?: ChatbotLeadFormField[];
+}
+
 export interface Lead {
   id: string;
   venue_id: string;
+  tour_id?: string | null;
+  chatbot_config_id?: string | null;
+  lead_form_id?: string | null;
   conversation_id?: string | null;
   session_id?: string | null;
-  chatbot_type?: 'tour' | null;
-  
-  // Contact Information
   visitor_name?: string | null;
   visitor_email?: string | null;
   visitor_phone?: string | null;
-  
-  // Lead Intelligence
-  source: string; // Default: 'chatbot'
-  lead_status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
-  interest_level?: 'high' | 'medium' | 'low' | null;
-  lead_score: number; // Default: 0
-  
-  // Context & Notes
-  lead_notes?: string | null;
-  conversation_context?: any; // JSONB
-  interests?: string[] | null; // JSONB array
-  
-  // Tracking
-  ip_address?: string | null;
-  user_agent?: string | null;
+  field_values: Record<string, string>;
+  source: string;
+  status: LeadStatus;
+  consent_given: boolean;
+  consent_text?: string | null;
+  consent_privacy_url?: string | null;
+  consented_at: string;
   page_url?: string | null;
-  utm_source?: string | null;
-  utm_campaign?: string | null;
-  
-  // Follow-up
-  follow_up_date?: string | null;
-  assigned_to?: string | null;
-  last_contacted_at?: string | null;
-  
+  domain?: string | null;
+  user_agent?: string | null;
+  ip_address?: string | null;
+  notification_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-// Lead activities for tracking interactions
-export interface LeadActivity {
+export type ChatbotIntegrationEvent = 'lead.created' | 'custom_action.fired' | 'custom_action.query';
+export type ChatbotCustomActionMode = 'write' | 'query';
+export type ChatbotCustomActionConditionType = 'keywords' | 'intent' | 'message_count';
+
+export interface ChatbotIntegrationEndpoint {
   id: string;
-  lead_id: string;
-  activity_type: 
-    | 'email_sent' 
-    | 'call_made' 
-    | 'note_added' 
-    | 'status_changed' 
-    | 'lead_created'
-    | 'lead_captured'        // NEW: When lead is captured from chatbot
-    | 'trigger_activated'    // NEW: When custom trigger fires
-    | 'ai_scored'           // NEW: When AI scores the lead
-    | 'score_updated';      // NEW: When score is manually updated
+  chatbot_config_id: string;
+  venue_id: string;
+  tour_id?: string | null;
+  url: string;
+  signing_secret?: string | null;
+  is_enabled: boolean;
+  subscribed_events: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatbotCustomAction {
+  id: string;
+  chatbot_config_id: string;
+  venue_id: string;
+  tour_id?: string | null;
+  name: string;
+  action_key: string;
+  mode: ChatbotCustomActionMode;
+  is_active: boolean;
   description?: string | null;
-  performed_by?: string | null;
-  metadata?: any; // JSONB - stores trigger details, score info, etc.
+  webhook_url?: string | null;
+  signing_secret?: string | null;
+  can_rotate_secret?: boolean;
+  condition_type: ChatbotCustomActionConditionType;
+  condition_keywords?: string[] | null;
+  condition_intent?: string | null;
+  condition_message_count?: number | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatbotWebhookDelivery {
+  id: string;
+  venue_id: string;
+  chatbot_config_id?: string | null;
+  endpoint_id?: string | null;
+  custom_action_id?: string | null;
+  event: string;
+  mode: ChatbotCustomActionMode;
+  request_url: string;
+  request_body?: Record<string, unknown> | null;
+  response_status?: number | null;
+  response_body?: string | null;
+  error_message?: string | null;
+  duration_ms?: number | null;
   created_at: string;
 }
 
-// Lead analytics view
-export interface LeadAnalytics {
-  venue_id: string;
-  total_leads: number;
-  leads_this_month: number;
-  converted_leads: number;
-  tour_leads: number;
-  avg_lead_score: number;
-  high_interest_leads: number;
-  conversion_rate: number;
-}
-
-// Lead filters for querying and filtering leads
-export interface LeadFilters {
-  status?: string[];
-  chatbot_type?: string[];
-  interest_level?: string[];
-  date_from?: string;
-  date_to?: string;
-  search?: string;
-  assigned_to?: string;
-  source?: string[];
-  lead_score_min?: number;
-  lead_score_max?: number;
-  score_quality?: string;
-}
-
-export type ScoreQuality = 'high' | 'medium' | 'low' | 'poor';
+export type ChatMessageKind = 'text' | 'lead_form';
 
 // Analytics data
 export interface Analytics {
@@ -910,7 +1063,7 @@ export interface BillingPlan {
   description?: string | null;
   monthly_price_gbp: number;
   yearly_price_gbp?: number | null;
-  included_spaces: number;
+  included_bots: number;
   included_messages: number;
   stripe_price_monthly_sandbox?: string | null;
   stripe_price_yearly_sandbox?: string | null;
@@ -925,7 +1078,7 @@ export interface BillingPlan {
 
 export interface BillingAddon {
   id: string;
-  code: 'extra_space' | 'message_block' | 'white_label' | 'agency_extra_space' | 'agency_message_block' | string;
+  code: 'extra_bot' | 'message_block' | 'white_label' | 'agency_extra_bot' | 'agency_message_block' | string;
   name: string;
   description?: string | null;
   unit_label: string;
@@ -945,11 +1098,11 @@ export interface VenueBillingRecord {
   billing_status: 'free' | 'active' | 'past_due' | 'cancelled' | 'trialing';
   billing_override_enabled: boolean;
   override_plan_code?: string | null;
-  addon_extra_spaces: number;
+  addon_extra_bots: number;
   addon_message_blocks: number;
   addon_white_label: boolean;
   addon_agency_portal: boolean;
-  effective_space_limit?: number | null;
+  effective_bot_limit?: number | null;
   effective_message_limit?: number | null;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
@@ -988,13 +1141,32 @@ export interface Invoice {
   created_at: string;
 }
 
-// Chat message for playground
+// Chat message for playground / tour widget
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
-  isStreaming?: boolean; // Flag to show typing animation and streaming cursor
+  isStreaming?: boolean;
+  kind?: ChatMessageKind;
+  leadForm?: {
+    formId: string;
+    chatbotConfigId?: string;
+    introMessage?: string | null;
+    submitLabel: string;
+    successMessage: string;
+    fields: Array<{
+      field_key: string;
+      label: string;
+      field_type: ChatbotLeadFormFieldType;
+      placeholder?: string | null;
+      options?: ChatbotLeadFormFieldOption[] | null;
+      is_required: boolean;
+    }>;
+    privacyPolicyUrl: string;
+    consentCheckboxLabel: string;
+    status: 'pending' | 'submitted' | 'error';
+  };
 }
 
 // Conversation message for AI scoring (simplified ChatMessage)

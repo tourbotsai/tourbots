@@ -15,9 +15,6 @@ const DEMO_TOUR_ID = "77a2da98-8688-42c9-b702-8a24ba298092";
 const DEMO_MODEL_ID = "kHMSzJkuDFP";
 const DEMO_VENUE_NAME = "Tour Bots";
 
-/** When set with MARKETING_SITE_MOVE_TRACKING_* server env, Hero tour moves are stored like customer embeds. */
-const MARKETING_SITE_EMBED_ID = process.env.NEXT_PUBLIC_MARKETING_SITE_EMBED_ID;
-
 export function Hero() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -57,7 +54,6 @@ export function Hero() {
               demoVenueId={DEMO_VENUE_ID}
               demoTourId={DEMO_TOUR_ID}
               demoVenueName={DEMO_VENUE_NAME}
-              marketingSiteEmbedId={MARKETING_SITE_EMBED_ID}
               onModelChange={setActiveModelId}
               onFullscreenToggle={toggleCustomFullscreen}
               onConnectionChange={setIsConnected}
@@ -104,7 +100,6 @@ export function Hero() {
         demoVenueId={DEMO_VENUE_ID}
         demoTourId={DEMO_TOUR_ID}
         demoVenueName={DEMO_VENUE_NAME}
-        marketingSiteEmbedId={MARKETING_SITE_EMBED_ID}
         onModelChange={setActiveModelId}
         isConnected={isConnected}
         onConnectionChange={setIsConnected}

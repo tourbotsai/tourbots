@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { ContactFormEmail } from '@/components/emails/ContactFormEmail';
 import { z } from 'zod';
 
-const PLATFORM_ADMIN_EMAIL = 'hello@tourbots.ai';
+const PLATFORM_ADMIN_EMAIL = 'info@tourbots.ai';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const { name, email, phone, message, venueName, helpTopic } = parsed.data;
 
     const { data, error } = await resend.emails.send({
-      from: 'Contact Form <contact@tourbots.ai>',
+      from: 'Contact Form <info@tourbots.ai>',
       to: [PLATFORM_ADMIN_EMAIL],
       subject: `New Message from ${name} via TourBots.ai`,
       replyTo: email,

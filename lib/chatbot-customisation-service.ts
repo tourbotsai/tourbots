@@ -84,7 +84,7 @@ export async function deleteChatbotCustomisation(
 }
 
 // Get default customisation values (LEGACY - for backward compatibility)
-export function getDefaultCustomisation(_chatbotType: 'tour' = 'tour'): Partial<ChatbotCustomisation> {
+export function getDefaultCustomisation(_chatbotType: 'tour' | 'website' = 'tour'): Partial<ChatbotCustomisation> {
   const baseDefaults = {
     chat_button_size: 'medium' as const,
     chat_button_size_px: 80,
@@ -111,14 +111,14 @@ export function getDefaultCustomisation(_chatbotType: 'tour' = 'tour'): Partial<
     user_message_text_color: '#FFFFFF',
     send_button_color: '#1E40AF',
     send_button_icon_color: '#FFFFFF',
-    window_title: 'Tour Assistant',
+    window_title: _chatbotType === 'website' ? 'Website Assistant' : 'Tour Assistant',
     input_placeholder_text: 'Ask me anything...',
   };
 }
 
 // ADVANCED DEFAULT CUSTOMISATION - Complete set with all new fields
 export function getAdvancedDefaultCustomisation(
-  _chatbotType: 'tour' = 'tour'
+  _chatbotType: 'tour' | 'website' = 'tour'
 ): Partial<ChatbotCustomisation> {
   const baseDefaults = {
     // EXISTING FIELDS
@@ -333,7 +333,7 @@ export function getAdvancedDefaultCustomisation(
     user_message_text_color: '#FFFFFF',
     send_button_color: '#1E40AF',
     send_button_icon_color: '#FFFFFF',
-    window_title: 'Tour Assistant',
+    window_title: _chatbotType === 'website' ? 'Website Assistant' : 'Tour Assistant',
     input_placeholder_text: 'Ask me anything...',
     mobile_chat_button_color: '#1E40AF',
     mobile_header_background_color: '#1E40AF',
@@ -341,7 +341,7 @@ export function getAdvancedDefaultCustomisation(
     mobile_user_message_background: '#1E40AF',
     mobile_send_button_color: '#1E40AF',
     mobile_send_button_icon_color: '#FFFFFF',
-    mobile_window_title: 'Tour Assistant',
+    mobile_window_title: _chatbotType === 'website' ? 'Website Assistant' : 'Tour Assistant',
     mobile_input_placeholder_text: 'Ask me anything...',
     mobile_placeholder_text_color: '#9CA3AF',
     mobile_input_text_color: '#111827',

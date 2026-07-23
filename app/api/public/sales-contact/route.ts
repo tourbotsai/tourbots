@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { SalesContactEmail } from '@/components/emails/SalesContactEmail';
 import { z } from 'zod';
 
-const PLATFORM_ADMIN_EMAIL = 'hello@tourbots.ai';
+const PLATFORM_ADMIN_EMAIL = 'info@tourbots.ai';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const { name, email, phone, venueName, planType, message } = parsed.data;
 
     const { data, error } = await resend.emails.send({
-      from: 'Sales Enquiry <sales@tourbots.ai>',
+      from: 'Sales Enquiry <info@tourbots.ai>',
       to: [PLATFORM_ADMIN_EMAIL],
       subject: `New Sales Enquiry: ${planType === 'essential' ? 'AI Essentials' : 'All-in-One'} from ${name} (${venueName})`,
       replyTo: email,

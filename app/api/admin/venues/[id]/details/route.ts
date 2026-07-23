@@ -61,7 +61,7 @@ export async function GET(
       // 2c. Billing plans catalogue
       supabase
         .from('billing_plans')
-        .select('code, name, monthly_price_gbp, included_spaces, included_messages')
+        .select('code, name, monthly_price_gbp, included_bots, included_messages')
         .eq('is_active', true),
 
       // 2d. Billing add-ons catalogue
@@ -159,12 +159,6 @@ export async function GET(
       .from('leads')
       .select('*', { count: 'exact', head: true })
       .eq('venue_id', venueId);
-
-    const { count: convertedLeads } = await supabase
-      .from('leads')
-      .select('*', { count: 'exact', head: true })
-      .eq('venue_id', venueId)
-      .eq('lead_status', 'converted');
 
     // Billing message usage should match app/dashboard logic: only visitor
     // messages sent to the tour chatbot since the start of the current calendar
@@ -304,10 +298,10 @@ export async function GET(
       leads: leadsResult.data || [],
       leadStats: {
         total: totalLeads || 0,
-        converted: convertedLeads || 0,
-        conversionRate: totalLeads && totalLeads > 0
-          ? Math.round((convertedLeads || 0) / totalLeads * 100)
-          : 0,
+        // Lead statuses do not include a converted state, so retain the legacy
+        // fields without treating a contact attempt as a successful conversion.
+        converted: 0,
+        conversionRate: 0,
       },
       paymentLinks: paymentLinksResult.data || [],
       venueInformation: venueInfoTableResult.data || null,

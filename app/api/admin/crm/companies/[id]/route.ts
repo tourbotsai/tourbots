@@ -4,6 +4,7 @@ import {
   listCrmNotes,
   listCrmActivities,
   updateCrmCompanyStatus,
+  updateCrmCompanyDetails,
   CrmCompanyStatus,
 } from '@/lib/services/admin/crm-service';
 import { requirePlatformAdmin } from '@/lib/api/require-platform-admin';
@@ -42,6 +43,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
+const DETAIL_FIELDS = ['company_name', 'first_name', 'last_name', 'email', 'phone', 'region'] as const;
+
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const authError = await requirePlatformAdmin(request);
@@ -49,13 +52,32 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const companyId = params.id;
     const body = await request.json();
-    const status = body.status as CrmCompanyStatus;
 
-    if (!status || !VALID_STATUSES.includes(status)) {
-      return NextResponse.json({ success: false, error: 'A valid status is required' }, { status: 400 });
+    let company = null;
+
+    if (body.status !== undefined) {
+      const status = body.status as CrmCompanyStatus;
+      if (!VALID_STATUSES.includes(status)) {
+        return NextResponse.json({ success: false, error: 'A valid status is required' }, { status: 400 });
+      }
+      company = await updateCrmCompanyStatus(companyId, status);
     }
 
-    const company = await updateCrmCompanyStatus(companyId, status);
+    const hasDetailUpdate = DETAIL_FIELDS.some((field) => body[field] !== undefined);
+    if (hasDetailUpdate) {
+      company = await updateCrmCompanyDetails(companyId, {
+        company_name: body.company_name,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        email: body.email,
+        phone: body.phone,
+        region: body.region,
+      });
+    }
+
+    if (!company) {
+      return NextResponse.json({ success: false, error: 'Nothing to update' }, { status: 400 });
+    }
 
     return NextResponse.json({ success: true, company });
   } catch (error: any) {

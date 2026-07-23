@@ -21,8 +21,9 @@ async function isAgencyVenue(venueId: string): Promise<boolean> {
 
 export async function getChatbotCustomisation(
   venueId: string,
-  chatbotType: 'tour',
-  tourId?: string | null
+  chatbotType: 'tour' | 'website',
+  tourId?: string | null,
+  chatbotConfigId?: string | null
 ): Promise<ChatbotCustomisation | null> {
   let query = supabase
     .from('chatbot_customisations')
@@ -30,13 +31,15 @@ export async function getChatbotCustomisation(
     .eq('venue_id', venueId)
     .eq('chatbot_type', chatbotType);
 
-  if (tourId) {
+  if (chatbotType === 'website' && chatbotConfigId) {
+    query = query.eq('chatbot_config_id', chatbotConfigId);
+  } else if (tourId) {
     query = query.eq('tour_id', tourId);
   } else {
     query = query.is('tour_id', null);
   }
 
-  const { data, error } = await query.single();
+  const { data, error } = await query.maybeSingle();
   if (error) {
     if (error.code === 'PGRST116') return null;
     throw error;
@@ -47,15 +50,57 @@ export async function getChatbotCustomisation(
 
 export async function upsertChatbotCustomisation(
   venueId: string,
-  chatbotType: 'tour',
-  tourId: string,
-  customisation: Partial<Omit<ChatbotCustomisation, 'id' | 'venue_id' | 'chatbot_type' | 'created_at' | 'updated_at'>>
+  chatbotType: 'tour' | 'website',
+  tourId: string | null,
+  customisation: Partial<
+    Omit<ChatbotCustomisation, 'id' | 'venue_id' | 'chatbot_type' | 'created_at' | 'updated_at'>
+  >,
+  chatbotConfigId?: string | null
 ): Promise<ChatbotCustomisation> {
-  // White-label is standard on the agency plan: never persist the branding as
-  // visible for an agency venue, regardless of what the caller supplies.
   const brandingOverride = (await isAgencyVenue(venueId))
     ? { show_powered_by: false, mobile_show_powered_by: false }
     : {};
+
+  if (chatbotType === 'website') {
+    if (!chatbotConfigId) {
+      throw new Error('chatbotConfigId is required for website customisations');
+    }
+
+    const existing = await getChatbotCustomisation(venueId, 'website', null, chatbotConfigId);
+    if (existing) {
+      const { data, error } = await supabase
+        .from('chatbot_customisations')
+        .update({
+          ...customisation,
+          ...brandingOverride,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    const { data, error } = await supabase
+      .from('chatbot_customisations')
+      .insert({
+        venue_id: venueId,
+        tour_id: null,
+        chatbot_type: 'website',
+        chatbot_config_id: chatbotConfigId,
+        ...customisation,
+        ...brandingOverride,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  if (!tourId) {
+    throw new Error('tourId is required for tour customisations');
+  }
 
   const { data, error } = await supabase
     .from('chatbot_customisations')
@@ -93,15 +138,24 @@ export async function getVenueChatbotCustomisations(
 
 export async function deleteChatbotCustomisation(
   venueId: string,
-  chatbotType: 'tour',
-  tourId: string
+  chatbotType: 'tour' | 'website',
+  tourId?: string | null,
+  chatbotConfigId?: string | null
 ): Promise<void> {
-  const { error } = await supabase
+  let query = supabase
     .from('chatbot_customisations')
     .delete()
     .eq('venue_id', venueId)
-    .eq('chatbot_type', chatbotType)
-    .eq('tour_id', tourId);
+    .eq('chatbot_type', chatbotType);
 
+  if (chatbotType === 'website' && chatbotConfigId) {
+    query = query.eq('chatbot_config_id', chatbotConfigId);
+  } else if (tourId) {
+    query = query.eq('tour_id', tourId);
+  } else {
+    query = query.is('tour_id', null);
+  }
+
+  const { error } = await query;
   if (error) throw error;
 }

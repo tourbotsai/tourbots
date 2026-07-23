@@ -18,18 +18,20 @@ export interface ClientAllocationResult {
  * Checks an individual agency-portal client's monthly message allocation.
  *
  * Only applies when the venue is an agency operating in `allocated` usage mode.
- * In that mode each client (one agency_portal_shares row per tour) has a fixed
- * monthly slice of the agency pool; when the slice is used up that client's
- * chatbot stops while other clients keep working. Usage is counted live against
- * the current calendar-month window, matching the billing pool reset.
+ * In that mode each client (one agency_portal_shares row per tour OR website
+ * chatbot config) has a fixed monthly slice of the agency pool; when the slice
+ * is used up that client's chatbot stops while other clients keep working.
+ * Usage is counted live against the current calendar-month window, matching
+ * the billing pool reset.
  *
- * When the venue is not an allocated agency, or the tour has no matching share,
- * this returns `enforced: false, allowed: true` so callers can treat it as a
- * no-op layered on top of the venue-wide pool check.
+ * When the venue is not an allocated agency, or the tour/config has no
+ * matching share, this returns `enforced: false, allowed: true` so callers can
+ * treat it as a no-op layered on top of the venue-wide pool check.
  */
 export async function checkClientAllocationUsage(
   venueId: string,
-  tourId: string | null | undefined
+  tourId: string | null | undefined,
+  chatbotConfigId?: string | null
 ): Promise<ClientAllocationResult> {
   const { resetAt } = getCurrentMessageCreditPeriod();
 
@@ -44,7 +46,8 @@ export async function checkClientAllocationUsage(
   };
 
   try {
-    if (!tourId) return notEnforced;
+    const isWebsiteScope = !tourId && Boolean(chatbotConfigId);
+    if (!tourId && !chatbotConfigId) return notEnforced;
 
     const { data: settings } = await supabase
       .from('agency_portal_settings')
@@ -56,28 +59,32 @@ export async function checkClientAllocationUsage(
       return notEnforced;
     }
 
-    // Find the client share for this tour. Without a share the tour is not a
-    // portal client, so the venue-wide pool check alone governs it.
-    const { data: share } = await supabase
+    // Find the client share for this tour/config. Without a share, this scope
+    // is not a portal client, so the venue-wide pool check alone governs it.
+    let shareQuery = supabase
       .from('agency_portal_shares')
       .select('message_credit_allocation')
-      .eq('venue_id', venueId)
-      .eq('tour_id', tourId)
-      .maybeSingle();
+      .eq('venue_id', venueId);
+    shareQuery = isWebsiteScope
+      ? shareQuery.eq('chatbot_config_id', chatbotConfigId)
+      : shareQuery.eq('tour_id', tourId);
+    const { data: share } = await shareQuery.maybeSingle();
 
     if (!share) return notEnforced;
 
     const allocation = Number(share.message_credit_allocation || 0);
 
     const { periodStart } = getCurrentMessageCreditPeriod();
-    const { count: usedCount, error: usageError } = await supabase
+    let usageQuery = supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('venue_id', venueId)
-      .eq('tour_id', tourId)
-      .eq('chatbot_type', 'tour')
       .eq('message_type', 'visitor')
       .gte('created_at', periodStart);
+    usageQuery = isWebsiteScope
+      ? usageQuery.eq('chatbot_config_id', chatbotConfigId as string).eq('chatbot_type', 'website')
+      : usageQuery.eq('tour_id', tourId as string).eq('chatbot_type', 'tour');
+    const { count: usedCount, error: usageError } = await usageQuery;
 
     if (usageError) {
       console.error('Error checking client allocation usage:', usageError);

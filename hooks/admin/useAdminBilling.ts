@@ -20,10 +20,10 @@ interface AdminBillingVenueUpdate {
   billing_status?: 'free' | 'active' | 'past_due' | 'cancelled' | 'trialing';
   billing_override_enabled?: boolean;
   override_plan_code?: string | null;
-  addon_extra_spaces?: number;
+  addon_extra_bots?: number;
   addon_message_blocks?: number;
   addon_white_label?: boolean;
-  effective_space_limit?: number | null;
+  effective_bot_limit?: number | null;
   effective_message_limit?: number | null;
   notes?: string | null;
 }

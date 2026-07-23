@@ -7,13 +7,13 @@ export function HowItWorks() {
       step: "01",
       title: "Upload Matterport tour",
       description: "Add your tour in seconds without rebuilding anything or disrupting your current setup.",
-      details: "Paste the tour link, check the preview, and organise your space before configuration.",
+      details: "Paste the tour link, check the preview, and organise your bot before configuration.",
       duration: "2 minutes",
       features: ["Matterport integration", "Quick setup", "Instant preview", "No technical bottlenecks"]
     },
     {
       step: "02", 
-      title: "Train the AI on your space",
+      title: "Train the AI on your bot",
       mobileTitle: "Train the AI",
       description: "Upload information, define behaviour rules, and set up navigation points so the AI knows what to say and where to go.",
       mobileDescription: "Upload information, define behaviour rules, and set up navigation points.",
@@ -25,9 +25,9 @@ export function HowItWorks() {
       step: "03",
       title: "One line of code, live",
       description: "Embed once and launch an AI-guided tour with engagement tracking built in from day one.",
-      details: "Go live quickly, monitor conversations, and see how visitors interact with your space.",
+      details: "Go live quickly, monitor conversations, and see how visitors interact with your bot.",
       duration: "Live instantly",
-      features: ["Single embed code", "Tour and AI together", "Space-level analytics", "Lead capture notifications"]
+      features: ["Single embed code", "Tour and AI together", "Bot-level analytics", "Lead capture notifications"]
     }
   ];
 

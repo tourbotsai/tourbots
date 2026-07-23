@@ -13,6 +13,8 @@ interface ColorPickerProps {
   className?: string;
   showPresets?: boolean;
   supportTransparency?: boolean;
+  /** Single-line row (label left, swatch + hex right) instead of the full label + swatch + input layout. */
+  compact?: boolean;
 }
 
 interface HSV {
@@ -121,6 +123,7 @@ export function ColorPicker({
   label = "Colour",
   className,
   supportTransparency = true,
+  compact = false,
 }: ColorPickerProps) {
   const [hsv, setHsv] = useState<HSV>(() => {
     const { hex } = splitHexAlpha(value);
@@ -196,6 +199,171 @@ export function ColorPicker({
     }
   };
 
+  const colorPickerBody = (
+    <>
+      {/* Saturation / Value */}
+      <div
+        className="relative h-40 w-full rounded-md cursor-crosshair select-none touch-none shadow-inner"
+        style={{
+          background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${baseHueHex})`,
+        }}
+        onPointerDown={(e) => {
+          draggingRef.current = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          onSaturationMove(e.clientX, e.clientY, e.currentTarget);
+        }}
+        onPointerMove={(e) => {
+          if (draggingRef.current && e.buttons === 1) {
+            onSaturationMove(e.clientX, e.clientY, e.currentTarget);
+          }
+        }}
+        onPointerUp={(e) => {
+          draggingRef.current = false;
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }}
+      >
+        <div
+          className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white pointer-events-none"
+          style={{
+            left: `${hsv.s}%`,
+            top: `${100 - hsv.v}%`,
+            backgroundColor: currentHex,
+            boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)",
+          }}
+        />
+      </div>
+
+      {/* Hue */}
+      <div
+        className="relative h-3 w-full rounded-full cursor-pointer select-none touch-none"
+        style={{
+          background:
+            "linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)",
+        }}
+        onPointerDown={(e) => {
+          draggingRef.current = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          onLinearMove(e.clientX, e.currentTarget, "hue");
+        }}
+        onPointerMove={(e) => {
+          if (draggingRef.current && e.buttons === 1) {
+            onLinearMove(e.clientX, e.currentTarget, "hue");
+          }
+        }}
+        onPointerUp={(e) => {
+          draggingRef.current = false;
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }}
+      >
+        <div
+          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white pointer-events-none"
+          style={{
+            left: `${(hsv.h / 360) * 100}%`,
+            backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
+            boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)",
+          }}
+        />
+      </div>
+
+      {/* Transparency */}
+      {supportTransparency && (
+        <div
+          className="relative h-3 w-full rounded-full cursor-pointer select-none touch-none overflow-hidden"
+          style={{ background: CHECKERBOARD }}
+          onPointerDown={(e) => {
+            draggingRef.current = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            onLinearMove(e.clientX, e.currentTarget, "alpha");
+          }}
+          onPointerMove={(e) => {
+            if (draggingRef.current && e.buttons === 1) {
+              onLinearMove(e.clientX, e.currentTarget, "alpha");
+            }
+          }}
+          onPointerUp={(e) => {
+            draggingRef.current = false;
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          }}
+        >
+          <div
+            className="absolute inset-0 rounded-full pointer-events-none"
+            style={{
+              background: `linear-gradient(to right, transparent, ${currentHex})`,
+            }}
+          />
+          <div
+            className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white pointer-events-none"
+            style={{
+              left: `${alpha * 100}%`,
+              backgroundColor: currentHex,
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Hex + alpha readout */}
+      <div className="flex items-center gap-2 pt-1">
+        <span
+          className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-input shadow-sm"
+          style={{ background: CHECKERBOARD }}
+          aria-hidden="true"
+        >
+          <span className="absolute inset-0" style={{ backgroundColor: swatchColor }} />
+        </span>
+        <Input
+          value={hexInput}
+          onChange={(e) => handleHexInputChange(e.target.value)}
+          placeholder="#000000"
+          className="h-9 flex-1 font-mono text-sm uppercase dark:border-input dark:bg-background dark:text-slate-100"
+        />
+        {supportTransparency && (
+          <span className="w-12 text-right text-xs font-mono text-muted-foreground">
+            {Math.round(alpha * 100)}%
+          </span>
+        )}
+      </div>
+    </>
+  );
+
+  if (compact) {
+    const hasLabel = Boolean(label?.trim());
+    return (
+      <div className={cn("w-full", className)}>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${label || "Colour"} picker`}
+              className={cn(
+                "flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-neutral-800",
+                hasLabel ? "justify-between" : "justify-center"
+              )}
+            >
+              {hasLabel ? (
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                  {label}
+                </span>
+              ) : null}
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full border border-slate-300 shadow-sm dark:border-neutral-600"
+                  style={{ background: CHECKERBOARD }}
+                >
+                  <span className="absolute inset-0" style={{ backgroundColor: swatchColor }} />
+                </span>
+                <span className="font-mono text-[10px] tabular-nums text-slate-400">{hexInput}</span>
+              </span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 space-y-3 p-3">
+            {colorPickerBody}
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-2", className)}>
       <Label className="text-sm font-medium">{label}</Label>
@@ -214,128 +382,7 @@ export function ColorPicker({
           </PopoverTrigger>
 
           <PopoverContent align="start" className="w-64 p-3 space-y-3">
-            {/* Saturation / Value */}
-            <div
-              className="relative h-40 w-full rounded-md cursor-crosshair select-none touch-none shadow-inner"
-              style={{
-                background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${baseHueHex})`,
-              }}
-              onPointerDown={(e) => {
-                draggingRef.current = true;
-                e.currentTarget.setPointerCapture(e.pointerId);
-                onSaturationMove(e.clientX, e.clientY, e.currentTarget);
-              }}
-              onPointerMove={(e) => {
-                if (draggingRef.current && e.buttons === 1) {
-                  onSaturationMove(e.clientX, e.clientY, e.currentTarget);
-                }
-              }}
-              onPointerUp={(e) => {
-                draggingRef.current = false;
-                e.currentTarget.releasePointerCapture(e.pointerId);
-              }}
-            >
-              <div
-                className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white pointer-events-none"
-                style={{
-                  left: `${hsv.s}%`,
-                  top: `${100 - hsv.v}%`,
-                  backgroundColor: currentHex,
-                  boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)",
-                }}
-              />
-            </div>
-
-            {/* Hue */}
-            <div
-              className="relative h-3 w-full rounded-full cursor-pointer select-none touch-none"
-              style={{
-                background:
-                  "linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)",
-              }}
-              onPointerDown={(e) => {
-                draggingRef.current = true;
-                e.currentTarget.setPointerCapture(e.pointerId);
-                onLinearMove(e.clientX, e.currentTarget, "hue");
-              }}
-              onPointerMove={(e) => {
-                if (draggingRef.current && e.buttons === 1) {
-                  onLinearMove(e.clientX, e.currentTarget, "hue");
-                }
-              }}
-              onPointerUp={(e) => {
-                draggingRef.current = false;
-                e.currentTarget.releasePointerCapture(e.pointerId);
-              }}
-            >
-              <div
-                className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white pointer-events-none"
-                style={{
-                  left: `${(hsv.h / 360) * 100}%`,
-                  backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
-                  boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)",
-                }}
-              />
-            </div>
-
-            {/* Transparency */}
-            {supportTransparency && (
-              <div
-                className="relative h-3 w-full rounded-full cursor-pointer select-none touch-none overflow-hidden"
-                style={{ background: CHECKERBOARD }}
-                onPointerDown={(e) => {
-                  draggingRef.current = true;
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  onLinearMove(e.clientX, e.currentTarget, "alpha");
-                }}
-                onPointerMove={(e) => {
-                  if (draggingRef.current && e.buttons === 1) {
-                    onLinearMove(e.clientX, e.currentTarget, "alpha");
-                  }
-                }}
-                onPointerUp={(e) => {
-                  draggingRef.current = false;
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                }}
-              >
-                <div
-                  className="absolute inset-0 rounded-full pointer-events-none"
-                  style={{
-                    background: `linear-gradient(to right, transparent, ${currentHex})`,
-                  }}
-                />
-                <div
-                  className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white pointer-events-none"
-                  style={{
-                    left: `${alpha * 100}%`,
-                    backgroundColor: currentHex,
-                    boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)",
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Hex + alpha readout */}
-            <div className="flex items-center gap-2 pt-1">
-              <span
-                className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-input shadow-sm"
-                style={{ background: CHECKERBOARD }}
-                aria-hidden="true"
-              >
-                <span className="absolute inset-0" style={{ backgroundColor: swatchColor }} />
-              </span>
-              <Input
-                value={hexInput}
-                onChange={(e) => handleHexInputChange(e.target.value)}
-                placeholder="#000000"
-                className="h-9 flex-1 font-mono text-sm uppercase dark:border-input dark:bg-background dark:text-slate-100"
-              />
-              {supportTransparency && (
-                <span className="w-12 text-right text-xs font-mono text-muted-foreground">
-                  {Math.round(alpha * 100)}%
-                </span>
-              )}
-            </div>
+            {colorPickerBody}
           </PopoverContent>
         </Popover>
 

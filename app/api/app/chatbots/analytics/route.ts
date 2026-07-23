@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const requestedVenueId = searchParams.get('venueId');
     const tourId = searchParams.get('tourId');
+    const chatbotConfigId = searchParams.get('chatbotConfigId');
     const sessionId = searchParams.get('sessionId');
     const chatbotType = searchParams.get('chatbotType');
     const type = searchParams.get('type'); // 'conversations' | 'stats' | 'session'
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
       }
       if (tourId) {
         allConversationsQuery = allConversationsQuery.eq('tour_id', tourId);
+      }
+      if (chatbotConfigId) {
+        allConversationsQuery = allConversationsQuery.eq('chatbot_config_id', chatbotConfigId);
       }
 
       if (chatbotType) {
@@ -69,6 +73,9 @@ export async function GET(request: NextRequest) {
       }
       if (tourId) {
         sessionsQuery = sessionsQuery.eq('tour_id', tourId);
+      }
+      if (chatbotConfigId) {
+        sessionsQuery = sessionsQuery.eq('chatbot_config_id', chatbotConfigId);
       }
 
       if (chatbotType) {
@@ -129,6 +136,9 @@ export async function GET(request: NextRequest) {
       if (tourId) {
         sessionQuery = sessionQuery.eq('tour_id', tourId);
       }
+      if (chatbotConfigId) {
+        sessionQuery = sessionQuery.eq('chatbot_config_id', chatbotConfigId);
+      }
 
       if (chatbotType) {
         sessionQuery = sessionQuery.eq('chatbot_type', chatbotType);
@@ -158,6 +168,9 @@ export async function GET(request: NextRequest) {
     }
     if (tourId) {
       query = query.eq('tour_id', tourId);
+    }
+    if (chatbotConfigId) {
+      query = query.eq('chatbot_config_id', chatbotConfigId);
     }
 
     if (sessionId) {

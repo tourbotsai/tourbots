@@ -9,12 +9,20 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
-const GMAIL_SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
+const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const GMAIL_SEND_URL = `${GMAIL_API_BASE}/messages/send`;
 
-// Send-only scope — classified "sensitive" (not "restricted") by Google, so it
-// needs no CASA security assessment, only standard OAuth verification (which
-// itself is skippable while the app stays in Testing mode with under 100 users).
-const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'openid', 'email'].join(' ');
+// gmail.send is "sensitive"; gmail.readonly (needed to poll for inbound
+// replies) is classified "restricted" by Google — it needs a CASA security
+// assessment only if the app is verified/published for >100 users. Staying
+// in Testing mode with jack@tourbotsai.com as a listed test user avoids that
+// entirely, same as today.
+const GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'openid',
+  'email',
+].join(' ');
 
 function getClientId(): string {
   const value = process.env.CRM_GMAIL_CLIENT_ID;
@@ -198,10 +206,11 @@ export interface CrmGmailAccount {
   updated_at: string;
 }
 
-interface CrmGmailAccountRow extends CrmGmailAccount {
+export interface CrmGmailAccountRow extends CrmGmailAccount {
   refresh_token_encrypted: string;
   access_token_encrypted: string | null;
   access_token_expires_at: string | null;
+  last_history_id: string | null;
 }
 
 export async function getActiveCrmGmailAccount(): Promise<CrmGmailAccount | null> {
@@ -217,7 +226,7 @@ export async function getActiveCrmGmailAccount(): Promise<CrmGmailAccount | null
   return (data as CrmGmailAccount) || null;
 }
 
-async function getActiveCrmGmailAccountRow(): Promise<CrmGmailAccountRow | null> {
+export async function getActiveCrmGmailAccountRow(): Promise<CrmGmailAccountRow | null> {
   const { data, error } = await supabase
     .from('crm_gmail_accounts')
     .select('*')
@@ -288,9 +297,10 @@ export async function disconnectCrmGmailAccount(): Promise<void> {
 /**
  * Returns a valid (non-expired) access token for the connected Gmail account,
  * refreshing and persisting a new one first if the cached token has expired
- * or is within 60 seconds of expiring.
+ * or is within 60 seconds of expiring. Exported so the inbound-poll cron can
+ * reuse the exact same refresh logic as sending does.
  */
-async function getValidAccessToken(account: CrmGmailAccountRow): Promise<string> {
+export async function getValidAccessToken(account: CrmGmailAccountRow): Promise<string> {
   const expiresAt = account.access_token_expires_at ? new Date(account.access_token_expires_at).getTime() : 0;
   const isExpiringSoon = !account.access_token_encrypted || expiresAt - Date.now() < 60_000;
 
@@ -364,7 +374,7 @@ export async function sendCrmSequenceEmailViaGmail(input: {
   toName?: string | null;
   subject: string;
   bodyText: string;
-}): Promise<{ gmailMessageId: string; fromAddress: string }> {
+}): Promise<{ gmailMessageId: string; gmailThreadId: string | null; fromAddress: string }> {
   const account = await getActiveCrmGmailAccountRow();
   if (!account) {
     throw new Error('No Gmail account is connected. Connect one from the CRM before sending sequence emails.');
@@ -394,5 +404,169 @@ export async function sendCrmSequenceEmailViaGmail(input: {
     throw new Error(data.error?.message || 'Failed to send email via Gmail');
   }
 
-  return { gmailMessageId: data.id as string, fromAddress: account.email_address };
+  return {
+    gmailMessageId: data.id as string,
+    gmailThreadId: (data.threadId as string) || null,
+    fromAddress: account.email_address,
+  };
+}
+
+// --------------------
+// Inbound polling (reply detection)
+// --------------------
+
+export async function updateGmailHistoryId(accountId: string, historyId: string): Promise<void> {
+  const { error } = await supabase.from('crm_gmail_accounts').update({ last_history_id: historyId }).eq('id', accountId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Seeds last_history_id from Gmail's current historyId, without processing
+ * any existing mail. Used the first time the poll cron ever runs for this
+ * account so we start watching from "now" rather than retroactively firing
+ * activity logs / auto-stops for old mail that predates this feature.
+ */
+export async function bootstrapGmailHistoryId(accessToken: string): Promise<string> {
+  const response = await fetch(`${GMAIL_API_BASE}/profile`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to fetch Gmail profile for history bootstrap');
+  }
+  return String(data.historyId);
+}
+
+export interface GmailHistoryResult {
+  messageIds: string[];
+  latestHistoryId: string;
+  // True when Gmail reports the given startHistoryId is too old (history is
+  // only retained ~1 week) — the caller should re-bootstrap and skip this cycle.
+  expired: boolean;
+}
+
+/**
+ * Returns every message ID added to INBOX since startHistoryId, paginating
+ * as needed, plus the historyId to resume from next time.
+ */
+export async function getGmailHistorySince(accessToken: string, startHistoryId: string): Promise<GmailHistoryResult> {
+  const messageIds = new Set<string>();
+  let pageToken: string | undefined;
+  let latestHistoryId = startHistoryId;
+
+  do {
+    const params = new URLSearchParams({
+      startHistoryId,
+      historyTypes: 'messageAdded',
+      labelId: 'INBOX',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const response = await fetch(`${GMAIL_API_BASE}/history?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Gmail returns 404 with reason "notFound" once startHistoryId falls
+      // outside its retention window.
+      if (response.status === 404) {
+        return { messageIds: [], latestHistoryId: startHistoryId, expired: true };
+      }
+      throw new Error(data.error?.message || 'Failed to fetch Gmail history');
+    }
+
+    for (const record of data.history || []) {
+      for (const added of record.messagesAdded || []) {
+        if (added.message?.id) messageIds.add(added.message.id as string);
+      }
+    }
+    if (data.historyId) latestHistoryId = String(data.historyId);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return { messageIds: Array.from(messageIds), latestHistoryId, expired: false };
+}
+
+export interface InboundGmailMessage {
+  gmailMessageId: string;
+  gmailThreadId: string | null;
+  fromAddress: string;
+  subject: string | null;
+  bodyText: string;
+  receivedAt: string | null;
+}
+
+function decodeBase64Url(value: string): string {
+  return Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Gmail messages can nest MIME parts arbitrarily (multipart/alternative inside
+// multipart/mixed, etc.) — walk the tree and prefer the first text/plain part
+// found, falling back to a stripped text/html part.
+function extractBodyFromPayload(payload: any): { plain: string | null; html: string | null } {
+  let plain: string | null = null;
+  let html: string | null = null;
+
+  const visit = (part: any) => {
+    if (!part) return;
+    const mimeType = part.mimeType || '';
+    const data = part.body?.data;
+    if (mimeType === 'text/plain' && data && plain === null) {
+      plain = decodeBase64Url(data);
+    } else if (mimeType === 'text/html' && data && html === null) {
+      html = decodeBase64Url(data);
+    }
+    for (const child of part.parts || []) visit(child);
+  };
+
+  visit(payload);
+  return { plain, html };
+}
+
+function parseFromHeader(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return (match ? match[1] : value).trim().toLowerCase();
+}
+
+/**
+ * Fetches one full inbound message and extracts what we need to log it:
+ * sender address, subject, plain-text body (falling back to stripped HTML,
+ * then Gmail's snippet if neither MIME part is present).
+ */
+export async function fetchInboundGmailMessage(accessToken: string, messageId: string): Promise<InboundGmailMessage> {
+  const response = await fetch(`${GMAIL_API_BASE}/messages/${messageId}?format=full`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || `Failed to fetch Gmail message ${messageId}`);
+  }
+
+  const headers: { name: string; value: string }[] = data.payload?.headers || [];
+  const getHeader = (name: string) =>
+    headers.find((header) => header.name.toLowerCase() === name.toLowerCase())?.value || null;
+
+  const fromHeader = getHeader('From') || '';
+  const subject = getHeader('Subject');
+  const { plain, html } = extractBodyFromPayload(data.payload);
+  const bodyText = (plain || (html ? stripHtml(html) : null) || data.snippet || '').trim();
+
+  return {
+    gmailMessageId: data.id as string,
+    gmailThreadId: (data.threadId as string) || null,
+    fromAddress: parseFromHeader(fromHeader),
+    subject,
+    bodyText,
+    receivedAt: data.internalDate ? new Date(Number(data.internalDate)).toISOString() : null,
+  };
 }

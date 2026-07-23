@@ -39,7 +39,7 @@ export function TourInfoCard({ onAddTour }: TourInfoCardProps) {
             <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-success-green" />
             <div>
               <h4 className="text-sm font-medium text-slate-900">
-                Expand with additional spaces
+                Expand with additional bots
               </h4>
               <p className="text-xs text-slate-600">
                 Add more tours as you scale, each with its own AI menu and tracking.

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServiceRole as supabase } from '@/lib/supabase-service-role';
 import { openAIService } from '@/lib/openai-service';
 import { requireAgencyPortalSession } from '@/lib/agency-portal-auth';
-import { getScopedTourChatbotConfig, updateScopedTourChatbotConfig } from '@/lib/agency-portal-module-service';
+import {
+  getScopedSessionChatbotConfig,
+  getScopedTourChatbotConfig,
+  updateScopedTourChatbotConfig,
+} from '@/lib/agency-portal-module-service';
 
 const DEFAULT_TOUR_CHATBOT_NAME = 'Tour Assistant';
 const DEFAULT_TOUR_GUARDRAIL_PROMPT =
@@ -16,16 +20,25 @@ function textOrDefault(value: unknown, fallback: string): string {
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
-async function getScopedConfigById(configId: string, venueId: string, tourId: string) {
-  const { data, error } = await supabase
+async function getScopedConfigById(
+  configId: string,
+  venueId: string,
+  tourId: string | null,
+  chatbotConfigId: string | null
+) {
+  let query = supabase
     .from('chatbot_configs')
     .select('*')
     .eq('id', configId)
-    .eq('venue_id', venueId)
-    .eq('tour_id', tourId)
-    .eq('chatbot_type', 'tour')
-    .maybeSingle();
+    .eq('venue_id', venueId);
 
+  if (chatbotConfigId) {
+    query = query.eq('chatbot_type', 'website').eq('id', chatbotConfigId);
+  } else if (tourId) {
+    query = query.eq('tour_id', tourId).eq('chatbot_type', 'tour');
+  }
+
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -41,7 +54,11 @@ export async function GET(request: NextRequest) {
     });
     if (session instanceof NextResponse) return session;
 
-    const config = await getScopedTourChatbotConfig(session.venueId, session.tourId);
+    const config = await getScopedSessionChatbotConfig(
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
     return NextResponse.json(config || null);
   } catch (error: any) {
     console.error('Agency portal chatbot-config GET error:', error);
@@ -70,7 +87,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'configId and updates are required.' }, { status: 400 });
     }
 
-    const existing = await getScopedConfigById(configId, session.venueId, session.tourId);
+    const existing = await getScopedConfigById(
+      configId,
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
     if (!existing) {
       return NextResponse.json({ error: 'Chatbot config not found for share scope.' }, { status: 404 });
     }
@@ -85,7 +107,12 @@ export async function PUT(request: NextRequest) {
       is_active: updates.is_active,
     };
 
-    const updated = await updateScopedTourChatbotConfig(session.venueId, session.tourId, safeUpdates);
+    const updated = await updateScopedTourChatbotConfig(
+      session.venueId,
+      session.tourId,
+      safeUpdates as any,
+      session.chatbotConfigId
+    );
     if (!updated) {
       return NextResponse.json({ error: 'Failed to update chatbot config.' }, { status: 500 });
     }
@@ -112,12 +139,46 @@ export async function POST(request: NextRequest) {
     });
     if (session instanceof NextResponse) return session;
 
-    const existing = await getScopedTourChatbotConfig(session.venueId, session.tourId);
+    const existing = await getScopedSessionChatbotConfig(
+      session.venueId,
+      session.tourId,
+      session.chatbotConfigId
+    );
     if (existing) {
       return NextResponse.json(existing);
     }
 
+    // Website shares always have a config already (created with the client).
+    if (session.chatbotConfigId) {
+      return NextResponse.json({ error: 'Website chatbot config not found.' }, { status: 404 });
+    }
+
+    if (!session.tourId) {
+      return NextResponse.json({ error: 'Tour scope missing for this portal share.' }, { status: 400 });
+    }
+
     const incomingConfig = payload?.config || {};
+    const safeConfig = {
+      chatbot_name: textOrDefault(incomingConfig?.chatbot_name, DEFAULT_TOUR_CHATBOT_NAME),
+      welcome_message:
+        typeof incomingConfig?.welcome_message === 'string'
+          ? incomingConfig.welcome_message.trim() || null
+          : null,
+      personality_prompt:
+        typeof incomingConfig?.personality_prompt === 'string'
+          ? incomingConfig.personality_prompt.trim() || null
+          : null,
+      instruction_prompt: textOrDefault(incomingConfig?.instruction_prompt, DEFAULT_TOUR_INSTRUCTION_PROMPT),
+      guardrail_prompt: textOrDefault(incomingConfig?.guardrail_prompt, DEFAULT_TOUR_GUARDRAIL_PROMPT),
+      guardrails_enabled:
+        typeof incomingConfig?.guardrails_enabled === 'boolean'
+          ? incomingConfig.guardrails_enabled
+          : true,
+      is_active:
+        typeof incomingConfig?.is_active === 'boolean'
+          ? incomingConfig.is_active
+          : true,
+    };
     const venueLookup = await supabase
       .from('venues')
       .select('name')
@@ -144,18 +205,7 @@ export async function POST(request: NextRequest) {
           tour_id: session.tourId,
           chatbot_type: 'tour',
           openai_vector_store_id: vectorStoreId,
-          ...incomingConfig,
-          chatbot_name: textOrDefault(incomingConfig?.chatbot_name, DEFAULT_TOUR_CHATBOT_NAME),
-          instruction_prompt: textOrDefault(incomingConfig?.instruction_prompt, DEFAULT_TOUR_INSTRUCTION_PROMPT),
-          guardrail_prompt: textOrDefault(incomingConfig?.guardrail_prompt, DEFAULT_TOUR_GUARDRAIL_PROMPT),
-          guardrails_enabled:
-            typeof incomingConfig?.guardrails_enabled === 'boolean'
-              ? incomingConfig.guardrails_enabled
-              : true,
-          is_active:
-            typeof incomingConfig?.is_active === 'boolean'
-              ? incomingConfig.is_active
-              : true,
+          ...safeConfig,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },

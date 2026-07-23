@@ -1,5 +1,13 @@
 import { supabaseServiceRole as supabase } from '../../supabase-service-role';
-import { sendCrmSequenceEmailViaGmail } from './crm-gmail-service';
+import {
+  sendCrmSequenceEmailViaGmail,
+  getActiveCrmGmailAccountRow,
+  getValidAccessToken,
+  bootstrapGmailHistoryId,
+  getGmailHistorySince,
+  fetchInboundGmailMessage,
+  updateGmailHistoryId,
+} from './crm-gmail-service';
 
 export type CrmCompanyStatus =
   | 'not_started'
@@ -20,9 +28,14 @@ export interface CrmCompany {
   notes_summary: string | null;
   source: string;
   status: CrmCompanyStatus;
+  is_stopped: boolean;
+  stopped_at: string | null;
+  stopped_reason: CrmStoppedReason | null;
   created_at: string;
   updated_at: string;
 }
+
+export type CrmStoppedReason = 'manual' | 'inbound_reply';
 
 export interface CrmCompanyWithActivity extends CrmCompany {
   last_activity_date: string | null;
@@ -36,6 +49,7 @@ export interface CrmNote {
 }
 
 export type CrmActivityType = 'call' | 'email';
+export type CrmActivityDirection = 'outbound' | 'inbound';
 
 export interface CrmActivity {
   id: string;
@@ -46,6 +60,7 @@ export interface CrmActivity {
   subject: string | null;
   summary: string;
   outcome: string | null;
+  direction: CrmActivityDirection;
   created_at: string;
 }
 
@@ -174,6 +189,47 @@ export async function getCrmCompanyById(companyId: string): Promise<CrmCompany |
   return data as CrmCompany;
 }
 
+export interface UpdateCrmCompanyDetailsInput {
+  company_name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  region?: string;
+}
+
+// Editable contact-record fields — separate from status/is_stopped, which have
+// their own dedicated update paths. Used by the "Edit contact" form on the
+// company detail page (e.g. filling in first/last name after seeding from a
+// spreadsheet that only had company-level contact info).
+export async function updateCrmCompanyDetails(
+  companyId: string,
+  input: UpdateCrmCompanyDetailsInput
+): Promise<CrmCompany> {
+  const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (input.company_name !== undefined) {
+    const trimmed = input.company_name.trim();
+    if (!trimmed) throw new Error('Company name cannot be blank');
+    updatePayload.company_name = trimmed;
+  }
+  if (input.first_name !== undefined) updatePayload.first_name = input.first_name?.trim() || null;
+  if (input.last_name !== undefined) updatePayload.last_name = input.last_name?.trim() || null;
+  if (input.email !== undefined) updatePayload.email = input.email?.trim() || null;
+  if (input.phone !== undefined) updatePayload.phone = input.phone?.trim() || null;
+  if (input.region !== undefined) updatePayload.region = input.region?.trim() || '';
+
+  const { data, error } = await supabase
+    .from('crm_companies')
+    .update(updatePayload)
+    .eq('id', companyId)
+    .select('*')
+    .single();
+
+  if (error || !data) throw new Error(error?.message || 'Failed to update company details');
+  return data as CrmCompany;
+}
+
 export async function updateCrmCompanyStatus(companyId: string, status: CrmCompanyStatus): Promise<CrmCompany> {
   const { data, error } = await supabase
     .from('crm_companies')
@@ -183,6 +239,50 @@ export async function updateCrmCompanyStatus(companyId: string, status: CrmCompa
     .single();
 
   if (error || !data) throw new Error(error?.message || 'Failed to update company status');
+  return data as CrmCompany;
+}
+
+// Stopping a company blocks it from every automated send and flags it as
+// "do not call" everywhere it appears, across every sequence it belongs to —
+// independent of, and without overwriting, its sales-outcome status. Any
+// scheduled-but-not-yet-sent emails are cancelled immediately so nothing
+// slips out before the next cron run.
+export async function stopCrmCompanyOutreach(
+  companyId: string,
+  reason: CrmStoppedReason = 'manual'
+): Promise<CrmCompany> {
+  const { data, error } = await supabase
+    .from('crm_companies')
+    .update({
+      is_stopped: true,
+      stopped_at: new Date().toISOString(),
+      stopped_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', companyId)
+    .select('*')
+    .single();
+
+  if (error || !data) throw new Error(error?.message || 'Failed to stop company outreach');
+
+  await supabase
+    .from('crm_sequence_scheduled_emails')
+    .update({ status: 'cancelled', error_message: `Cancelled — ${data.company_name} was marked stopped` })
+    .eq('company_id', companyId)
+    .eq('status', 'scheduled');
+
+  return data as CrmCompany;
+}
+
+export async function resumeCrmCompanyOutreach(companyId: string): Promise<CrmCompany> {
+  const { data, error } = await supabase
+    .from('crm_companies')
+    .update({ is_stopped: false, stopped_at: null, stopped_reason: null, updated_at: new Date().toISOString() })
+    .eq('id', companyId)
+    .select('*')
+    .single();
+
+  if (error || !data) throw new Error(error?.message || 'Failed to resume company outreach');
   return data as CrmCompany;
 }
 
@@ -238,6 +338,7 @@ export interface CreateCrmActivityInput {
   subject?: string | null;
   summary: string;
   outcome?: string | null;
+  direction?: CrmActivityDirection;
 }
 
 export async function createCrmActivity(companyId: string, input: CreateCrmActivityInput): Promise<CrmActivity> {
@@ -256,6 +357,7 @@ export async function createCrmActivity(companyId: string, input: CreateCrmActiv
         subject: input.subject?.trim() || null,
         summary: input.summary.trim(),
         outcome: input.outcome?.trim() || null,
+        direction: input.direction || 'outbound',
       },
     ])
     .select('*')
@@ -559,12 +661,40 @@ export async function listCrmSequenceStepStatuses(sequenceId: string): Promise<C
   return (data ?? []) as CrmSequenceStepStatus[];
 }
 
+export type CrmCallOutcome = 'no_answer' | 'positive' | 'negative';
+
+export const CALL_OUTCOME_LABELS: Record<CrmCallOutcome, string> = {
+  no_answer: 'No answer',
+  positive: 'Positive',
+  negative: 'Negative',
+};
+
+export interface CompleteCrmSequenceStepOptions {
+  // Call outcome, captured via the "No answer" / "Positive" / "Negative"
+  // buttons. Free text notes from the Positive/Negative modal are stored as
+  // the activity summary, overriding the default call-script/email-body text.
+  outcome?: CrmCallOutcome | null;
+  note?: string | null;
+  // From the Negative outcome modal's "stop this contact" checkbox — stops
+  // outreach for the company across every sequence it belongs to.
+  stopContact?: boolean;
+  // Email steps only — used by the "Mark as sent" action, which logs the
+  // step as done without actually calling the Gmail API. Also flips the
+  // matching crm_sequence_scheduled_emails row to 'sent' so the cron never
+  // tries to send it for real afterwards.
+  markScheduledEmailSent?: boolean;
+}
+
 /**
  * Marks a sequence step complete for a specific contact. This is the single
  * action that both logs the real activity (source of truth) and updates the
- * tick state used purely for rendering the Sequences tab checkbox.
+ * tick state used to render completion in the Sequences tab.
  */
-export async function completeCrmSequenceStep(stepId: string, companyId: string): Promise<{
+export async function completeCrmSequenceStep(
+  stepId: string,
+  companyId: string,
+  options: CompleteCrmSequenceStepOptions = {}
+): Promise<{
   activity: CrmActivity;
   stepStatus: CrmSequenceStepStatus;
 }> {
@@ -579,12 +709,14 @@ export async function completeCrmSequenceStep(stepId: string, companyId: string)
   const stepRow = step as CrmSequenceStep;
   const companyRow = company as CrmCompany;
 
+  const note = options.note?.trim() || null;
   const summarySource = stepRow.step_type === 'email' ? stepRow.email_body : stepRow.call_script;
-  const summary = summarySource ? resolveTemplateVariables(summarySource, companyRow) : stepRow.title;
+  const summary = note || (summarySource ? resolveTemplateVariables(summarySource, companyRow) : stepRow.title);
   const subject =
     stepRow.step_type === 'email' && stepRow.email_subject
       ? resolveTemplateVariables(stepRow.email_subject, companyRow)
       : null;
+  const outcome = options.outcome ? CALL_OUTCOME_LABELS[options.outcome] : null;
 
   const { data: activity, error: activityError } = await supabase
     .from('crm_activities')
@@ -595,7 +727,7 @@ export async function completeCrmSequenceStep(stepId: string, companyId: string)
         activity_date: new Date().toISOString().slice(0, 10),
         subject,
         summary,
-        outcome: null,
+        outcome,
       },
     ])
     .select('*')
@@ -614,6 +746,19 @@ export async function completeCrmSequenceStep(stepId: string, companyId: string)
 
   if (stepStatusError || !stepStatus) {
     throw new Error(stepStatusError?.message || 'Failed to update step status');
+  }
+
+  if (options.markScheduledEmailSent && stepRow.step_type === 'email') {
+    await supabase
+      .from('crm_sequence_scheduled_emails')
+      .update({ status: 'sent', sent_at: new Date().toISOString(), error_message: null })
+      .eq('step_id', stepId)
+      .eq('company_id', companyId)
+      .in('status', ['scheduled', 'processing', 'failed', 'cancelled']);
+  }
+
+  if (options.stopContact) {
+    await stopCrmCompanyOutreach(companyId);
   }
 
   return { activity: activity as CrmActivity, stepStatus: stepStatus as CrmSequenceStepStatus };
@@ -649,6 +794,7 @@ export interface CrmScheduledEmail {
   attempts: number;
   error_message: string | null;
   gmail_message_id: string | null;
+  gmail_thread_id: string | null;
   sent_at: string | null;
   created_at: string;
   updated_at: string;
@@ -674,6 +820,30 @@ export async function listCrmScheduledEmailsForSequence(sequenceId: string): Pro
 
   if (error) throw new Error(error.message);
   return (data ?? []) as CrmScheduledEmail[];
+}
+
+export interface CrmSequenceEffectiveScheduleEntry {
+  step_id: string;
+  company_id: string;
+  effective_date: string | null;
+}
+
+/**
+ * Each contact's own actual date for every step in the sequence (call steps
+ * included, which have no scheduled-email row of their own) — derived from
+ * their anchor_date via crm_sequence_effective_schedule(). Used by the
+ * sequence detail UI so staggered enrollment shows correctly per company
+ * instead of one shared date for everyone.
+ */
+export async function listCrmSequenceEffectiveSchedule(
+  sequenceId: string
+): Promise<CrmSequenceEffectiveScheduleEntry[]> {
+  const { data, error } = await supabase.rpc('crm_sequence_effective_schedule', {
+    p_sequence_id: sequenceId,
+  });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CrmSequenceEffectiveScheduleEntry[];
 }
 
 /**
@@ -735,6 +905,17 @@ async function processCrmScheduledEmail(scheduledEmail: CrmScheduledEmail): Prom
   const stepRow = step as CrmSequenceStep;
   const companyRow = company as CrmCompany;
 
+  if (companyRow.is_stopped) {
+    await supabase
+      .from('crm_sequence_scheduled_emails')
+      .update({
+        status: 'cancelled',
+        error_message: `Skipped — ${companyRow.company_name} is marked stopped`,
+      })
+      .eq('id', scheduledEmail.id);
+    return;
+  }
+
   if (STATUSES_EXCLUDED_FROM_SENDING.includes(companyRow.status)) {
     await supabase
       .from('crm_sequence_scheduled_emails')
@@ -764,7 +945,7 @@ async function processCrmScheduledEmail(scheduledEmail: CrmScheduledEmail): Prom
   }
 
   try {
-    const { gmailMessageId } = await sendCrmSequenceEmailViaGmail({
+    const { gmailMessageId, gmailThreadId } = await sendCrmSequenceEmailViaGmail({
       toAddress: recipientEmail,
       toName: contactDisplayName(companyRow),
       subject,
@@ -798,6 +979,7 @@ async function processCrmScheduledEmail(scheduledEmail: CrmScheduledEmail): Prom
         status: 'sent',
         sent_at: nowIso,
         gmail_message_id: gmailMessageId,
+        gmail_thread_id: gmailThreadId,
         attempts: scheduledEmail.attempts + 1,
         error_message: null,
       })
@@ -881,4 +1063,111 @@ export async function processAllPendingCrmSequenceEmails(): Promise<{
   }
 
   return { processed: rows.length, sent, failed, errors };
+}
+
+// --------------------
+// Inbound reply detection (poll cron)
+// --------------------
+
+/**
+ * Cron entry point — polls the connected Gmail inbox for new mail since the
+ * last check, matches senders to CRM companies, logs a "reply received"
+ * activity for any match, and auto-stops that company's outreach across
+ * every sequence. Every message seen (matched or not) is recorded in
+ * crm_gmail_inbound_messages so re-running the cron never double-processes.
+ */
+export async function processInboundGmailMessages(): Promise<{
+  checked: number;
+  matched: number;
+  unmatched: number;
+  errors: string[];
+}> {
+  const account = await getActiveCrmGmailAccountRow();
+  if (!account) {
+    return { checked: 0, matched: 0, unmatched: 0, errors: [] };
+  }
+
+  const accessToken = await getValidAccessToken(account);
+  const errors: string[] = [];
+
+  if (!account.last_history_id) {
+    const historyId = await bootstrapGmailHistoryId(accessToken);
+    await updateGmailHistoryId(account.id, historyId);
+    return { checked: 0, matched: 0, unmatched: 0, errors: [] };
+  }
+
+  const history = await getGmailHistorySince(accessToken, account.last_history_id);
+
+  if (history.expired) {
+    // Gmail's history retention window (~1 week) has been exceeded since the
+    // last successful poll — re-bootstrap from "now" rather than erroring
+    // forever. Any mail that arrived in the gap will be missed, which is an
+    // acceptable trade-off for a cron that is expected to run every 5 minutes.
+    const historyId = await bootstrapGmailHistoryId(accessToken);
+    await updateGmailHistoryId(account.id, historyId);
+    return { checked: 0, matched: 0, unmatched: 0, errors: ['Gmail history expired — re-bootstrapped cursor'] };
+  }
+
+  let matched = 0;
+  let unmatched = 0;
+
+  for (const messageId of history.messageIds) {
+    try {
+      const { data: existing } = await supabase
+        .from('crm_gmail_inbound_messages')
+        .select('id')
+        .eq('gmail_message_id', messageId)
+        .maybeSingle();
+      if (existing) continue;
+
+      const message = await fetchInboundGmailMessage(accessToken, messageId);
+
+      // Never treat mail sent from our own connected mailbox as an inbound
+      // reply (e.g. a copy of an outbound send that also lands in INBOX).
+      if (message.fromAddress === account.email_address.toLowerCase()) continue;
+
+      const { data: company } = await supabase
+        .from('crm_companies')
+        .select('*')
+        .ilike('email', message.fromAddress)
+        .maybeSingle();
+
+      if (company) {
+        matched += 1;
+        await supabase.from('crm_activities').insert([
+          {
+            company_id: company.id,
+            activity_type: 'email',
+            activity_date: (message.receivedAt || new Date().toISOString()).slice(0, 10),
+            subject: message.subject,
+            summary: message.bodyText.slice(0, 5000) || '(no content)',
+            outcome: 'Replied — outreach auto-paused',
+            direction: 'inbound',
+          },
+        ]);
+        await stopCrmCompanyOutreach(company.id, 'inbound_reply');
+      } else {
+        unmatched += 1;
+      }
+
+      await supabase.from('crm_gmail_inbound_messages').insert([
+        {
+          gmail_message_id: message.gmailMessageId,
+          gmail_thread_id: message.gmailThreadId,
+          company_id: company?.id || null,
+          matched: Boolean(company),
+          from_address: message.fromAddress,
+          subject: message.subject,
+          body_text: message.bodyText,
+          received_at: message.receivedAt,
+        },
+      ]);
+    } catch (error: any) {
+      errors.push(`Message ${messageId}: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  await updateGmailHistoryId(account.id, history.latestHistoryId);
+
+  return { checked: history.messageIds.length, matched, unmatched, errors };
 }

@@ -21,10 +21,10 @@ import type { BillingAddon } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // Add-ons are plan-scoped: core add-ons extend the Pro plan; agency add-ons
-// extend the Agency plan. Agency capacity reuses the shared extra-space /
+// extend the Agency plan. Agency capacity reuses the shared extra-bot /
 // message-block counters, so the underlying quantities map to the same fields.
-const CORE_ADDON_CODES = new Set(["extra_space", "message_block", "white_label"]);
-const AGENCY_ADDON_CODES = new Set(["agency_extra_space", "agency_message_block"]);
+const CORE_ADDON_CODES = new Set(["extra_bot", "message_block", "white_label"]);
+const AGENCY_ADDON_CODES = new Set(["agency_extra_bot", "agency_message_block"]);
 
 export function SubscriptionStatus() {
   const { user } = useUser();
@@ -54,10 +54,10 @@ export function SubscriptionStatus() {
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [cancelAddonTarget, setCancelAddonTarget] = useState<BillingAddon | null>(null);
   const [addonQuantities, setAddonQuantities] = useState<Record<string, number>>({
-    extra_space: 1,
+    extra_bot: 1,
     message_block: 1,
     white_label: 1,
-    agency_extra_space: 1,
+    agency_extra_bot: 1,
     agency_message_block: 1,
   });
 
@@ -165,7 +165,7 @@ export function SubscriptionStatus() {
   const manageSubscriptionLabel = isCancellationScheduled ? "Reactivate" : "Manage plan";
 
   const getAddonQuantity = (addonCode: string) => {
-    if (addonCode === "extra_space" || addonCode === "agency_extra_space") return billingRecord?.addon_extra_spaces || 0;
+    if (addonCode === "extra_bot" || addonCode === "agency_extra_bot") return billingRecord?.addon_extra_bots || 0;
     if (addonCode === "message_block" || addonCode === "agency_message_block") return billingRecord?.addon_message_blocks || 0;
     if (addonCode === "white_label") return billingRecord?.addon_white_label ? 1 : 0;
     return 0;
@@ -199,8 +199,8 @@ export function SubscriptionStatus() {
     const isCancelling = Boolean(subState?.cancelAtPeriodEnd);
     const isQuantityAddon = addon.code !== "white_label";
     const currentValueLabel =
-      addon.code === "extra_space" || addon.code === "agency_extra_space"
-        ? `${billingRecord?.addon_extra_spaces || 0}`
+      addon.code === "extra_bot" || addon.code === "agency_extra_bot"
+        ? `${billingRecord?.addon_extra_bots || 0}`
         : addon.code === "message_block" || addon.code === "agency_message_block"
           ? `${billingRecord?.addon_message_blocks || 0}`
           : billingRecord?.addon_white_label ? "Enabled" : "Disabled";
@@ -514,16 +514,16 @@ export function SubscriptionStatus() {
                 isAgencyPlanActive ? "lg:grid-cols-5" : "md:grid-cols-4"
               )}>
                 <div>
-                  <p className="text-sm text-muted-foreground">Base spaces</p>
-                  <p className="text-lg font-semibold">{limits.baseSpaces}</p>
+                  <p className="text-sm text-muted-foreground">Base bots</p>
+                  <p className="text-lg font-semibold">{limits.baseBots}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Base messages</p>
                   <p className="text-lg font-semibold">{limits.baseMessages.toLocaleString("en-GB")}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total spaces</p>
-                  <p className="text-lg font-semibold">{limits.totalSpaces}</p>
+                  <p className="text-sm text-muted-foreground">Total bots</p>
+                  <p className="text-lg font-semibold">{limits.totalBots}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Message credits (this month)</p>
@@ -551,7 +551,7 @@ export function SubscriptionStatus() {
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
               Your {activePlan?.name || "current"} plan is scheduled to cancel on{" "}
               <span className="font-semibold">{formatDate(cancellationDate)}</span>. You'll keep full
-              access until then, after which you'll move to the Free plan (1 space, 25 messages) and
+              access until then, after which you'll move to the Free plan (1 bot, 25 messages) and
               any add-ons will be removed. Choose <span className="font-semibold">Reactivate</span> to
               stay on your current plan.
             </div>
@@ -562,11 +562,11 @@ export function SubscriptionStatus() {
               const isCurrent = currentPlan === plan.code;
 
               const positiveBullets: string[] = [
-                // Free grants one test space (its DB included_spaces is 0); show the
+                // Free grants one test bot (its DB included_bots is 0); show the
                 // real entitlement to match the pricing page ("One test tour").
                 plan.code === "free"
-                  ? "1 test space"
-                  : `${plan.included_spaces} included spaces`,
+                  ? "1 test bot"
+                  : `${plan.included_bots} included bots`,
                 `${plan.included_messages.toLocaleString("en-GB")} included messages`,
               ];
               const negativeBullets: string[] = [];
@@ -632,7 +632,7 @@ export function SubscriptionStatus() {
           <CardHeader>
             <CardTitle>Core add-ons</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Scale your Pro allowance with extra spaces, message blocks, and white-label branding.
+              Scale your Pro allowance with extra bots, message blocks, and white-label branding.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -650,7 +650,7 @@ export function SubscriptionStatus() {
           <CardHeader>
             <CardTitle>Agency add-ons</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Expand your shared agency pool with additional spaces and message credits. White-label branding is already included with your plan.
+              Expand your shared agency pool with additional bots and message credits. White-label branding is already included with your plan.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
