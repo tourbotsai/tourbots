@@ -1,3 +1,21 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/publish-scheduled-blogs",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/send-crm-sequence-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-crm-inbound-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-stripe-cancellation-state",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "trailingSlash": false
 }
