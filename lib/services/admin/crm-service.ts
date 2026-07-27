@@ -644,6 +644,64 @@ export async function createCrmSequenceStep(
   return data as CrmSequenceStep;
 }
 
+export type UpdateCrmSequenceStepInput = CreateCrmSequenceStepInput;
+
+/**
+ * Edits an existing step's content/schedule. Unlike create, this also has to
+ * deal with contacts already enrolled: any of this step's scheduled emails
+ * still in 'scheduled' status get their scheduled_for recomputed against the
+ * (possibly changed) date/time via crm_resync_scheduled_emails_for_step()
+ * (migration 108), and crm_sync_scheduled_emails_for_step() still runs
+ * afterwards to queue a row for any contact that doesn't have one yet (e.g.
+ * a step that was call-only and just became an email step).
+ */
+export async function updateCrmSequenceStep(
+  stepId: string,
+  input: UpdateCrmSequenceStepInput
+): Promise<CrmSequenceStep> {
+  if (!input.title || !input.title.trim()) {
+    throw new Error('Title is required');
+  }
+  if (input.step_type === 'email' && (!input.email_subject?.trim() || !input.email_body?.trim())) {
+    throw new Error('Email steps require a subject and body');
+  }
+  if (input.step_type === 'call' && !input.call_script?.trim()) {
+    throw new Error('Call steps require a script');
+  }
+
+  const { data, error } = await supabase
+    .from('crm_sequence_steps')
+    .update({
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      scheduled_date: input.scheduled_date || null,
+      scheduled_time: input.scheduled_time || null,
+      step_type: input.step_type,
+      email_subject: input.step_type === 'email' ? input.email_subject?.trim() || null : null,
+      email_body: input.step_type === 'email' ? input.email_body?.trim() || null : null,
+      call_script: input.step_type === 'call' ? input.call_script?.trim() || null : null,
+    })
+    .eq('id', stepId)
+    .select('*')
+    .single();
+
+  if (error || !data) throw new Error(error?.message || 'Failed to update sequence step');
+
+  if (data.step_type === 'email') {
+    const { error: resyncError } = await supabase.rpc('crm_resync_scheduled_emails_for_step', {
+      p_step_id: data.id,
+    });
+    if (resyncError) console.error('Failed to resync scheduled emails for edited step:', resyncError);
+
+    const { error: syncError } = await supabase.rpc('crm_sync_scheduled_emails_for_step', {
+      p_step_id: data.id,
+    });
+    if (syncError) console.error('Failed to queue scheduled emails for edited step:', syncError);
+  }
+
+  return data as CrmSequenceStep;
+}
+
 export async function listCrmSequenceStepStatuses(sequenceId: string): Promise<CrmSequenceStepStatus[]> {
   const { data: steps, error: stepsError } = await supabase
     .from('crm_sequence_steps')

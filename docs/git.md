@@ -1,4 +1,4 @@
 git checkout -b feat/tourbotsprodready
 git add .
-git commit -m "feat: implement tourbots crm fix google callback"
+git commit -m "feat: prod push vercel cron"
 git push -u origin feat/tourbotsprodready

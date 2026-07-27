@@ -15,6 +15,7 @@ import {
   Info,
   Mail,
   Pause,
+  Pencil,
   Phone,
   PhoneMissed,
   Play,
@@ -235,8 +236,9 @@ export default function CrmSequenceDetailPage() {
   const [outcomeStopContact, setOutcomeStopContact] = useState(false);
   const [isSavingOutcome, setIsSavingOutcome] = useState(false);
 
-  const [isAddStepModalOpen, setIsAddStepModalOpen] = useState(false);
+  const [isStepModalOpen, setIsStepModalOpen] = useState(false);
   const [isSavingStep, setIsSavingStep] = useState(false);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [stepTitle, setStepTitle] = useState("");
   const [stepDescription, setStepDescription] = useState("");
   const [stepScheduledDate, setStepScheduledDate] = useState("");
@@ -681,6 +683,7 @@ export default function CrmSequenceDetailPage() {
   };
 
   const resetStepForm = () => {
+    setEditingStepId(null);
     setStepTitle("");
     setStepDescription("");
     setStepScheduledDate("");
@@ -689,6 +692,24 @@ export default function CrmSequenceDetailPage() {
     setStepEmailSubject("");
     setStepEmailBody("");
     setStepCallScript("");
+  };
+
+  const openAddStepModal = () => {
+    resetStepForm();
+    setIsStepModalOpen(true);
+  };
+
+  const openEditStepModal = (step: CrmSequenceStep) => {
+    setEditingStepId(step.id);
+    setStepTitle(step.title);
+    setStepDescription(step.description || "");
+    setStepScheduledDate(step.scheduled_date || "");
+    setStepScheduledTime(step.scheduled_time ? step.scheduled_time.slice(0, 5) : DEFAULT_STEP_TIME[step.step_type]);
+    setStepType(step.step_type);
+    setStepEmailSubject(step.email_subject || "");
+    setStepEmailBody(step.email_body || "");
+    setStepCallScript(step.call_script || "");
+    setIsStepModalOpen(true);
   };
 
   const handleStepTypeChange = (value: "email" | "call") => {
@@ -712,7 +733,7 @@ export default function CrmSequenceDetailPage() {
     });
   };
 
-  const handleCreateStep = async () => {
+  const handleSaveStep = async () => {
     if (!stepTitle.trim()) {
       toast({ title: "Title required", description: "Please give the step a title.", variant: "destructive" });
       return;
@@ -730,31 +751,41 @@ export default function CrmSequenceDetailPage() {
       return;
     }
 
+    const isEditing = Boolean(editingStepId);
     setIsSavingStep(true);
     try {
-      const response = await fetch(`/api/admin/crm/sequences/${sequenceId}/steps`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: stepTitle,
-          description: stepDescription,
-          scheduled_date: stepScheduledDate || null,
-          scheduled_time: stepScheduledTime || null,
-          step_type: stepType,
-          email_subject: stepType === "email" ? stepEmailSubject : null,
-          email_body: stepType === "email" ? stepEmailBody : null,
-          call_script: stepType === "call" ? stepCallScript : null,
-        }),
-      });
+      const response = await fetch(
+        isEditing
+          ? `/api/admin/crm/sequences/${sequenceId}/steps/${editingStepId}`
+          : `/api/admin/crm/sequences/${sequenceId}/steps`,
+        {
+          method: isEditing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: stepTitle,
+            description: stepDescription,
+            scheduled_date: stepScheduledDate || null,
+            scheduled_time: stepScheduledTime || null,
+            step_type: stepType,
+            email_subject: stepType === "email" ? stepEmailSubject : null,
+            email_body: stepType === "email" ? stepEmailBody : null,
+            call_script: stepType === "call" ? stepCallScript : null,
+          }),
+        }
+      );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to create step");
+      if (!response.ok) throw new Error(data.error || `Failed to ${isEditing ? "update" : "create"} step`);
 
-      toast({ title: "Success", description: "Step added to sequence." });
+      toast({ title: "Success", description: isEditing ? "Step updated." : "Step added to sequence." });
       resetStepForm();
-      setIsAddStepModalOpen(false);
+      setIsStepModalOpen(false);
       await fetchSequence();
     } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to create step.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error.message || `Failed to ${isEditing ? "update" : "create"} step.`,
+        variant: "destructive",
+      });
     } finally {
       setIsSavingStep(false);
     }
@@ -1182,6 +1213,12 @@ export default function CrmSequenceDetailPage() {
                         {contact.company?.company_name || "Unknown company"}
                       </Link>
                       <span className="truncate text-xs text-slate-500">{contactName(contact.company)}</span>
+                      {contact.company?.email ? (
+                        <span className="inline-flex items-center gap-1 truncate text-xs text-slate-400">
+                          <Mail className="h-3 w-3" />
+                          {contact.company.email}
+                        </span>
+                      ) : null}
                       {contact.company?.phone ? (
                         <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                           <Phone className="h-3 w-3" />
@@ -1291,17 +1328,25 @@ export default function CrmSequenceDetailPage() {
                 </CardDescription>
               </div>
             </button>
-            <Dialog open={isAddStepModalOpen} onOpenChange={setIsAddStepModalOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Step
-                </Button>
-              </DialogTrigger>
+            <Dialog
+              open={isStepModalOpen}
+              onOpenChange={(open) => {
+                setIsStepModalOpen(open);
+                if (!open) resetStepForm();
+              }}
+            >
+              <Button onClick={openAddStepModal}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Step
+              </Button>
               <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[36rem]">
                 <DialogHeader>
-                  <DialogTitle>Add sequence step</DialogTitle>
-                  <DialogDescription>Steps are shown in the order they are created.</DialogDescription>
+                  <DialogTitle>{editingStepId ? "Edit sequence step" : "Add sequence step"}</DialogTitle>
+                  <DialogDescription>
+                    {editingStepId
+                      ? "Changes apply immediately, including to any emails already queued for this step."
+                      : "Steps are shown in the order they are created."}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2">
                   <div className="space-y-1.5">
@@ -1391,13 +1436,13 @@ export default function CrmSequenceDetailPage() {
                     variant="outline"
                     onClick={() => {
                       resetStepForm();
-                      setIsAddStepModalOpen(false);
+                      setIsStepModalOpen(false);
                     }}
                   >
                     Cancel
                   </Button>
-                  <Button type="button" onClick={handleCreateStep} disabled={isSavingStep}>
-                    {isSavingStep ? "Adding..." : "Add step"}
+                  <Button type="button" onClick={handleSaveStep} disabled={isSavingStep}>
+                    {isSavingStep ? (editingStepId ? "Saving..." : "Adding...") : editingStepId ? "Save changes" : "Add step"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1515,17 +1560,30 @@ export default function CrmSequenceDetailPage() {
 
                   {isExpanded ? (
                     <div className="border-t border-slate-100 p-4 pt-3">
-                      {step.description ? <p className="text-sm text-slate-600">{step.description}</p> : null}
-                      {step.step_type === "email" && step.email_subject ? (
-                        <p className="mt-2 text-sm text-slate-700">
-                          <span className="font-medium">Subject:</span> {step.email_subject}
-                        </p>
-                      ) : null}
-                      {(step.step_type === "email" ? step.email_body : step.call_script) ? (
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-500">
-                          {step.step_type === "email" ? step.email_body : step.call_script}
-                        </p>
-                      ) : null}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          {step.description ? <p className="text-sm text-slate-600">{step.description}</p> : null}
+                          {step.step_type === "email" && step.email_subject ? (
+                            <p className="mt-2 text-sm text-slate-700">
+                              <span className="font-medium">Subject:</span> {step.email_subject}
+                            </p>
+                          ) : null}
+                          {(step.step_type === "email" ? step.email_body : step.call_script) ? (
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-slate-500">
+                              {step.step_type === "email" ? step.email_body : step.call_script}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 shrink-0 px-2 text-xs"
+                          onClick={() => openEditStepModal(step)}
+                        >
+                          <Pencil className="mr-1 h-3 w-3" />
+                          Edit
+                        </Button>
+                      </div>
 
                       {contacts.length > 0 ? (
                         <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
