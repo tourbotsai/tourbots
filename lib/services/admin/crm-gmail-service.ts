@@ -333,6 +333,37 @@ function encodeMimeHeaderValue(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 }
 
+/**
+ * Gmail's messages.send API hard-wraps text/plain bodies at ~78 characters
+ * (RFC 2822 "SHOULD"), inserting real line breaks mid-sentence. That is why
+ * sequence emails were arriving with awkward breaks even when the stored
+ * template had continuous paragraphs. Sending a minimal HTML body avoids
+ * that rewrite — Gmail leaves HTML paragraphs alone — while staying free of
+ * tracking pixels / remote images for deliverability.
+ */
+function bodyTextToSimpleHtml(bodyText: string): string {
+  const escaped = bodyText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return escaped
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+/** RFC 2045: base64 output must be wrapped at ≤76 characters per line. */
+function foldBase64(value: string): string {
+  const chunks: string[] = [];
+  for (let i = 0; i < value.length; i += 76) {
+    chunks.push(value.slice(i, i + 76));
+  }
+  return chunks.join('\r\n');
+}
+
 function buildRawMimeMessage(input: {
   fromAddress: string;
   fromName?: string | null;
@@ -345,16 +376,17 @@ function buildRawMimeMessage(input: {
     ? `${encodeMimeHeaderValue(input.fromName)} <${input.fromAddress}>`
     : input.fromAddress;
   const toHeader = input.toName ? `${encodeMimeHeaderValue(input.toName)} <${input.toAddress}>` : input.toAddress;
+  const htmlBody = bodyTextToSimpleHtml(input.bodyText);
 
   const lines = [
     `From: ${fromHeader}`,
     `To: ${toHeader}`,
     `Subject: ${encodeMimeHeaderValue(input.subject)}`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Type: text/html; charset="UTF-8"',
     'Content-Transfer-Encoding: base64',
     '',
-    Buffer.from(input.bodyText, 'utf8').toString('base64'),
+    foldBase64(Buffer.from(htmlBody, 'utf8').toString('base64')),
   ];
 
   return lines.join('\r\n');
@@ -365,9 +397,12 @@ function base64UrlEncode(value: string): string {
 }
 
 /**
- * Sends one plain-text email through the connected Gmail account's own inbox —
+ * Sends one email through the connected Gmail account's own inbox —
  * it lands in that account's real Sent folder and any reply threads there
  * naturally, exactly like a normal email sent from Gmail's own UI.
+ *
+ * Body is sent as minimal HTML (paragraphs from blank-line-separated plain
+ * text) because Gmail's API hard-wraps text/plain at ~78 chars.
  */
 export async function sendCrmSequenceEmailViaGmail(input: {
   toAddress: string;
