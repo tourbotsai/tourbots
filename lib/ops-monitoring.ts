@@ -197,6 +197,7 @@ export async function finishCronRun(
   }
 
   if (input.status === 'partial' && (input.failedCount || 0) > 0) {
+    const errorsList = (input.errorDetails?.errors as unknown[] | undefined) || [];
     await notifyOpsAlert({
       level: 'warning',
       category: 'cron_partial_failure',
@@ -207,6 +208,10 @@ export async function finishCronRun(
         processedCount: input.processedCount || 0,
         successCount: input.successCount || 0,
         failedCount: input.failedCount || 0,
+        // Previously omitted entirely, so a "16/16 failed" alert gave no way
+        // to tell if it was one root cause or sixteen unrelated ones — a
+        // sample of the actual per-item error text at least answers that.
+        sampleErrors: errorsList.slice(0, 5),
       },
     });
   }

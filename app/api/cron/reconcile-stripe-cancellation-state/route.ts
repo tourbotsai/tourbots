@@ -179,6 +179,11 @@ async function reconcileStripeCancellationState() {
     } catch (reconcileError: any) {
       failed += 1;
       const reason = reconcileError?.message || String(reconcileError);
+      // Previously swallowed entirely — nothing showed this in Vercel logs,
+      // the alert email, or the cron_job_runs row, so a total failure like
+      // "16/16 failed" gave no way to diagnose the actual cause. Logging
+      // here at least surfaces it in Vercel's function logs immediately.
+      console.error(`reconcile-stripe-cancellation-state failed for ${stripeSubscriptionId}:`, reconcileError);
       errors.push(`${stripeSubscriptionId}: ${reason}`);
     }
   }
@@ -214,6 +219,9 @@ async function handleCron(request: NextRequest, method: 'GET' | 'POST', triggerS
       processedCount: result.processed,
       successCount: result.updated,
       failedCount: result.failed,
+      // Previously dropped — result.errors was collected but never forwarded,
+      // so even the cron_job_runs table had no record of why items failed.
+      errorDetails: result.errors.length > 0 ? { errors: result.errors } : undefined,
       route,
       method,
     });
