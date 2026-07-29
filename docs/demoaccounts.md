@@ -11,7 +11,7 @@ Desc: Apex VR Tours Agency main showcase
 Email: agency@tourbots.ai
 PW: Google Password
 Tour: Body Factory
-MockUp Website: https://apexvrtours.vercel.app/
+Website: https://apexvrtours.vercel.app/
 Portal Domain: VenueTours.ai
 
 ## TourBots AgencyClient
@@ -19,3 +19,9 @@ Desc: Apex VR Tours client
 Email: agencyclient@tourbots.ai
 PW: Google Password same as Agency
 Tour: Your Gym Lytham
+
+## MP Skin Test
+Desc: Testing MP Skin
+Email: mpskin@tourbots.ai
+PW: Google Password
+Tour: NG24 Fitness

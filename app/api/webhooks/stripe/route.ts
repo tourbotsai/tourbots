@@ -152,6 +152,17 @@ async function clearVenueAddonsForCancellation(
   venueId: string,
   stripeCustomerId?: string | null
 ) {
+  // Admin comps / demo overrides must not be wiped by a Stripe cancellation event.
+  const { data: billing } = await supabase
+    .from('venue_billing_records')
+    .select('billing_override_enabled')
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (billing?.billing_override_enabled) {
+    console.log(`Stripe webhook: skipping free-downgrade for override venue ${venueId}`);
+    return;
+  }
+
   const update: Record<string, unknown> = {
     plan_code: 'free',
     billing_status: 'cancelled',
