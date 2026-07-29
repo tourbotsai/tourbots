@@ -86,6 +86,19 @@ async function syncAddonSubscriptionCancellationForCustomer(
 }
 
 async function clearVenueAddonsForCancellation(venueId: string, stripeCustomerId?: string | null) {
+  // Never wipe admin-comped / manual-override venues down to free.
+  const { data: billing } = await supabase
+    .from('venue_billing_records')
+    .select('billing_override_enabled')
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (billing?.billing_override_enabled) {
+    console.log(
+      `reconcile-stripe-cancellation-state: skipping free-downgrade for override venue ${venueId}`
+    );
+    return;
+  }
+
   // The main plan (pro or agency) ended: downgrade to free and clear all add-ons.
   await supabase
     .from('venue_billing_records')
@@ -108,6 +121,17 @@ async function reconcileStripeCancellationState() {
   const stripe = getStripe();
   const nowIso = new Date().toISOString();
 
+  // Manual / admin-override venues (comps, demos) are not Stripe-managed —
+  // never retrieve or sync their subscriptions, even if a stale sub id remains.
+  const { data: overrideRows, error: overrideError } = await supabase
+    .from('venue_billing_records')
+    .select('venue_id')
+    .eq('billing_override_enabled', true);
+  if (overrideError) {
+    throw new Error(`Failed to fetch billing overrides for reconciliation: ${overrideError.message}`);
+  }
+  const overrideVenueIds = new Set((overrideRows || []).map((row: { venue_id: string }) => row.venue_id));
+
   const { data: subscriptions, error } = await supabase
     .from('subscriptions')
     .select('id, venue_id, stripe_subscription_id, stripe_customer_id, cancel_at_period_end, cancel_at, status')
@@ -121,10 +145,16 @@ async function reconcileStripeCancellationState() {
   let processed = 0;
   let updated = 0;
   let cancelledAndCleared = 0;
+  let skippedOverride = 0;
   let failed = 0;
   const errors: string[] = [];
 
   for (const row of subscriptions || []) {
+    if (overrideVenueIds.has(row.venue_id as string)) {
+      skippedOverride += 1;
+      continue;
+    }
+
     processed += 1;
     const stripeSubscriptionId = row.stripe_subscription_id as string | null;
     if (!stripeSubscriptionId) continue;
@@ -192,6 +222,7 @@ async function reconcileStripeCancellationState() {
     processed,
     updated,
     cancelledAndCleared,
+    skippedOverride,
     failed,
     errors: errors.slice(0, 20),
   };
