@@ -102,6 +102,10 @@ export function TourViewer({
   const currentViewingModelIdRef = useRef<string | null>(null);
   const lastAppliedSelectionRequestRef = useRef<string | null>(null);
   const lastTourLocationsSignalRef = useRef<number | undefined>(openTourLocationsManagerSignal);
+  // Keep the latest Location selection without putting it in the fetchTour effect deps —
+  // otherwise every dropdown change reloads tours and snaps back to the first primary.
+  const selectedTourIdOverrideRef = useRef<string | null | undefined>(selectedTourIdOverride);
+  selectedTourIdOverrideRef.current = selectedTourIdOverride;
   const activeVenueId = forcedVenueId || user?.venue?.id;
   const activeVenueName = forcedVenueName || user?.venue?.name || "Venue";
   const isAgencyPortal = isAgencyPortalPath();
@@ -225,12 +229,14 @@ export function TourViewer({
       let tourData: Tour | null = null;
       let allToursData: Tour[] = [];
 
+      const preferredTourId = selectedTourIdOverrideRef.current || null;
+
       if (isAgencyPortalPath()) {
         // Load THIS share's tour, not the venue's primary. Without the tourId the
         // endpoint defaults to the primary tour, so every client portal would show
         // the agency's first tour instead of the client's own.
-        const tourQuery = selectedTourIdOverride
-          ? `?tourId=${encodeURIComponent(selectedTourIdOverride)}`
+        const tourQuery = preferredTourId
+          ? `?tourId=${encodeURIComponent(preferredTourId)}`
           : "";
         const response = await fetch(`/api/public/tours/${encodeURIComponent(activeVenueId)}${tourQuery}`, {
           credentials: "include",
@@ -250,7 +256,12 @@ export function TourViewer({
           throw new Error(payload?.error || "Failed to load tours");
         }
         allToursData = Array.isArray(payload) ? (payload as Tour[]) : [];
+        // Honour an existing Location selection; only fall back to the first primary
+        // when seeding the page for the first time.
         tourData =
+          (preferredTourId
+            ? allToursData.find((row) => row.id === preferredTourId)
+            : undefined) ||
           allToursData.find((row) => row.tour_type === "primary" || !row.tour_type) ||
           allToursData[0] ||
           null;
@@ -266,8 +277,9 @@ export function TourViewer({
       onToursUpdated?.(allToursData || []);
       setCustomisation(customisationData);
       
-      // Notify parent of tour change
-      if (tourData && onTourChange) {
+      // Seed parent selection only when none exists yet. Never overwrite an explicit
+      // Location dropdown pick — that caused the flip-back to the first tour.
+      if (tourData && onTourChange && !preferredTourId) {
         onTourChange(resolvedLocationId);
       }
       
@@ -286,7 +298,9 @@ export function TourViewer({
 
   useEffect(() => {
     fetchTour();
-  }, [activeVenueId, selectedTourIdOverride, resolveLocationIdFromList, fetchTourCustomisation, getAuthHeaders]);
+    // Intentionally omit selectedTourIdOverride — location switches are handled by
+    // the dedicated selection effect below via handleSwitchModel.
+  }, [activeVenueId, resolveLocationIdFromList, fetchTourCustomisation, getAuthHeaders]);
 
   useEffect(() => {
     // Embedded agency sessions are cookie-authenticated and do not use app billing endpoints.
