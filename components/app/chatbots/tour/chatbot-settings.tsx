@@ -272,8 +272,10 @@ export function TourChatbotSettings({ selectedTourId, chatbotConfigId, visibleSe
 
     try {
       const venueId = user?.venue?.id || '';
+      // Bucket is private; the view route requires a Firebase bearer token to mint a signed URL.
       const response = await fetch(
-        `/api/app/chatbots/documents/view?documentId=${encodeURIComponent(documentId)}&venueId=${encodeURIComponent(venueId)}`
+        `/api/app/chatbots/documents/view?documentId=${encodeURIComponent(documentId)}&venueId=${encodeURIComponent(venueId)}`,
+        { headers: await getAuthHeaders() }
       );
       const data = await response.json();
       if (!response.ok || !data?.url) {
