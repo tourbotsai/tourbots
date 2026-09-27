@@ -71,6 +71,20 @@ export function NestedTourShell({ venueId, canonicalOrigin, searchParams }: Nest
     setSrc(buildInnerSrc(venueId, canonicalOrigin, searchParams));
   }, [venueId, canonicalOrigin, searchParams]);
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window.parent) return;
+      const data = event.data;
+      if (!data || data.source !== 'tourbots-host') return;
+      if (data.type !== 'tourbots:navigate' && data.type !== 'tourbots:handoff') return;
+      const frame = document.querySelector('iframe');
+      if (!frame?.contentWindow) return;
+      frame.contentWindow.postMessage(data, canonicalOrigin);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [canonicalOrigin]);
+
   return (
     <iframe
       src={src}

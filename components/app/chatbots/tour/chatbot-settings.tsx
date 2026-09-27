@@ -20,6 +20,7 @@ import { ChatbotTriggers } from "./chatbot-triggers";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuthHeaders } from "@/hooks/useAuthHeaders";
 import { NoTourEmptyState } from "../no-tour-empty-state";
+import { ChatbotSiteGuide } from "./chatbot-site-guide";
 
 interface TourChatbotSettingsProps {
   selectedTourId?: string | null;
@@ -649,6 +650,10 @@ export function TourChatbotSettings({ selectedTourId, chatbotConfigId, visibleSe
 
       {showTriggersSection ? (
         <ChatbotTriggers chatbotConfigId={tourConfig?.id} chatbotType={isWebsiteMode ? 'website' : 'tour'} />
+      ) : null}
+
+      {isWebsiteMode && tourConfig?.id ? (
+        <ChatbotSiteGuide chatbotConfigId={tourConfig.id} />
       ) : null}
 
       {tourConfig?.id ? (

@@ -22,6 +22,15 @@ import {
 } from '@/lib/chatbot-custom-action-service';
 import { TOUR_CHATBOT_MODEL } from '@/lib/constants/ai-models';
 import {
+  SITE_GUIDE_TOOL_NAMES,
+  buildSiteGuidePrompt,
+  buildSiteGuideTools,
+  interpretSiteGuideTool,
+  isSiteGuideActive,
+  matchCurrentPage,
+} from '@/lib/site-guide';
+import { loadWebsiteSiteGuide } from '@/lib/site-guide-service';
+import {
   verifyPublicEmbedRequest,
 } from '@/lib/public-embed-token';
 import { getClientIp } from '@/lib/request-client-ip';
@@ -723,6 +732,15 @@ When a user asks to see an area that's in a DIFFERENT model than their current l
       activeCustomActions.map((action) => [action.action_key, action])
     );
 
+    const siteGuide = isWebsiteChatbotRequest && chatbotConfigId
+      ? await loadWebsiteSiteGuide(venueId, chatbotConfigId)
+      : null;
+    const siteGuideActive = isSiteGuideActive(siteGuide);
+    const currentGuidePage = siteGuideActive ? matchCurrentPage(siteGuide, typeof pageUrl === 'string' ? pageUrl : null) : null;
+    const siteGuidePrompt = siteGuideActive
+      ? buildSiteGuidePrompt(siteGuide, currentGuidePage, venueId)
+      : '';
+
     const hasOpenUrlTrigger = activeTriggers.some(
       (t) => t.action_type === 'open_url' && Boolean(t.action_url)
     );
@@ -736,7 +754,9 @@ You are specifically helping website visitors with questions about the business.
 - Answer questions about the business, its services, and what it offers
 - Explain opening hours, pricing, policies, and how to get in touch
 - Help visitors understand what the business does and how it can help them
-- There is no virtual tour attached to this chatbot, so never offer to navigate, move, or switch any tour view`
+${siteGuideActive
+  ? '- When a visitor wants to see another part of the website, or a tour listed on one of its pages, use the site guide tools. Only move a tour when the catalogue says the current page has one.'
+  : '- There is no virtual tour attached to this chatbot, so never offer to navigate, move, or switch any tour view'}`
       : `You are the AI assistant for ${venue.name}. You are in their virtual tour speaking to prospective members exploring their virtual tour.
 
 You are specifically helping users navigate and understand our virtual tour. Your primary role is to:
@@ -758,7 +778,7 @@ ${config.guardrails_enabled && config.guardrail_prompt ?
 
 ${navigationEnabled ? multiModelContext : ''}
 
-${isWebsiteChatbotRequest ? '' : (navigationEnabled ? tourPointsContext : 'TOUR NAVIGATION: Disabled for this embed. You cannot move, navigate, or switch the tour view. Do NOT offer to take the user to areas or switch locations; simply answer their questions.')}
+${isWebsiteChatbotRequest ? (siteGuidePrompt ? `\n\n${siteGuidePrompt}` : '') : (navigationEnabled ? tourPointsContext : 'TOUR NAVIGATION: Disabled for this embed. You cannot move, navigate, or switch the tour view. Do NOT offer to take the user to areas or switch locations; simply answer their questions.')}
 ${triggerInstructions}${leadFormInstructions}${customActionInstructions}
 DEVICE CONTEXT:
 The visitor is on a ${deviceType === 'unknown' ? 'desktop' : deviceType} device.${deviceType === 'mobile' ? ' Bear this in mind and adjust your answer length accordingly — keep replies concise unless directed otherwise.' : ''}
@@ -828,6 +848,10 @@ You also have a file search tool covering the venue's uploaded documents. If the
     // Build tools array directly in responseArgs to avoid serialization issues
     const tools = [];
     
+    if (siteGuideActive && siteGuide) {
+      tools.push(...buildSiteGuideTools(siteGuide, currentGuidePage));
+    }
+
     if (config.openai_vector_store_id) {
       tools.push({
         type: 'file_search',
@@ -1130,7 +1154,40 @@ You also have a file search tool covering the venue's uploaded documents. If the
               for (const functionCall of functionCalls) {
                 if (!functionCall.call_id) continue;
 
-                if (functionCall.name === 'navigate_to_area') {
+                let siteGuideResult: ReturnType<typeof interpretSiteGuideTool> = null;
+                if (siteGuideActive && siteGuide && (SITE_GUIDE_TOOL_NAMES as readonly string[]).includes(functionCall.name)) {
+                  try {
+                    siteGuideResult = interpretSiteGuideTool(
+                      functionCall.name,
+                      JSON.parse(functionCall.arguments || '{}'),
+                      siteGuide,
+                      currentGuidePage,
+                      venueId,
+                    );
+                  } catch (error) {
+                    console.error('Error processing site guide function:', error);
+                    siteGuideResult = { error: 'Could not read the site guide action' };
+                  }
+                }
+
+                if (siteGuideResult) {
+                  if ('action' in siteGuideResult) {
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify(siteGuideResult.action)}\n\n`)
+                    );
+                    functionOutputs.push({
+                      type: 'function_call_output',
+                      call_id: functionCall.call_id,
+                      output: JSON.stringify(siteGuideResult.output),
+                    });
+                  } else {
+                    functionOutputs.push({
+                      type: 'function_call_output',
+                      call_id: functionCall.call_id,
+                      output: JSON.stringify({ status: 'error', error: siteGuideResult.error }),
+                    });
+                  }
+                } else if (functionCall.name === 'navigate_to_area') {
                   try {
                     const parsedArgs = JSON.parse(functionCall.arguments || '{}');
                     controller.enqueue(
@@ -1342,7 +1399,9 @@ You also have a file search tool covering the venue's uploaded documents. If the
               // we suppress the continuation's text to avoid a redundant double reply, while
               // still submitting the output to keep the conversation state valid.
               const hasTourAction = functionCalls.some(
-                (fc) => fc.name === 'navigate_to_area' || fc.name === 'switch_tour_model'
+                (fc) => fc.name === 'navigate_to_area'
+                  || fc.name === 'switch_tour_model'
+                  || (SITE_GUIDE_TOOL_NAMES as readonly string[]).includes(fc.name)
               );
               const hasQueryCustomAction = functionCalls.some((fc) => {
                 if (fc.name !== 'run_custom_action') return false;

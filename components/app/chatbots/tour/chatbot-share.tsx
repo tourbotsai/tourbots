@@ -192,7 +192,7 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId, chatbotCo
                     Tour navigation
                   </Label>
                   <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    Website chatbots have no virtual tour to navigate, so this assistant is question-and-answer only.
+                    This switch stays off. A website chatbot does not drive a raw Matterport player. When you add a site guide, the advanced snippet can still open your pages and move a TourBots tour embed.
                   </p>
                 </div>
                 <Switch id="enable-tour-navigation" checked={false} disabled />
@@ -221,7 +221,9 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId, chatbotCo
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Simple Embed (Recommended)</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                A self-contained chatbot you can drop onto any web page.
+                {isWebsiteMode
+                  ? "A self-contained chatbot for questions and answers. It cannot move the host page. Use the advanced snippet below when you want the site guide."
+                  : "A self-contained chatbot you can drop onto any web page."}
               </p>
               <Textarea
                 value={embedCode.simple}
@@ -259,7 +261,7 @@ export function TourChatbotShare({ onSwitchToSettings, selectedTourId, chatbotCo
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Advanced Embed</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {isWebsiteMode
-                  ? "A floating chat bubble for your website. Use this for more control over placement and styling."
+                  ? "A floating chat bubble for your website. Paste this on every page you want the assistant to guide. It can open the pages in your site guide, scroll to a section, and move a TourBots tour embed on that page."
                   : "A floating chat bubble that can drive the virtual tour. Use this when the chatbot sits on the same page as your tour."}
               </p>
               <Textarea
