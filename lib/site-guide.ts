@@ -477,3 +477,24 @@ export const SITE_GUIDE_TOOL_NAMES = [
   'guide_navigate',
   'handoff_tour_chat',
 ] as const;
+
+/**
+ * The host script repeats a handoff until the tour frame is listening. That
+ * window is about twelve seconds. A second delivery of the same question
+ * inside it would send the question again.
+ */
+export const SITE_GUIDE_HANDOFF_DEDUPE_MS = 15_000;
+
+export function siteGuideHandoffDeliveryKey(prompt: string, autoSend: boolean): string {
+  return `${autoSend ? 'send' : 'fill'}:${prompt}`;
+}
+
+export function shouldDeliverSiteGuideHandoff(
+  previous: { key: string; at: number } | null,
+  key: string,
+  now: number,
+  windowMs = SITE_GUIDE_HANDOFF_DEDUPE_MS,
+): boolean {
+  if (!previous || previous.key !== key) return true;
+  return now - previous.at >= windowMs;
+}

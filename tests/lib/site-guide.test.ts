@@ -3,6 +3,8 @@ import {
   buildSiteGuideTools,
   interpretSiteGuideTool,
   matchCurrentPage,
+  shouldDeliverSiteGuideHandoff,
+  siteGuideHandoffDeliveryKey,
   normaliseCataloguePath,
   normaliseSiteOrigin,
   pageUrlMatches,
@@ -147,5 +149,15 @@ describe('site guide catalogue', () => {
       prompt: 'Where is the armour?',
       autoSend: true,
     });
+  });
+
+  it('ignores a repeated handoff while the host script is still retrying', () => {
+    const key = siteGuideHandoffDeliveryKey('What is this space used for?', true);
+    const first = { key, at: 1_000 };
+    expect(shouldDeliverSiteGuideHandoff(null, key, 1_000)).toBe(true);
+    expect(shouldDeliverSiteGuideHandoff(first, key, 1_500)).toBe(false);
+    expect(shouldDeliverSiteGuideHandoff(first, key, 12_000)).toBe(false);
+    expect(shouldDeliverSiteGuideHandoff(first, key, 16_000)).toBe(true);
+    expect(shouldDeliverSiteGuideHandoff(first, siteGuideHandoffDeliveryKey('A different question', true), 2_000)).toBe(true);
   });
 });

@@ -7,6 +7,7 @@ import { MatterportSDKWrapper } from '@/components/matterport/matterport-sdk-wra
 import { TourMenuOverlay } from '@/components/embed/tour-menu-overlay';
 import { getTourEmbedParentTrackingContext } from '@/lib/tour-embed-parent-context';
 import { normaliseMatterportPoseForTracking } from '@/lib/matterport-pose-normalise';
+import { shouldDeliverSiteGuideHandoff, siteGuideHandoffDeliveryKey } from '@/lib/site-guide';
 
 interface TourEmbedClientProps {
   tour: Tour;
@@ -42,6 +43,7 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
   const locationScopeTourId = tour.parent_tour_id || tour.id;
 
   const poseRef = useRef<any>(null);
+  const lastHandoffDeliveryRef = useRef<{ key: string; at: number } | null>(null);
   const lastSweepSidForMoveRef = useRef<string | null>(null);
   const moveTrackingGenerationRef = useRef(0);
   /** True after the user focuses the tour iframe; skips autoplay/guided sweep changes before that. */
@@ -89,10 +91,15 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
       }
       if (data.type === 'tourbots:handoff') {
         const prompt = typeof data.prompt === 'string' ? data.prompt.trim() : '';
+        const autoSend = data.autoSend === true;
+        const key = siteGuideHandoffDeliveryKey(prompt, autoSend);
+        const now = Date.now();
+        if (!shouldDeliverSiteGuideHandoff(lastHandoffDeliveryRef.current, key, now)) return;
+        lastHandoffDeliveryRef.current = { key, at: now };
         setIsChatExpanded(true);
         if (prompt) {
           setChatExternalPrompt(prompt);
-          setChatExternalAutoSend(data.autoSend === true);
+          setChatExternalAutoSend(autoSend);
         }
       }
     };
