@@ -63,6 +63,10 @@ export function ChatbotEmbedClient({
   // delivered to the host page (postMessage), where chat.js's bridge drives the
   // tour. When navigation is disabled, emit nothing.
   const navTarget: 'parent' | 'none' = navigationEnabled ? 'parent' : 'none';
+  // Site guide (open a listed page, scroll, load our tour embed) is carried by
+  // chat.js. It is separate from Matterport navigation, which stays off for
+  // website bots until a listed tour is actually on the page.
+  const siteGuideTarget: 'parent' | 'none' = chatbotConfigId && mode === 'embed' ? 'parent' : 'none';
 
   // Receive the host viewport from chat.js (posted on load + resize) and request it
   // on mount, so our responsive/fullscreen decisions reflect the real host page.
@@ -271,6 +275,7 @@ export function ChatbotEmbedClient({
         embedToken={embedToken || undefined}
         forcePublic
         navTarget={navTarget}
+        siteGuideTarget={siteGuideTarget}
         hostViewportWidth={mode === 'embed' ? resolvedHostWidth : null}
         hostViewportHeight={mode === 'embed' ? resolvedHostHeight : null}
       />

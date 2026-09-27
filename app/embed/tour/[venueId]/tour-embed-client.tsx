@@ -70,6 +70,36 @@ export function TourEmbedClient({ tour, venue, customisation, menu, chatbotConfi
     lastSweepSidForMoveRef.current = typeof sid === "string" ? sid : null;
   }, []);
 
+  // The website site-guide script posts into this frame to move the tour or
+  // open this embed's own chatbot. Only the parent window is accepted.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window.parent) return;
+      const data = event.data;
+      if (!data || data.source !== 'tourbots-host') return;
+      if (data.type === 'tourbots:navigate' && data.sweep_id) {
+        window.dispatchEvent(new CustomEvent('matterport_navigate', {
+          detail: {
+            sweep_id: data.sweep_id,
+            position: data.position,
+            rotation: data.rotation,
+            area_name: data.area_name,
+          },
+        }));
+      }
+      if (data.type === 'tourbots:handoff') {
+        const prompt = typeof data.prompt === 'string' ? data.prompt.trim() : '';
+        setIsChatExpanded(true);
+        if (prompt) {
+          setChatExternalPrompt(prompt);
+          setChatExternalAutoSend(data.autoSend === true);
+        }
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   // Listen for model switch events from AI chatbot
   useEffect(() => {
     const handleModelSwitch = (event: CustomEvent) => {

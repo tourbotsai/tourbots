@@ -12,6 +12,8 @@
  *   1. mount + size the iframe,
  *   2. translate navigation messages from the iframe into Matterport SDK calls,
  *   3. relay the tour's current sweep back to the iframe for move analytics.
+ *   4. for a website site guide, open a listed same-site page, scroll to a
+ *      section, and drive a TourBots tour embed on the page.
  */
 (function () {
   'use strict';
@@ -249,6 +251,262 @@
     }
   }
 
+  var PENDING_KEY = 'tourbots-site-guide-pending';
+
+  function sameSiteUrl(path) {
+    try {
+      var url = new URL(path, window.location.origin);
+      if (url.origin !== window.location.origin) return null;
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+      return url;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function loosePath(url) {
+    var path = url.pathname || '/';
+    if (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
+    return path + url.search;
+  }
+
+  function pathsMatch(path) {
+    var target = sameSiteUrl(path);
+    if (!target) return false;
+    if (loosePath(target) !== loosePath(window.location)) return false;
+    if (target.hash && window.location.hash !== target.hash) return false;
+    return true;
+  }
+
+  function findTourFrame(selector) {
+    if (selector) {
+      try {
+        var selected = document.querySelector(selector);
+        if (selected && selected.tagName === 'IFRAME') return selected;
+      } catch (e) {
+        /* invalid selector */
+      }
+    }
+    var frames = document.getElementsByTagName('iframe');
+    for (var i = 0; i < frames.length; i++) {
+      var src = frames[i].src || '';
+      if (src.indexOf('/embed/tour/') !== -1) return frames[i];
+    }
+    return null;
+  }
+
+  function tourFrameOrigin(frame) {
+    try {
+      return new URL(frame.src).origin;
+    } catch (e) {
+      return baseOrigin;
+    }
+  }
+
+  function postToTourFrame(frame, message) {
+    if (!frame || !frame.contentWindow) return;
+    try {
+      frame.contentWindow.postMessage(message, tourFrameOrigin(frame));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function scrollToAnchor(anchor) {
+    if (!anchor) return;
+    var el = null;
+    try {
+      if (anchor.charAt(0) === '.' || anchor.charAt(0) === '[') {
+        el = document.querySelector(anchor);
+      } else {
+        el = document.getElementById(anchor.replace(/^#/, '')) || document.querySelector('#' + anchor.replace(/^#/, ''));
+      }
+    } catch (e) {
+      el = null;
+    }
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function allowedEmbedPath(embedPath) {
+    try {
+      var url = new URL(embedPath, baseOrigin);
+      if (url.origin !== baseOrigin) return null;
+      if (url.pathname.indexOf('/embed/tour/') !== 0) return null;
+      return url.toString();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function loadTourFrame(step) {
+    return new Promise(function (resolve) {
+      var frame = findTourFrame(step.selector);
+      var nextSrc = allowedEmbedPath(step.embedPath);
+      if (!frame || !nextSrc) {
+        resolve();
+        return;
+      }
+      var current = '';
+      try {
+        current = new URL(frame.src).pathname + new URL(frame.src).search;
+      } catch (e) {
+        current = '';
+      }
+      var next = '';
+      try {
+        var parsed = new URL(nextSrc);
+        next = parsed.pathname + parsed.search;
+      } catch (e2) {
+        resolve();
+        return;
+      }
+      if (current === next) {
+        resolve();
+        return;
+      }
+      var done = function () {
+        frame.removeEventListener('load', done);
+        resolve();
+      };
+      frame.addEventListener('load', done);
+      frame.src = nextSrc;
+      window.setTimeout(resolve, 8000);
+    });
+  }
+
+  function retryTourMessage(selector, message) {
+    var attempts = 0;
+    var timer = window.setInterval(function () {
+      attempts++;
+      var frame = findTourFrame(selector);
+      if (frame) postToTourFrame(frame, message);
+      if (attempts > 24) window.clearInterval(timer);
+    }, 500);
+  }
+
+  function runStep(step) {
+    if (!step || !step.action) return Promise.resolve();
+    if (step.action === 'scroll') {
+      scrollToAnchor(step.anchor);
+      return Promise.resolve();
+    }
+    if (step.action === 'load_tour') return loadTourFrame(step);
+    if (step.action === 'navigate') {
+      retryTourMessage(step.selector, {
+        source: 'tourbots-host',
+        type: 'tourbots:navigate',
+        sweep_id: step.sweep_id,
+        position: step.position,
+        rotation: step.rotation,
+        area_name: step.area_name,
+      });
+      return Promise.resolve();
+    }
+    if (step.action === 'handoff') {
+      retryTourMessage(step.selector, {
+        source: 'tourbots-host',
+        type: 'tourbots:handoff',
+        prompt: step.prompt || '',
+        autoSend: step.autoSend === true,
+      });
+      return Promise.resolve();
+    }
+    return Promise.resolve();
+  }
+
+  function runSteps(steps) {
+    var chain = Promise.resolve();
+    (steps || []).forEach(function (step) {
+      chain = chain.then(function () {
+        return runStep(step);
+      });
+    });
+    return chain;
+  }
+
+  function rememberPending(path, steps) {
+    try {
+      if (!steps || !steps.length) {
+        sessionStorage.removeItem(PENDING_KEY);
+        return;
+      }
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify({ path: path, steps: steps }));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function consumePending() {
+    var raw;
+    try {
+      raw = sessionStorage.getItem(PENDING_KEY);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+    var pending;
+    try {
+      pending = JSON.parse(raw);
+    } catch (e2) {
+      sessionStorage.removeItem(PENDING_KEY);
+      return;
+    }
+    if (!pending || !pending.path || !pathsMatch(pending.path)) return;
+    try {
+      sessionStorage.removeItem(PENDING_KEY);
+    } catch (e3) {
+      /* ignore */
+    }
+    runSteps(pending.steps);
+  }
+
+  function handleSiteGuide(data) {
+    if (data.action === 'open_page') {
+      var destination = sameSiteUrl(data.path);
+      if (!destination) return;
+      rememberPending(data.path, data.pending);
+      if (!pathsMatch(data.path)) {
+        try {
+          window.location.assign(destination.toString());
+        } catch (e) {
+          /* navigation can be blocked by the host page */
+        }
+      } else {
+        consumePending();
+      }
+      return;
+    }
+    if (data.action === 'scroll') {
+      scrollToAnchor(data.anchor);
+      return;
+    }
+    if (data.action === 'load_tour') {
+      loadTourFrame({ embedPath: data.embedPath, selector: data.selector });
+      return;
+    }
+    if (data.action === 'navigate') {
+      runStep({
+        action: 'navigate',
+        selector: data.selector,
+        sweep_id: data.sweep_id,
+        position: data.position,
+        rotation: data.rotation,
+        area_name: data.area_name,
+      });
+      return;
+    }
+    if (data.action === 'handoff') {
+      runStep({
+        action: 'handoff',
+        selector: data.selector,
+        prompt: data.prompt,
+        autoSend: data.autoSend,
+      });
+    }
+  }
+
   function postToIframe(message) {
     try {
       if (iframe.contentWindow) {
@@ -258,6 +516,8 @@
       /* ignore */
     }
   }
+
+  consumePending();
 
   if (navigationEnabled) {
     var attempts = 0;
@@ -282,6 +542,9 @@
     if (!data || data.source !== 'tourbots' || typeof data.type !== 'string') return;
 
     switch (data.type) {
+      case 'site_guide':
+        handleSiteGuide(data);
+        break;
       case 'tourbots:request-viewport':
         postViewport();
         break;

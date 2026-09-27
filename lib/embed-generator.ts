@@ -351,10 +351,9 @@ export function generateChatbotEmbed(venueId: string, options: ChatbotEmbedOptio
       ? `${window.location.protocol}//${window.location.host}`
       : 'https://tourbots.ai');
 
-  // Navigation defaults ON for tour chatbots. Website chatbots have no
-  // Matterport tour, so navigation is always forced off regardless of the
-  // requested option. Serialised into both snippets so the embed page and the
-  // chatbot route gate the navigation tools accordingly.
+  // Navigation defaults ON for tour chatbots. Website chatbots do not drive a
+  // raw Matterport player, so data-nav stays off. A website site guide, when
+  // the operator has listed pages, is carried by chat.js regardless of data-nav.
   const navigationEnabled = isWebsiteChatbot ? false : (options.navigationEnabled ?? true);
   const navParam = navigationEnabled ? 'on' : 'off';
 
@@ -374,8 +373,9 @@ export function generateChatbotEmbed(venueId: string, options: ChatbotEmbedOptio
 
   // Advanced = the chat.js loader. Injects a floating chat bubble and, when
   // navigation is on and a Matterport tour is present, installs the bridge that
-  // lets the AI drive the tour. This is also the snippet to paste into an MPskin
-  // "extend-HTML" block.
+  // lets the AI drive the tour. For a website chatbot it also carries the site
+  // guide (open a listed page, scroll, and drive a TourBots tour embed). This
+  // is also the snippet to paste into an MPskin "extend-HTML" block.
   const advancedEmbed = `<script
   src="${baseUrl}/embed/chat.js"
   data-venue-id="${venueId}"${!isWebsiteChatbot && options.tourId ? `\n  data-tour-id="${options.tourId}"` : ''}${isWebsiteChatbot && options.chatbotConfigId ? `\n  data-chatbot-config-id="${options.chatbotConfigId}"` : ''}

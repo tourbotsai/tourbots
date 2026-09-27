@@ -99,6 +99,10 @@ interface TourChatWidgetProps {
   //   injected onto a third-party page (e.g. MPskin) where a bridge drives the SDK.
   // - 'none': navigation is disabled for this embed; no events are emitted.
   navTarget?: 'event' | 'parent' | 'none';
+  // Website site guide actions (open a page, scroll, load our tour embed) are
+  // posted to the host page. 'parent' is the floating chat.js embed. 'none'
+  // keeps playground and plain iframes from trying to move a page.
+  siteGuideTarget?: 'parent' | 'none';
   // When the widget renders inside a small floating iframe (the standalone chatbot
   // embed), its own `window.innerWidth` is the iframe's width, not the host page's,
   // so responsive/mobile detection would always be wrong. The host loader (chat.js)
@@ -131,6 +135,7 @@ export function TourChatWidget({
   initialConfig,
   forcePublic = false,
   navTarget = 'event',
+  siteGuideTarget = 'none',
   hostViewportWidth = null,
   hostViewportHeight = null
 }: TourChatWidgetProps) {
@@ -153,6 +158,10 @@ export function TourChatWidget({
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasStreamedContent, setHasStreamedContent] = useState(false);
+  const websiteStorageKey = chatbotConfigId
+    ? `tourbots-website-chat:${venueId}:${chatbotConfigId}`
+    : null;
+  const [websiteSessionReady, setWebsiteSessionReady] = useState(!chatbotConfigId);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [previousResponseId, setPreviousResponseId] = useState<string | null>(null);
@@ -161,6 +170,7 @@ export function TourChatWidget({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   // Determine if this is a public/demo usage (no logged-in user, or explicitly
   // forced for the marketing site which shares a domain with the app).
@@ -191,6 +201,62 @@ export function TourChatWidget({
     },
     [navTarget]
   );
+
+  const emitSiteGuide = useCallback((detail: Record<string, unknown>) => {
+    if (siteGuideTarget !== 'parent') return;
+    try {
+      window.parent?.postMessage({ source: 'tourbots', type: 'site_guide', ...detail }, '*');
+    } catch {
+      /* best-effort */
+    }
+  }, [siteGuideTarget]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    if (!websiteStorageKey) return;
+    try {
+      const raw = window.localStorage.getItem(websiteStorageKey);
+      if (raw) {
+        const stored = JSON.parse(raw) as {
+          sessionId?: string;
+          conversationId?: string;
+          previousResponseId?: string | null;
+          messages?: ChatMessage[];
+        };
+        if (stored.sessionId) setSessionId(stored.sessionId);
+        if (stored.conversationId) setConversationId(stored.conversationId);
+        if (stored.previousResponseId) setPreviousResponseId(stored.previousResponseId);
+        if (Array.isArray(stored.messages) && stored.messages.length > 0) {
+          setMessages(stored.messages.slice(-40));
+        }
+      }
+    } catch {
+      /* a damaged session should not block a new conversation */
+    }
+    setWebsiteSessionReady(true);
+  }, [websiteStorageKey]);
+
+  const persistWebsiteSession = useCallback((nextMessages: ChatMessage[]) => {
+    if (!websiteStorageKey || !sessionId) return;
+    try {
+      window.localStorage.setItem(websiteStorageKey, JSON.stringify({
+        sessionId,
+        conversationId,
+        previousResponseId,
+        messages: nextMessages.slice(-40),
+      }));
+    } catch {
+      /* storage may be full or blocked */
+    }
+  }, [websiteStorageKey, sessionId, conversationId, previousResponseId]);
+
+  useEffect(() => {
+    if (!websiteSessionReady) return;
+    persistWebsiteSession(messages);
+  }, [websiteSessionReady, messages, persistWebsiteSession]);
 
   // Load config for public demos WITHOUT storing messages.
   // Skipped entirely when SSR already provided the config (embed fast path).
@@ -236,20 +302,10 @@ export function TourChatWidget({
 
       fetchPublicConfig();
     }
-    
-    // Initialize session and conversation IDs
-    if (!sessionId) {
-      setSessionId(`tour-${venueId}-${Date.now()}`);
-    }
-    if (!conversationId) {
-      setConversationId(createConversationId());
-    }
   }, [
     isPublicDemo,
     venueId,
     venueName,
-    sessionId,
-    conversationId,
     initialConfig,
     chatbotConfigId,
     embedId,
@@ -257,6 +313,18 @@ export function TourChatWidget({
     scopeTourId,
     tour?.id,
   ]);
+
+  // Website bots wait until any stored session has been read, so a page
+  // change continues the same chat. Tour bots start a session immediately.
+  useEffect(() => {
+    if (!websiteSessionReady) return;
+    if (!sessionId) {
+      setSessionId(`tour-${venueId}-${Date.now()}`);
+    }
+    if (!conversationId) {
+      setConversationId(createConversationId());
+    }
+  }, [websiteSessionReady, sessionId, conversationId, venueId]);
 
   // Detect client-only viewport/device state
   useEffect(() => {
@@ -716,6 +784,23 @@ export function TourChatWidget({
                       timestamp: new Date().toISOString(),
                     }]
               );
+            } else if (data.type === 'site_guide') {
+              const snapshot = [...messagesRef.current];
+              if (accumulatedContent) {
+                const existing = snapshot.find((msg) => msg.id === assistantMessageId);
+                if (existing) {
+                  existing.content = accumulatedContent;
+                } else {
+                  snapshot.push({
+                    id: assistantMessageId,
+                    role: 'assistant',
+                    content: accumulatedContent,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              }
+              persistWebsiteSession(snapshot);
+              emitSiteGuide(data);
             } else if (data.type === 'navigate_to_area') {
               emitTourEvent('matterport_navigate', {
                 sweep_id: data.sweep_id,
